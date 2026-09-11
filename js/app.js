@@ -1,18 +1,17 @@
 /* ==========================================================================
    APP.JS
    ==========================================================================
-   Router + rendering + comportamento (marquee, autoplay galleria, menu).
-   Nessuna dipendenza esterna. Il contenuto vive in content.js.
+   Router + rendering + comportamento (viewer galleria). Il contenuto e le
+   dimensioni vivono in content.js (PROJECTS, ARCHIVE, LAYOUT).
 
    Indice:
      1. Costanti regolabili
      2. Helpers generici
      3. Placeholder immagini (SVG generato al volo)
-     4. Render: HOME
+     4. Render: HOME (lista statica, nessuna animazione)
      5. Render: GALLERY (progetti + core archive)
      6. Render: CONTACTS / ABOUT
-     7. Menu ad hamburger (overlay di navigazione)
-     8. Router
+     7. Router
    ========================================================================== */
 
 /* -------------------------------------------------------------------------
@@ -20,7 +19,6 @@
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 5000;   // ms di pausa su ogni foto prima di avanzare
 const TRANSITION_MS = 2000;    // durata dello scroll/transizione tra le foto
-const MARQUEE_SPEED_PX_S = 22; // velocità del marquee in home (px al secondo, più basso = più lento)
 
 /* -------------------------------------------------------------------------
    2. Helpers generici
@@ -46,6 +44,13 @@ function findProject(slug) {
   return PROJECTS.find((p) => p.slug === slug) || null;
 }
 
+// Applica width/height (in qualsiasi unità CSS) a un elemento, se definiti.
+function applyBoxSize(node, { width, height } = {}) {
+  if (width) node.style.width = width;
+  if (height) node.style.height = height;
+  return node;
+}
+
 // Tiene traccia degli event listener/timer della vista corrente, così il
 // router può ripulirli prima di disegnare la vista successiva.
 let currentTeardown = null;
@@ -67,9 +72,9 @@ function hashString(str) {
 }
 
 // Genera una foto segnaposto come SVG in data-URI: colore stabile in base al
-// seed (slug+indice), così ogni progetto ha una sua tinta riconoscibile.
-// Quando hai le foto vere, sostituisci "src" in content.js e questa
-// funzione non verrà più chiamata per quel progetto.
+// seed, così ogni foto ha una sua tinta riconoscibile. Quando hai le foto
+// vere, sostituisci "src" in content.js e questa funzione non verrà più
+// chiamata per quell'immagine.
 function placeholderImg(seed, label) {
   const hue = hashString(seed) % 360;
   const bg1 = `hsl(${hue}, 28%, 78%)`;
@@ -89,12 +94,12 @@ function placeholderImg(seed, label) {
   return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
 }
 
-function resolveImageSrc(project, index, image) {
-  return image.src || placeholderImg(`${project.slug}-${index}`, `${project.name} ${index + 1}`);
+function resolveImageSrc(seed, index, image) {
+  return image.src || placeholderImg(`${seed}-${index}`, image.caption || `${seed} ${index + 1}`);
 }
 
 /* -------------------------------------------------------------------------
-   4. Render: HOME
+   4. Render: HOME — lista statica, ferma, dimensioni da LAYOUT.home
    ------------------------------------------------------------------------- */
 function renderHome() {
   app.innerHTML = "";
@@ -105,30 +110,16 @@ function renderHome() {
     el("span", { class: "author" }, SITE.author),
   ]);
 
-  const viewport = el("div", { class: "marquee-viewport" });
-  const track = el("div", { class: "marquee-track" });
+  const list = el(
+    "ul",
+    { class: "home-list" },
+    PROJECTS.map((p) =>
+      el("li", {}, [el("a", { href: `#/project/${p.slug}` }, p.name)])
+    )
+  );
+  applyBoxSize(list, { width: LAYOUT.home.listWidth, height: LAYOUT.home.listHeight });
 
-  const makeList = () =>
-    el(
-      "ul",
-      { class: "marquee-list" },
-      PROJECTS.map((p) =>
-        el("li", {}, [
-          el("a", { href: `#/project/${p.slug}`, class: "marquee-link" }, p.name),
-        ])
-      )
-    );
-
-  // Il contenuto è duplicato per ottenere un loop verticale continuo e
-  // impercettibile: quando la prima copia esce dal basso, la seconda la
-  // sta già seguendo esattamente allo stesso punto.
-  const listA = makeList();
-  const listB = makeList();
-  track.appendChild(listA);
-  track.appendChild(listB);
-  viewport.appendChild(track);
-
-  const spacer = el("div", { class: "marquee-spacer" });
+  const spacer = el("div", { class: "home-spacer" });
 
   const footer = el(
     "footer",
@@ -137,78 +128,25 @@ function renderHome() {
   );
 
   app.appendChild(header);
-  app.appendChild(viewport);
+  app.appendChild(list);
   app.appendChild(spacer);
   app.appendChild(footer);
 
-  // --- animazione marquee: durata calcolata dall'altezza reale del contenuto,
-  // così la velocità (px/s) resta costante indipendentemente da quante voci
-  // ci sono nella lista.
-  let rafId = null;
-  let paused = false;
-  let lastNow = null;
-  let offset = 0; // px già percorsi in questo ciclo (0 -> listHeight)
-  let listHeight = 0;
-
-  function measure() {
-    listHeight = listA.getBoundingClientRect().height;
-    // Il contenitore è alto esattamente quanto una copia della lista: così a
-    // riposo (offset 0 o listHeight) si vede l'elenco intero una sola volta,
-    // com'è nel riferimento, e lo spazio restante lo occupa lo spacer sotto.
-    viewport.style.height = `${listHeight}px`;
-  }
-
-  function tick(now) {
-    if (lastNow == null) lastNow = now;
-    const delta = now - lastNow;
-    lastNow = now;
-    if (!paused && listHeight > 0) {
-      offset += (MARQUEE_SPEED_PX_S / 1000) * delta;
-      if (offset >= listHeight) offset -= listHeight;
-      // Scorre verso il basso: partiamo dalla seconda copia "sopra" (-listHeight)
-      // e ci spostiamo verso 0, dando la sensazione che la lista scenda.
-      track.style.transform = `translateY(${offset - listHeight}px)`;
-    }
-    rafId = requestAnimationFrame(tick);
-  }
-
-  function handlePause() {
-    paused = true;
-    viewport.classList.add("is-paused");
-  }
-  function handleResume() {
-    paused = false;
-    viewport.classList.remove("is-paused");
-  }
-
-  measure();
-  rafId = requestAnimationFrame(tick);
-
-  window.addEventListener("resize", measure);
-  viewport.addEventListener("mouseenter", handlePause);
-  viewport.addEventListener("mouseleave", handleResume);
-  viewport.addEventListener("touchstart", handlePause, { passive: true });
-  viewport.addEventListener("touchend", handleResume);
-
-  currentTeardown = () => {
-    cancelAnimationFrame(rafId);
-    window.removeEventListener("resize", measure);
-  };
+  currentTeardown = null;
 }
 
 /* -------------------------------------------------------------------------
    5. Render: GALLERY (usata sia per i progetti sia per "core archive")
    ------------------------------------------------------------------------- */
-function renderGallery({ index, total, title, description, images, variant = "default" }) {
+function renderGallery({ total, title, description, descriptionBox, images, variant = "default" }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
-  if (variant === "polaroid") app.classList.add("variant-polaroid");
-  else app.classList.remove("variant-polaroid");
+  app.classList.toggle("variant-polaroid", variant === "polaroid");
 
   const topbar = el("div", { class: "topbar" }, [
     el("span", { class: "topbar-index" }, String(total)),
     el("span", { class: "topbar-title" }, title),
-    el("button", { class: "hamburger", "aria-label": "Menu", onclick: openMenu }, [
+    el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
       el("span", {}), el("span", {}), el("span", {}),
     ]),
   ]);
@@ -218,13 +156,19 @@ function renderGallery({ index, total, title, description, images, variant = "de
     { class: "description" },
     description.map((paragraph) => el("p", {}, paragraph))
   );
+  applyBoxSize(descBlock, { width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth, height: descriptionBox && descriptionBox.height });
 
-  const figures = images.map((image, i) =>
-    el("figure", { class: "photo", "data-index": i }, [
+  const figures = images.map((image, i) => {
+    const figure = el("figure", { class: "photo", "data-index": i }, [
       el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" }),
       image.caption ? el("figcaption", {}, image.caption) : null,
-    ])
-  );
+    ]);
+    applyBoxSize(figure, {
+      width: image.width || LAYOUT.gallery.imageWidth,
+      height: image.height || LAYOUT.gallery.imageHeight,
+    });
+    return figure;
+  });
 
   const feed = el("div", { class: "photo-feed" }, figures);
 
@@ -238,7 +182,7 @@ function renderGallery({ index, total, title, description, images, variant = "de
   app.appendChild(feed);
   app.appendChild(footerBar);
 
-  /* ---- viewer: autoplay 5s + transizione 2s + frecce manuali ---- */
+  /* ---- viewer: scroll sempre verticale, autoplay 5s + transizione 2s + frecce manuali ---- */
   let current = 0;
   let autoplayTimer = null;
   let paused = false;
@@ -322,32 +266,23 @@ function renderProject(slug) {
     renderNotFound();
     return;
   }
-  const images = project.images.map((img, i) => ({ ...img, _src: resolveImageSrc(project, i, img) }));
+  const images = project.images.map((img, i) => ({ ...img, _src: resolveImageSrc(project.slug, i, img) }));
   renderGallery({
-    index: PROJECTS.indexOf(project) + 1,
     total: images.length,
     title: project.name.toLowerCase(),
     description: project.description,
+    descriptionBox: project.descriptionBox,
     images,
     variant: "default",
   });
 }
 
 function renderArchive() {
-  // "core archive": una selezione (qui: la prima foto di ogni progetto) in
-  // variante polaroid. Cambia questa logica in content.js/app.js quando
-  // avrai una selezione curata definitiva.
-  const images = PROJECTS.map((p, pi) => {
-    const first = p.images[0];
-    return {
-      caption: p.name.toLowerCase(),
-      _src: resolveImageSrc(p, 0, first || { src: null }),
-    };
-  });
+  const images = ARCHIVE.images.map((img, i) => ({ ...img, _src: resolveImageSrc("archive", i, img) }));
   renderGallery({
     total: images.length,
-    title: "core archive",
-    description: ["Una selezione trasversale, in continuo aggiornamento."],
+    title: ARCHIVE.title,
+    description: ARCHIVE.description,
     images,
     variant: "polaroid",
   });
@@ -364,7 +299,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   const topbar = el("div", { class: "topbar" }, [
     el("span", { class: "topbar-index" }, ""),
     el("span", { class: "topbar-title" }, title.toLowerCase()),
-    el("button", { class: "hamburger", "aria-label": "Menu", onclick: openMenu }, [
+    el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
       el("span", {}), el("span", {}), el("span", {}),
     ]),
   ]);
@@ -393,46 +328,7 @@ function renderNotFound() {
 }
 
 /* -------------------------------------------------------------------------
-   7. Menu ad hamburger (overlay di navigazione)
-   ------------------------------------------------------------------------- */
-function openMenu() {
-  if (document.querySelector(".menu-overlay")) return;
-
-  const overlay = el("div", { class: "menu-overlay" });
-  const closeBtn = el("button", { class: "menu-close", "aria-label": "Chiudi menu" }, "×");
-
-  const list = el(
-    "ul",
-    { class: "menu-list" },
-    PROJECTS.map((p) => el("li", {}, el("a", { href: `#/project/${p.slug}` }, p.name)))
-  );
-
-  const footer = el(
-    "div",
-    { class: "menu-footer" },
-    FOOTER_LINKS.map((l) => el("a", { href: l.hash, class: "footer-link" }, l.label))
-  );
-
-  overlay.appendChild(closeBtn);
-  overlay.appendChild(list);
-  overlay.appendChild(footer);
-  document.body.appendChild(overlay);
-  document.body.classList.add("menu-open");
-
-  function close() {
-    overlay.remove();
-    document.body.classList.remove("menu-open");
-  }
-
-  closeBtn.addEventListener("click", close);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
-  overlay.querySelectorAll("a").forEach((a) => a.addEventListener("click", close));
-}
-
-/* -------------------------------------------------------------------------
-   8. Router
+   7. Router
    ------------------------------------------------------------------------- */
 function parseHash() {
   const hash = location.hash.replace(/^#\/?/, "");
