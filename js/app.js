@@ -1,24 +1,26 @@
 /* ==========================================================================
    APP.JS
    ==========================================================================
-   Router + rendering + comportamento (viewer galleria). Il contenuto e le
-   dimensioni vivono in content.js (PROJECTS, ARCHIVE, LAYOUT).
+   Router + rendering + comportamento (viewer galleria a scorrimento
+   orizzontale + modalità modifica dimensioni a trascinamento). Il contenuto
+   e le dimensioni di default vivono in content.js (PROJECTS, ARCHIVE, LAYOUT).
 
    Indice:
      1. Costanti regolabili
      2. Helpers generici
-     3. Placeholder immagini (SVG generato al volo)
-     4. Render: HOME (lista statica, nessuna animazione)
-     5. Render: GALLERY (progetti + core archive)
-     6. Render: CONTACTS / ABOUT
-     7. Router
+     3. Dimensioni regolabili a trascinamento (localStorage + export)
+     4. Placeholder immagini (SVG generato al volo)
+     5. Render: HOME (lista statica, nessuna animazione)
+     6. Render: GALLERY (progetti + core archive) — slide orizzontale
+     7. Render: CONTACTS / ABOUT
+     8. Router
    ========================================================================== */
 
 /* -------------------------------------------------------------------------
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 5000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 2000;    // durata dello scroll/transizione tra le foto
+const TRANSITION_MS = 2000;    // durata dello slide orizzontale tra le foto
 
 /* -------------------------------------------------------------------------
    2. Helpers generici
@@ -44,15 +46,8 @@ function findProject(slug) {
   return PROJECTS.find((p) => p.slug === slug) || null;
 }
 
-// Applica width/height (in qualsiasi unità CSS) a un elemento, se definiti.
-function applyBoxSize(node, { width, height } = {}) {
-  if (width) node.style.width = width;
-  if (height) node.style.height = height;
-  return node;
-}
-
-// Tiene traccia degli event listener/timer della vista corrente, così il
-// router può ripulirli prima di disegnare la vista successiva.
+// Tiene traccia degli event listener/timer/observer della vista corrente,
+// così il router può ripulirli prima di disegnare la vista successiva.
 let currentTeardown = null;
 function teardownCurrentView() {
   if (typeof currentTeardown === "function") currentTeardown();
@@ -60,7 +55,171 @@ function teardownCurrentView() {
 }
 
 /* -------------------------------------------------------------------------
-   3. Placeholder immagini
+   3. Dimensioni regolabili a trascinamento
+   ------------------------------------------------------------------------- */
+const SIZE_STORE_KEY = "site-size-overrides-v1";
+
+function loadSizeOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(SIZE_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveSizeOverride(key, size) {
+  const all = loadSizeOverrides();
+  all[key] = size;
+  try {
+    localStorage.setItem(SIZE_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la dimensione resta comunque applicata per questa sessione */
+  }
+}
+
+// Rende "node" ridimensionabile a trascinamento in modalità modifica.
+// "key" identifica il blocco (es. "project.lines.image.0") per salvare e
+// riproporre la dimensione scelta. "defaults" sono width/height di partenza
+// (da LAYOUT o dal singolo progetto/foto in content.js).
+function makeResizable(node, key, defaults = {}) {
+  node.classList.add("resizable");
+  if (!node.style.position) node.style.position = "relative";
+
+  const overrides = loadSizeOverrides();
+  const size = overrides[key] || {};
+  const width = size.width || defaults.width;
+  const height = size.height || defaults.height;
+  if (width) node.style.width = width;
+  if (height && height !== "auto") node.style.height = height;
+
+  const label = el("span", { class: "resizable-label" }, "");
+  node.appendChild(label);
+
+  function updateLabel() {
+    const r = node.getBoundingClientRect();
+    label.textContent = `${Math.round(r.width)} × ${Math.round(r.height)}px`;
+  }
+  updateLabel();
+
+  const observer = new ResizeObserver(() => {
+    updateLabel();
+    if (document.body.classList.contains("edit-mode")) {
+      saveSizeOverride(key, { width: node.style.width, height: node.style.height });
+    }
+  });
+  observer.observe(node);
+
+  return observer;
+}
+
+function setupEditMode(observers) {
+  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica dimensioni", title: "Modifica dimensioni" }, "⇲");
+  const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta dimensioni", title: "Esporta dimensioni" }, "⇩");
+
+  toggle.addEventListener("click", () => {
+    document.body.classList.toggle("edit-mode");
+  });
+  exportBtn.addEventListener("click", () => openExportPanel());
+
+  document.body.appendChild(toggle);
+  document.body.appendChild(exportBtn);
+
+  return () => {
+    toggle.remove();
+    exportBtn.remove();
+  };
+}
+
+// Ferma l'app.js corrente (i toggle di modifica restano tra una pagina e
+// l'altra, non vengono ricreati dal router).
+let editModeTeardown = null;
+function ensureEditModeUI() {
+  if (editModeTeardown) return;
+  editModeTeardown = setupEditMode();
+}
+
+function describeOverrideKey(key) {
+  const homeMatch = key === "home.list";
+  if (homeMatch) return `LAYOUT.home  →  aggiorna listWidth/listHeight in content.js`;
+
+  const descMatch = key.match(/^project\.(.+)\.description$/);
+  if (descMatch) return `Progetto "${descMatch[1]}"  →  aggiungi/aggiorna "descriptionBox" su quel progetto in PROJECTS`;
+
+  const imgMatch = key.match(/^project\.(.+)\.image\.(\d+)$/);
+  if (imgMatch) return `Progetto "${imgMatch[1]}", foto #${Number(imgMatch[2]) + 1}  →  aggiorna width/height su quella voce di "images"`;
+
+  if (key === "archive.description") return `Core archive  →  aggiorna "descriptionBox" sull'oggetto ARCHIVE`;
+
+  const archiveImgMatch = key.match(/^archive\.image\.(\d+)$/);
+  if (archiveImgMatch) return `Core archive, foto #${Number(archiveImgMatch[1]) + 1}  →  aggiorna width/height su quella voce di ARCHIVE.images`;
+
+  return key;
+}
+
+function buildExportText() {
+  const overrides = loadSizeOverrides();
+  const keys = Object.keys(overrides);
+  if (!keys.length) {
+    return "Non hai ancora ridimensionato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra), trascina l'angolo in basso a destra di un blocco per cambiarne larghezza/altezza, poi torna qui.";
+  }
+  const lines = [
+    "Dimensioni personalizzate — copia i valori qui sotto dentro content.js",
+    "(sostituendo/aggiungendo i campi indicati), poi puoi anche azzerare",
+    "queste modifiche dal pulsante \"Reset\" qui sotto.",
+    "",
+  ];
+  keys.forEach((key) => {
+    const size = overrides[key];
+    lines.push(`# ${describeOverrideKey(key)}`);
+    lines.push(`  width: "${size.width || "auto"}", height: "${size.height || "auto"}"`);
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function openExportPanel() {
+  const overlay = el("div", { class: "export-panel" });
+  const textarea = el("textarea", { readonly: "readonly" });
+  textarea.value = buildExportText();
+
+  const copyBtn = el("button", {}, "Copia");
+  const resetBtn = el("button", {}, "Reset dimensioni");
+  const closeBtn = el("button", {}, "Chiudi");
+
+  copyBtn.addEventListener("click", async () => {
+    textarea.focus();
+    textarea.select();
+    try {
+      await navigator.clipboard.writeText(textarea.value);
+      copyBtn.textContent = "Copiato!";
+      setTimeout(() => (copyBtn.textContent = "Copia"), 1500);
+    } catch (e) {
+      // clipboard API non disponibile (es. file://): il testo resta comunque selezionato, Ctrl+C funziona
+    }
+  });
+
+  resetBtn.addEventListener("click", () => {
+    localStorage.removeItem(SIZE_STORE_KEY);
+    location.reload();
+  });
+
+  closeBtn.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  const inner = el("div", { class: "export-panel-inner" }, [
+    el("h2", {}, "Esporta dimensioni"),
+    el("p", {}, "Queste sono le dimensioni che hai regolato trascinando. Copiale in content.js per renderle permanenti sul sito pubblicato."),
+    textarea,
+    el("div", { class: "export-panel-actions" }, [copyBtn, resetBtn, closeBtn]),
+  ]);
+  overlay.appendChild(inner);
+  document.body.appendChild(overlay);
+}
+
+/* -------------------------------------------------------------------------
+   4. Placeholder immagini
    ------------------------------------------------------------------------- */
 function hashString(str) {
   let h = 0;
@@ -99,11 +258,12 @@ function resolveImageSrc(seed, index, image) {
 }
 
 /* -------------------------------------------------------------------------
-   4. Render: HOME — lista statica, ferma, dimensioni da LAYOUT.home
+   5. Render: HOME — lista statica, dimensioni da LAYOUT.home
    ------------------------------------------------------------------------- */
 function renderHome() {
   app.innerHTML = "";
   app.classList.remove("has-fixed-bars");
+  ensureEditModeUI();
 
   const header = el("header", { class: "home-header" }, [
     el("span", { class: "kicker" }, SITE.kicker),
@@ -117,7 +277,6 @@ function renderHome() {
       el("li", {}, [el("a", { href: `#/project/${p.slug}` }, p.name)])
     )
   );
-  applyBoxSize(list, { width: LAYOUT.home.listWidth, height: LAYOUT.home.listHeight });
 
   const spacer = el("div", { class: "home-spacer" });
 
@@ -132,16 +291,22 @@ function renderHome() {
   app.appendChild(spacer);
   app.appendChild(footer);
 
-  currentTeardown = null;
+  const resizeObserver = makeResizable(list, "home.list", LAYOUT.home);
+
+  currentTeardown = () => resizeObserver.disconnect();
 }
 
 /* -------------------------------------------------------------------------
-   5. Render: GALLERY (usata sia per i progetti sia per "core archive")
+   6. Render: GALLERY (usata sia per i progetti sia per "core archive")
+   Le foto scorrono in ORIZZONTALE (slide) tra loro; la pagina scorre in
+   VERTICALE quando testo o foto corrente non entrano nello schermo.
    ------------------------------------------------------------------------- */
-function renderGallery({ total, title, description, descriptionBox, images, variant = "default" }) {
+function renderGallery({ keyPrefix, total, title, description, descriptionBox, images }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
-  app.classList.toggle("variant-polaroid", variant === "polaroid");
+  ensureEditModeUI();
+
+  const resizeObservers = [];
 
   const topbar = el("div", { class: "topbar" }, [
     el("span", { class: "topbar-index" }, String(total)),
@@ -156,21 +321,33 @@ function renderGallery({ total, title, description, descriptionBox, images, vari
     { class: "description" },
     description.map((paragraph) => el("p", {}, paragraph))
   );
-  applyBoxSize(descBlock, { width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth, height: descriptionBox && descriptionBox.height });
+  resizeObservers.push(
+    makeResizable(descBlock, `${keyPrefix}.description`, {
+      width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
+      height: descriptionBox && descriptionBox.height,
+    })
+  );
 
+  const frames = [];
   const figures = images.map((image, i) => {
+    const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
+    const frame = el("div", { class: "photo-frame" }, [img]);
+    frames.push(frame);
     const figure = el("figure", { class: "photo", "data-index": i }, [
-      el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" }),
+      frame,
       image.caption ? el("figcaption", {}, image.caption) : null,
     ]);
-    applyBoxSize(figure, {
-      width: image.width || LAYOUT.gallery.imageWidth,
-      height: image.height || LAYOUT.gallery.imageHeight,
-    });
+    resizeObservers.push(
+      makeResizable(frame, `${keyPrefix}.image.${i}`, {
+        width: image.width || LAYOUT.gallery.imageWidth,
+        height: image.height || LAYOUT.gallery.imageHeight,
+      })
+    );
     return figure;
   });
 
-  const feed = el("div", { class: "photo-feed" }, figures);
+  const track = el("div", { class: "photo-track" }, figures);
+  const viewport = el("div", { class: "photo-viewport" }, [track]);
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Foto precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Foto successiva" }, "→");
@@ -179,10 +356,10 @@ function renderGallery({ total, title, description, descriptionBox, images, vari
 
   app.appendChild(topbar);
   app.appendChild(descBlock);
-  app.appendChild(feed);
+  app.appendChild(viewport);
   app.appendChild(footerBar);
 
-  /* ---- viewer: scroll sempre verticale, autoplay 5s + transizione 2s + frecce manuali ---- */
+  /* ---- viewer: slide orizzontale, autoplay 5s + transizione 2s + frecce ---- */
   let current = 0;
   let autoplayTimer = null;
   let paused = false;
@@ -191,17 +368,22 @@ function renderGallery({ total, title, description, descriptionBox, images, vari
     counter.textContent = `${current + 1} / ${images.length}`;
   }
 
-  function scrollToIndex(i, behavior = "smooth") {
-    const target = figures[i];
-    if (!target) return;
-    target.scrollIntoView({ behavior, block: "start" });
+  function updateViewportHeight() {
+    const activeFigure = figures[current];
+    if (!activeFigure) return;
+    viewport.style.height = `${activeFigure.getBoundingClientRect().height}px`;
+  }
+
+  function applyPosition() {
+    track.style.transform = `translateX(-${current * 100}%)`;
+    updateViewportHeight();
+    updateCounter();
   }
 
   function goTo(i, { user = false } = {}) {
     if (!figures.length) return;
     current = (i + figures.length) % figures.length;
-    scrollToIndex(current);
-    updateCounter();
+    applyPosition();
     if (user) restartAutoplay();
   }
 
@@ -229,34 +411,38 @@ function renderGallery({ total, title, description, descriptionBox, images, vari
 
   prevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
   nextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
-  feed.addEventListener("mouseenter", handlePause);
-  feed.addEventListener("mouseleave", handleResume);
-  feed.addEventListener("touchstart", handlePause, { passive: true });
+  viewport.addEventListener("mouseenter", handlePause);
+  viewport.addEventListener("mouseleave", handleResume);
+  viewport.addEventListener("touchstart", handlePause, { passive: true });
 
-  // Se l'utente scrolla manualmente nel feed, teniamo il contatore
-  // sincronizzato con la foto più visibile.
-  const observer = new IntersectionObserver(
-    (entries) => {
-      const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      if (visible) {
-        const i = Number(visible.target.dataset.index);
-        if (!Number.isNaN(i)) {
-          current = i;
-          updateCounter();
-        }
-      }
-    },
-    { root: null, threshold: [0.6] }
-  );
-  figures.forEach((f) => observer.observe(f));
+  // swipe orizzontale su touch
+  let touchStartX = null;
+  viewport.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  viewport.addEventListener("touchend", (e) => {
+    if (touchStartX == null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 40) goTo(current + (dx < 0 ? 1 : -1), { user: true });
+    touchStartX = null;
+    handleResume();
+  });
 
-  document.documentElement.style.setProperty("--transition-ms", `${TRANSITION_MS}ms`);
-  updateCounter();
+  // se un'immagine è ancora in caricamento, ricalcola l'altezza quando arriva
+  figures.forEach((figure, i) => {
+    const img = figure.querySelector("img");
+    img.addEventListener("load", () => {
+      if (i === current) updateViewportHeight();
+    });
+  });
+
+  window.addEventListener("resize", updateViewportHeight);
+
+  applyPosition();
   scheduleNext();
 
   currentTeardown = () => {
     clearTimeout(autoplayTimer);
-    observer.disconnect();
+    window.removeEventListener("resize", updateViewportHeight);
+    resizeObservers.forEach((o) => o.disconnect());
   };
 }
 
@@ -268,33 +454,33 @@ function renderProject(slug) {
   }
   const images = project.images.map((img, i) => ({ ...img, _src: resolveImageSrc(project.slug, i, img) }));
   renderGallery({
+    keyPrefix: `project.${project.slug}`,
     total: images.length,
     title: project.name.toLowerCase(),
     description: project.description,
     descriptionBox: project.descriptionBox,
     images,
-    variant: "default",
   });
 }
 
 function renderArchive() {
   const images = ARCHIVE.images.map((img, i) => ({ ...img, _src: resolveImageSrc("archive", i, img) }));
   renderGallery({
+    keyPrefix: "archive",
     total: images.length,
     title: ARCHIVE.title,
     description: ARCHIVE.description,
     images,
-    variant: "polaroid",
   });
 }
 
 /* -------------------------------------------------------------------------
-   6. Render: CONTACTS / ABOUT
+   7. Render: CONTACTS / ABOUT
    ------------------------------------------------------------------------- */
 function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
-  app.classList.remove("variant-polaroid");
+  ensureEditModeUI();
 
   const topbar = el("div", { class: "topbar" }, [
     el("span", { class: "topbar-index" }, ""),
@@ -328,7 +514,7 @@ function renderNotFound() {
 }
 
 /* -------------------------------------------------------------------------
-   7. Router
+   8. Router
    ------------------------------------------------------------------------- */
 function parseHash() {
   const hash = location.hash.replace(/^#\/?/, "");
