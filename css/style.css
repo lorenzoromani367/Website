@@ -1,0 +1,439 @@
+/* ==========================================================================
+   TYPE — TeX Gyre Heros (regular, weight 400)
+   ========================================================================== */
+@font-face {
+  font-family: "TeX Gyre Heros";
+  src:
+    url("../fonts/TeXGyreHeros-Regular.woff2") format("woff2"),
+    url("../fonts/TeXGyreHeros-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* -------------------------------------------------------------------------
+   RESET & BASE
+   ------------------------------------------------------------------------- */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "TeX Gyre Heros", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+:root {
+  --bg: #161616;
+  --paper: #edebe0;
+  --ink: #2b2b28;
+  --muted: #8a877c;
+  --hairline: rgba(43, 43, 40, 0.12);
+  --panel-width: 740px;
+  --transition-ms: 2000ms;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+}
+
+/* -------------------------------------------------------------------------
+   PAGE PANEL — il "foglio" chiaro centrato sullo sfondo scuro
+   ------------------------------------------------------------------------- */
+.page {
+  position: relative;
+  width: min(100%, var(--panel-width));
+  min-height: 100vh;
+  margin: 0 auto;
+  background: var(--paper);
+  padding: 32px 40px 56px;
+  display: flex;
+  flex-direction: column;
+}
+
+.page.has-fixed-bars {
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  .page {
+    width: 100%;
+    min-height: 100dvh;
+    padding: 24px 20px 40px;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   HOME — lista statica (nessuna animazione). Le dimensioni del blocco
+   .home-list vengono impostate da JS leggendo LAYOUT.home in content.js
+   (o dal valore che hai trascinato tu in modalità modifica, vedi in fondo).
+   ------------------------------------------------------------------------- */
+.home-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  padding-bottom: 68px;
+}
+
+.home-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.home-list li {
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.home-list a {
+  display: inline-block;
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+
+.home-list a:hover {
+  opacity: 0.55;
+}
+
+.home-spacer {
+  flex: 1 1 auto;
+}
+
+.home-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 32px;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.home-footer .footer-link:hover {
+  opacity: 0.6;
+}
+
+/* -------------------------------------------------------------------------
+   GALLERY (progetti + core archive) — descrizione in alto, poi le foto.
+   Tra una foto e l'altra (manuale o in automatico) lo scorrimento è
+   ORIZZONTALE (le foto scorrono lateralmente, come una slide). La PAGINA
+   nel suo insieme scorre invece in verticale quando testo o foto non
+   entrano nello schermo, per poterli vedere per intero.
+   ------------------------------------------------------------------------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--paper);
+  padding: 28px 40px;
+  border-bottom: 1px solid transparent;
+}
+
+.topbar-index {
+  font-size: 0.95rem;
+  min-width: 1.5em;
+}
+
+.topbar-title {
+  font-size: 0.95rem;
+  flex: 1;
+}
+
+/* L'hamburger è un link che torna alla home (niente menu a comparsa). */
+.hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 22px;
+  padding: 4px;
+}
+
+.hamburger span {
+  display: block;
+  height: 1.5px;
+  background: var(--ink);
+  width: 100%;
+}
+
+/* La larghezza/altezza di .description viene impostata da JS leggendo
+   LAYOUT.gallery.descriptionWidth (o descriptionBox del singolo progetto). */
+.description {
+  padding: 8px 40px 40px;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  max-width: 100%;
+  position: relative;
+}
+
+.description p + p {
+  margin-top: 1.1em;
+}
+
+/* Il "binario" orizzontale: contiene tutte le foto in fila, una accanto
+   all'altra. La finestra (.photo-viewport) ne clip-pa la larghezza e
+   mostra una sola foto alla volta, facendo scorrere il binario con una
+   transform. L'altezza della finestra viene impostata da JS in base alla
+   foto corrente, così la pagina scorre in verticale q.b. per vederla
+   tutta se è più alta dello schermo. */
+.photo-viewport {
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+  transition: height var(--transition-ms) ease;
+}
+
+.photo-track {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  transition: transform var(--transition-ms) ease;
+  will-change: transform;
+}
+
+.photo {
+  flex: 0 0 100%;
+  width: 100%;
+  padding: 0 40px 72px;
+}
+
+/* Larghezza/altezza di ogni .photo-frame vengono impostate da JS leggendo
+   LAYOUT.gallery.imageWidth/imageHeight, sovrascrivibili per singola foto
+   (o trascinando l'angolo in modalità modifica). */
+.photo-frame {
+  margin: 0 auto;
+  overflow: hidden;
+  position: relative;
+}
+
+.photo-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo figcaption {
+  padding: 14px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .topbar { padding: 20px 20px; }
+  .description { padding: 8px 20px 32px; }
+  .photo { padding: 0 20px 48px; }
+}
+
+.gallerybar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--paper);
+  padding: 20px 40px 28px;
+}
+
+.nav-arrow {
+  font-size: 1rem;
+  padding: 6px 10px;
+  transition: opacity 0.2s ease;
+}
+
+.nav-arrow:hover {
+  opacity: 0.5;
+}
+
+.nav-counter {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .gallerybar { padding: 16px 20px 24px; }
+}
+
+/* -------------------------------------------------------------------------
+   SIMPLE PAGES (contacts / about / not found)
+   ------------------------------------------------------------------------- */
+.simple-page {
+  padding-top: 24px;
+}
+
+.contact-line {
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   MODALITÀ MODIFICA — regolare le dimensioni trascinando, non a numeri.
+   ==========================================================================
+   Il bottoncino "⇲" in basso a destra attiva/disattiva la modalità. Con la
+   modalità attiva, il blocco lista in home, il testo di descrizione e ogni
+   foto mostrano una maniglia di ridimensionamento nell'angolo in basso a
+   destra (il cursore diventa una doppia freccia): trascinala per cambiare
+   larghezza/altezza a vista. Ogni dimensione scelta resta salvata nel
+   browser (localStorage) e viene riproposta ad ogni visita. Quando sei
+   soddisfatto, apri "Esporta dimensioni" per avere il testo pronto da
+   incollare in content.js e rendere le modifiche permanenti sul sito
+   pubblicato. In modalità modifica i link (voci della lista, frecce,
+   hamburger) sono disattivati per non navigare per sbaglio mentre trascini.
+   ------------------------------------------------------------------------- */
+.edit-toggle,
+.export-toggle {
+  position: fixed;
+  right: 16px;
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #2b2b28;
+  color: var(--paper);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.35;
+  transition: opacity 0.2s ease;
+}
+
+.edit-toggle { bottom: 16px; }
+.export-toggle { bottom: 64px; display: none; }
+
+.edit-toggle:hover,
+.export-toggle:hover {
+  opacity: 1;
+}
+
+body.edit-mode .edit-toggle {
+  opacity: 1;
+  background: #8a3b2b;
+}
+
+body.edit-mode .export-toggle {
+  display: flex;
+}
+
+body.edit-mode .home-list,
+body.edit-mode .description,
+body.edit-mode .photo-frame {
+  resize: both;
+  overflow: auto;
+  outline: 1px dashed rgba(43, 43, 40, 0.5);
+  outline-offset: 3px;
+}
+
+body.edit-mode .photo-frame {
+  overflow: hidden; /* niente scrollbar su una foto, solo crop */
+}
+
+.resizable-label {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-size: 0.68rem;
+  background: rgba(43, 43, 40, 0.85);
+  color: var(--paper);
+  padding: 2px 6px;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 2;
+  display: none;
+  white-space: nowrap;
+}
+
+body.edit-mode .resizable-label {
+  display: block;
+}
+
+body.edit-mode .home-list a,
+body.edit-mode .hamburger,
+body.edit-mode .nav-arrow,
+body.edit-mode .footer-link {
+  pointer-events: none;
+}
+
+.export-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.export-panel-inner {
+  background: var(--paper);
+  color: var(--ink);
+  max-width: 640px;
+  width: 100%;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 24px;
+  border-radius: 6px;
+}
+
+.export-panel h2 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.export-panel p {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.export-panel textarea {
+  width: 100%;
+  height: 260px;
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-size: 0.78rem;
+  padding: 12px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--hairline);
+}
+
+.export-panel-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.export-panel-actions button {
+  padding: 8px 14px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
