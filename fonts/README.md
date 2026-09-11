@@ -1,12 +1,12 @@
-# Font — TeX Gyre Heros
+# Font
 
-Metti qui i file del font con **esattamente** questi nomi (già collegati in `css/style.css`):
+In uso ora:
 
 ```
-fonts/TeXGyreHeros-Regular.woff2   (formato preferito, più leggero)
-fonts/TeXGyreHeros-Regular.ttf     (fallback per browser più vecchi)
+fonts/TeXGyreHerosCn-Regular.otf     file originale che mi hai dato
+fonts/TeXGyreHerosCn-Regular.woff2   stessa font, convertita per un caricamento più leggero
 ```
 
-Non serve nessun'altra modifica: appena i file sono in questa cartella il sito li carica automaticamente al posto del fallback Helvetica/Arial.
+⚠️ **Nota**: il file che mi hai mandato è **TeX Gyre Heros Cn** — la "Cn" sta per *Condensed*, cioè la variante **stretta** della famiglia, diversa dalla "TeX Gyre Heros" normale (più larga) usata come riferimento visivo iniziale. Il sito la usa comunque, quindi le lettere sono un po' più strette di quanto visto negli screenshot di partenza.
 
-Se hai solo un `.otf` o un `.ttf`, puoi convertirlo in `.woff2` gratuitamente con https://cloudconvert.com/ttf-to-woff2 (o `fonttools`/`woff2_compress` da riga di comando).
+Se invece volevi la larghezza normale: cercami il file `TeXGyreHeros-Regular.otf` (senza "Cn") nello stesso pacchetto font da cui hai preso questo, mandamelo e sostituisco i due file qui sopra — non serve toccare nient'altro, `css/style.css` punta già a questi nomi file.

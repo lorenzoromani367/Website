@@ -1,17 +1,18 @@
 /* ==========================================================================
-   TYPE — TeX Gyre Heros (regular, weight 400)
+   TYPE — TeX Gyre Heros Cn (regular, weight 400)
    ==========================================================================
-   Metti i file del font in /fonts/ con questi nomi esatti e il sito li userà
-   automaticamente, senza toccare altro codice. Finché i file non ci sono,
-   il browser usa Helvetica/Arial come fallback (TeX Gyre Heros è un clone
-   metricamente compatibile di Helvetica, quindi il fallback è già molto
-   vicino all'originale).
+   NB: il file che mi hai dato ("texgyreheroscnregular.otf") è la variante
+   CONDENSED (Cn = Condensed) di TeX Gyre Heros, più stretta della versione
+   normale usata come riferimento negli screenshot. La uso comunque qui
+   sotto; se invece volevi la larghezza normale, mandami "TeXGyreHeros-
+   Regular" (senza "Cn") e basta sostituire i due file in /fonts — il resto
+   del sito non cambia.
    ========================================================================== */
 @font-face {
   font-family: "TeX Gyre Heros";
   src:
-    url("../fonts/TeXGyreHeros-Regular.woff2") format("woff2"),
-    url("../fonts/TeXGyreHeros-Regular.ttf") format("truetype");
+    url("../fonts/TeXGyreHerosCn-Regular.woff2") format("woff2"),
+    url("../fonts/TeXGyreHerosCn-Regular.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -24,8 +25,8 @@
 html, body { height: 100%; }
 body {
   margin: 0;
-  background: #0a0a0a;
-  color: #2b2b28;
+  background: var(--bg);
+  color: var(--ink);
   font-family: "TeX Gyre Heros", Helvetica, Arial, sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
@@ -45,7 +46,8 @@ button {
 }
 
 :root {
-  --paper: #efece1;
+  --bg: #161616;
+  --paper: #edebe0;
   --ink: #2b2b28;
   --muted: #8a877c;
   --hairline: rgba(43, 43, 40, 0.12);
@@ -58,7 +60,7 @@ button {
 }
 
 /* -------------------------------------------------------------------------
-   PAGE PANEL — il "foglio" chiaro centrato su sfondo nero
+   PAGE PANEL — il "foglio" chiaro centrato sullo sfondo scuro
    ------------------------------------------------------------------------- */
 .page {
   position: relative;
@@ -87,7 +89,8 @@ button {
 }
 
 /* -------------------------------------------------------------------------
-   HOME
+   HOME — lista statica (nessuna animazione). Le dimensioni del blocco
+   .home-list vengono impostate da JS leggendo LAYOUT.home in content.js.
    ------------------------------------------------------------------------- */
 .home-header {
   display: flex;
@@ -96,47 +99,31 @@ button {
   padding-bottom: 48px;
 }
 
-.marquee-viewport {
-  flex: 0 0 auto;
-  overflow: hidden;
-  position: relative;
-  cursor: default;
-}
-
-.marquee-spacer {
-  flex: 1 1 auto;
-}
-
-.marquee-track {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  will-change: transform;
-}
-
-.marquee-list {
+.home-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  flex: 0 0 auto;
+  overflow: auto; /* utile solo se dai a LAYOUT.home.listHeight un valore fisso */
 }
 
-.marquee-list li {
+.home-list li {
   line-height: 2.1;
   font-size: 1.05rem;
 }
 
-.marquee-link {
+.home-list a {
   display: inline-block;
   transition: opacity 0.2s ease;
+  cursor: pointer;
 }
 
-.marquee-link:hover {
+.home-list a:hover {
   opacity: 0.55;
 }
 
-.marquee-viewport.is-paused .marquee-link {
-  cursor: pointer;
+.home-spacer {
+  flex: 1 1 auto;
 }
 
 .home-footer {
@@ -177,6 +164,7 @@ button {
   flex: 1;
 }
 
+/* L'hamburger è un link che torna alla home (niente menu a comparsa). */
 .hamburger {
   display: flex;
   flex-direction: column;
@@ -193,31 +181,40 @@ button {
   width: 100%;
 }
 
+/* La larghezza/altezza di .description viene impostata da JS leggendo
+   LAYOUT.gallery.descriptionWidth (o descriptionBox del singolo progetto). */
 .description {
   padding: 8px 40px 40px;
   font-size: 0.95rem;
   line-height: 1.65;
-  max-width: 62ch;
+  max-width: 100%;
 }
 
 .description p + p {
   margin-top: 1.1em;
 }
 
+/* Lo scroll della galleria è sempre verticale: il feed scorre nel normale
+   flusso della pagina, mai in orizzontale. */
 .photo-feed {
   flex: 1 1 auto;
   scroll-snap-type: y proximity;
+  scroll-behavior: smooth;
 }
 
+/* Larghezza/altezza di ogni .photo vengono impostate da JS leggendo
+   LAYOUT.gallery.imageWidth/imageHeight, sovrascrivibili per singola foto. */
 .photo {
-  margin: 0 0 72px;
+  margin: 0 auto 72px;
   scroll-snap-align: start;
+  overflow: hidden;
 }
 
 .photo img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
 }
 
 .photo figcaption {
@@ -264,11 +261,6 @@ button {
   .gallerybar { padding: 16px 20px 24px; }
 }
 
-/* smooth scroll timing follows --transition-ms, set from JS (TRANSITION_MS) */
-.photo-feed {
-  scroll-behavior: smooth;
-}
-
 /* -------------------------------------------------------------------------
    VARIANTE "polaroid" — usata da core archive
    ------------------------------------------------------------------------- */
@@ -276,9 +268,6 @@ button {
   background: #fff;
   padding: 16px 16px 32px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-  max-width: 420px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .variant-polaroid .photo:nth-child(odd) { transform: rotate(-1.2deg); }
@@ -300,61 +289,4 @@ button {
   font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
   font-size: 0.85rem;
   color: var(--muted);
-}
-
-/* -------------------------------------------------------------------------
-   MENU AD HAMBURGER (overlay)
-   ------------------------------------------------------------------------- */
-body.menu-open {
-  overflow: hidden;
-}
-
-.menu-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: var(--paper);
-  display: flex;
-  flex-direction: column;
-  padding: 32px 40px 56px;
-  overflow-y: auto;
-}
-
-.menu-close {
-  align-self: flex-end;
-  font-size: 1.6rem;
-  line-height: 1;
-  padding: 4px 8px;
-}
-
-.menu-list {
-  list-style: none;
-  margin: 40px 0 0;
-  padding: 0;
-}
-
-.menu-list li {
-  line-height: 2.1;
-  font-size: 1.05rem;
-}
-
-.menu-list a:hover {
-  opacity: 0.55;
-}
-
-.menu-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: auto;
-  padding-top: 32px;
-  font-size: 0.95rem;
-}
-
-.menu-footer .footer-link:hover {
-  opacity: 0.6;
-}
-
-@media (max-width: 700px) {
-  .menu-overlay { padding: 24px 20px 40px; }
 }
