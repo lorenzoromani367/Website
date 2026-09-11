@@ -1,19 +1,22 @@
 /* ==========================================================================
    APP.JS
    ==========================================================================
-   Router + rendering + comportamento (viewer galleria a scorrimento
-   orizzontale + modalità modifica dimensioni a trascinamento). Il contenuto
-   e le dimensioni di default vivono in content.js (PROJECTS, ARCHIVE, LAYOUT).
+   Router + rendering + comportamento: viewer galleria a scorrimento
+   orizzontale, lightbox per ingrandire una foto, e modalità modifica per
+   ridimensionare i blocchi trascinando invece di scrivere numeri. Il
+   contenuto e le dimensioni di default vivono in content.js (PROJECTS,
+   ARCHIVE, LAYOUT).
 
    Indice:
      1. Costanti regolabili
      2. Helpers generici
      3. Dimensioni regolabili a trascinamento (localStorage + export)
-     4. Placeholder immagini (SVG generato al volo)
-     5. Render: HOME (lista statica, nessuna animazione)
-     6. Render: GALLERY (progetti + core archive) — slide orizzontale
-     7. Render: CONTACTS / ABOUT
-     8. Router
+     4. Lightbox (clic su una foto per ingrandirla)
+     5. Placeholder immagini (SVG generato al volo)
+     6. Render: HOME (lista statica, nessuna animazione)
+     7. Render: GALLERY (progetti + core archive) — slide orizzontale
+     8. Render: CONTACTS / ABOUT
+     9. Router (con gestione errori)
    ========================================================================== */
 
 /* -------------------------------------------------------------------------
@@ -44,6 +47,10 @@ function el(tag, attrs = {}, children = []) {
 
 function findProject(slug) {
   return PROJECTS.find((p) => p.slug === slug) || null;
+}
+
+function isEditMode() {
+  return document.body.classList.contains("edit-mode");
 }
 
 // Tiene traccia degli event listener/timer/observer della vista corrente,
@@ -103,7 +110,7 @@ function makeResizable(node, key, defaults = {}) {
 
   const observer = new ResizeObserver(() => {
     updateLabel();
-    if (document.body.classList.contains("edit-mode")) {
+    if (isEditMode()) {
       saveSizeOverride(key, { width: node.style.width, height: node.style.height });
     }
   });
@@ -112,35 +119,8 @@ function makeResizable(node, key, defaults = {}) {
   return observer;
 }
 
-function setupEditMode(observers) {
-  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica dimensioni", title: "Modifica dimensioni" }, "⇲");
-  const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta dimensioni", title: "Esporta dimensioni" }, "⇩");
-
-  toggle.addEventListener("click", () => {
-    document.body.classList.toggle("edit-mode");
-  });
-  exportBtn.addEventListener("click", () => openExportPanel());
-
-  document.body.appendChild(toggle);
-  document.body.appendChild(exportBtn);
-
-  return () => {
-    toggle.remove();
-    exportBtn.remove();
-  };
-}
-
-// Ferma l'app.js corrente (i toggle di modifica restano tra una pagina e
-// l'altra, non vengono ricreati dal router).
-let editModeTeardown = null;
-function ensureEditModeUI() {
-  if (editModeTeardown) return;
-  editModeTeardown = setupEditMode();
-}
-
 function describeOverrideKey(key) {
-  const homeMatch = key === "home.list";
-  if (homeMatch) return `LAYOUT.home  →  aggiorna listWidth/listHeight in content.js`;
+  if (key === "home.list") return `LAYOUT.home  →  aggiorna listWidth/listHeight in content.js`;
 
   const descMatch = key.match(/^project\.(.+)\.description$/);
   if (descMatch) return `Progetto "${descMatch[1]}"  →  aggiungi/aggiorna "descriptionBox" su quel progetto in PROJECTS`;
@@ -163,9 +143,9 @@ function buildExportText() {
     return "Non hai ancora ridimensionato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra), trascina l'angolo in basso a destra di un blocco per cambiarne larghezza/altezza, poi torna qui.";
   }
   const lines = [
-    "Dimensioni personalizzate — copia i valori qui sotto dentro content.js",
-    "(sostituendo/aggiungendo i campi indicati), poi puoi anche azzerare",
-    "queste modifiche dal pulsante \"Reset\" qui sotto.",
+    "Dimensioni personalizzate — copia i valori qui sotto (o manda a me",
+    "questo testo) per aggiornare content.js e rendere le modifiche",
+    "permanenti sul sito pubblicato.",
     "",
   ];
   keys.forEach((key) => {
@@ -210,7 +190,7 @@ function openExportPanel() {
 
   const inner = el("div", { class: "export-panel-inner" }, [
     el("h2", {}, "Esporta dimensioni"),
-    el("p", {}, "Queste sono le dimensioni che hai regolato trascinando. Copiale in content.js per renderle permanenti sul sito pubblicato."),
+    el("p", {}, "Queste sono le dimensioni che hai regolato trascinando. Copiale (o mandami questo testo in chat) per renderle permanenti sul sito pubblicato."),
     textarea,
     el("div", { class: "export-panel-actions" }, [copyBtn, resetBtn, closeBtn]),
   ]);
@@ -218,8 +198,62 @@ function openExportPanel() {
   document.body.appendChild(overlay);
 }
 
+// Il bottone di modifica e quello di esportazione restano identici tra una
+// pagina e l'altra: si creano una volta sola, non li ricrea il router.
+let editModeUIReady = false;
+function ensureEditModeUI() {
+  if (editModeUIReady) return;
+  editModeUIReady = true;
+
+  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica dimensioni", title: "Modifica dimensioni: trascina gli angoli di testo e foto" }, "⇲");
+  const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta dimensioni", title: "Esporta dimensioni" }, "⇩");
+
+  toggle.addEventListener("click", () => {
+    document.body.classList.toggle("edit-mode");
+  });
+  exportBtn.addEventListener("click", () => openExportPanel());
+
+  document.body.appendChild(toggle);
+  document.body.appendChild(exportBtn);
+}
+
 /* -------------------------------------------------------------------------
-   4. Placeholder immagini
+   4. Lightbox — clic su una foto per ingrandirla (solo la foto, sfondo
+   scuro come il resto del sito, non a tutto schermo: l'immagine resta
+   contenuta con un margine). Disattivo in modalità modifica, per non
+   aprirlo per sbaglio mentre si trascina una maniglia di resize.
+   ------------------------------------------------------------------------- */
+function openLightbox(src, alt) {
+  const overlay = el("div", { class: "lightbox" }, [
+    el("img", { src, alt: alt || "" }),
+  ]);
+  const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
+
+  function close() {
+    overlay.remove();
+    document.removeEventListener("keydown", onKeydown);
+  }
+  function onKeydown(e) {
+    if (e.key === "Escape") close();
+  }
+
+  overlay.addEventListener("click", close);
+  closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
+  document.addEventListener("keydown", onKeydown);
+
+  overlay.appendChild(closeBtn);
+  document.body.appendChild(overlay);
+}
+
+function makeZoomable(frame, img) {
+  frame.addEventListener("click", () => {
+    if (isEditMode()) return;
+    openLightbox(img.src, img.alt);
+  });
+}
+
+/* -------------------------------------------------------------------------
+   5. Placeholder immagini
    ------------------------------------------------------------------------- */
 function hashString(str) {
   let h = 0;
@@ -258,7 +292,7 @@ function resolveImageSrc(seed, index, image) {
 }
 
 /* -------------------------------------------------------------------------
-   5. Render: HOME — lista statica, dimensioni da LAYOUT.home
+   6. Render: HOME — lista statica, dimensioni da LAYOUT.home
    ------------------------------------------------------------------------- */
 function renderHome() {
   app.innerHTML = "";
@@ -297,16 +331,22 @@ function renderHome() {
 }
 
 /* -------------------------------------------------------------------------
-   6. Render: GALLERY (usata sia per i progetti sia per "core archive")
+   7. Render: GALLERY (usata sia per i progetti sia per "core archive")
    Le foto scorrono in ORIZZONTALE (slide) tra loro; la pagina scorre in
-   VERTICALE quando testo o foto corrente non entrano nello schermo.
+   VERTICALE quando testo o foto corrente non entrano nello schermo. Clic su
+   una foto la ingrandisce (lightbox).
+
+   Le frecce in basso, per un progetto, portano al progetto precedente/
+   successivo (passa "projectNav"); per core archive, invece, scorrono le
+   foto della selezione (projectNav assente).
    ------------------------------------------------------------------------- */
-function renderGallery({ keyPrefix, total, title, description, descriptionBox, images }) {
+function renderGallery({ total, title, description, descriptionBox, images, projectNav }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
   ensureEditModeUI();
 
   const resizeObservers = [];
+  const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
 
   const topbar = el("div", { class: "topbar" }, [
     el("span", { class: "topbar-index" }, String(total)),
@@ -322,35 +362,33 @@ function renderGallery({ keyPrefix, total, title, description, descriptionBox, i
     description.map((paragraph) => el("p", {}, paragraph))
   );
   resizeObservers.push(
-    makeResizable(descBlock, `${keyPrefix}.description`, {
+    makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
       width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
       height: descriptionBox && descriptionBox.height,
     })
   );
 
-  const frames = [];
   const figures = images.map((image, i) => {
     const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
     const frame = el("div", { class: "photo-frame" }, [img]);
-    frames.push(frame);
-    const figure = el("figure", { class: "photo", "data-index": i }, [
-      frame,
-      image.caption ? el("figcaption", {}, image.caption) : null,
-    ]);
     resizeObservers.push(
-      makeResizable(frame, `${keyPrefix}.image.${i}`, {
+      makeResizable(frame, `${sizeKeyPrefix}.image.${i}`, {
         width: image.width || LAYOUT.gallery.imageWidth,
         height: image.height || LAYOUT.gallery.imageHeight,
       })
     );
-    return figure;
+    makeZoomable(frame, img);
+    return el("figure", { class: "photo", "data-index": i }, [
+      frame,
+      image.caption ? el("figcaption", {}, image.caption) : null,
+    ]);
   });
 
   const track = el("div", { class: "photo-track" }, figures);
   const viewport = el("div", { class: "photo-viewport" }, [track]);
 
-  const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Foto precedente" }, "←");
-  const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Foto successiva" }, "→");
+  const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
+  const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
   const counter = el("span", { class: "nav-counter" }, `${images.length ? 1 : 0} / ${images.length}`);
   const footerBar = el("div", { class: "gallerybar" }, [prevBtn, counter, nextBtn]);
 
@@ -359,7 +397,11 @@ function renderGallery({ keyPrefix, total, title, description, descriptionBox, i
   app.appendChild(viewport);
   app.appendChild(footerBar);
 
-  /* ---- viewer: slide orizzontale, autoplay 5s + transizione 2s + frecce ---- */
+  /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----
+     Questo scorrimento automatico tra le foto della galleria funziona
+     sempre, sia per un progetto sia per core archive. Cambia solo cosa
+     fanno le frecce: su un progetto portano al progetto precedente/
+     successivo (vedi sotto), su core archive scorrono le foto. */
   let current = 0;
   let autoplayTimer = null;
   let paused = false;
@@ -409,8 +451,15 @@ function renderGallery({ keyPrefix, total, title, description, descriptionBox, i
     scheduleNext();
   }
 
-  prevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
-  nextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
+  // Le frecce, su un progetto, portano al progetto precedente/successivo
+  // invece di scorrere le foto della galleria corrente.
+  if (projectNav) {
+    prevBtn.addEventListener("click", () => { location.hash = `#/project/${projectNav.prevSlug}`; });
+    nextBtn.addEventListener("click", () => { location.hash = `#/project/${projectNav.nextSlug}`; });
+  } else {
+    prevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
+    nextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
+  }
   viewport.addEventListener("mouseenter", handlePause);
   viewport.addEventListener("mouseleave", handleResume);
   viewport.addEventListener("touchstart", handlePause, { passive: true });
@@ -453,20 +502,24 @@ function renderProject(slug) {
     return;
   }
   const images = project.images.map((img, i) => ({ ...img, _src: resolveImageSrc(project.slug, i, img) }));
+
+  const idx = PROJECTS.indexOf(project);
+  const prevSlug = PROJECTS[(idx - 1 + PROJECTS.length) % PROJECTS.length].slug;
+  const nextSlug = PROJECTS[(idx + 1) % PROJECTS.length].slug;
+
   renderGallery({
-    keyPrefix: `project.${project.slug}`,
     total: images.length,
     title: project.name.toLowerCase(),
     description: project.description,
     descriptionBox: project.descriptionBox,
     images,
+    projectNav: { slug: project.slug, prevSlug, nextSlug },
   });
 }
 
 function renderArchive() {
   const images = ARCHIVE.images.map((img, i) => ({ ...img, _src: resolveImageSrc("archive", i, img) }));
   renderGallery({
-    keyPrefix: "archive",
     total: images.length,
     title: ARCHIVE.title,
     description: ARCHIVE.description,
@@ -475,7 +528,7 @@ function renderArchive() {
 }
 
 /* -------------------------------------------------------------------------
-   7. Render: CONTACTS / ABOUT
+   8. Render: CONTACTS / ABOUT
    ------------------------------------------------------------------------- */
 function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   app.innerHTML = "";
@@ -514,7 +567,7 @@ function renderNotFound() {
 }
 
 /* -------------------------------------------------------------------------
-   8. Router
+   9. Router
    ------------------------------------------------------------------------- */
 function parseHash() {
   const hash = location.hash.replace(/^#\/?/, "");
@@ -522,28 +575,48 @@ function parseHash() {
   return { route: route || "home", param };
 }
 
+// Se content.js ha un errore (virgole/virgolette sbagliate, un campo che
+// manca...) mostriamo un messaggio leggibile invece di lasciare la pagina
+// vuota — così si capisce subito cosa è successo.
+function showFatalError(error) {
+  app.classList.remove("has-fixed-bars");
+  app.innerHTML = "";
+  app.appendChild(
+    el("div", { style: "padding:40px;font-family:ui-monospace,monospace;font-size:0.85rem;line-height:1.6;white-space:pre-wrap;" }, [
+      el("p", {}, "C'è un errore in content.js e la pagina non riesce a caricarsi del tutto:"),
+      el("p", { style: "color:#a33;" }, String(error && error.message ? error.message : error)),
+      el("p", {}, "Causa più comune: hai incollato un testo che contiene virgolette dritte (\" o ') dentro una stringa delimitata dagli stessi apici, oppure manca una virgola tra due righe. Se hai appena incollato un testo, prova a racchiuderlo tra backtick ` invece che tra virgolette \" \" — tollerano meglio apici e virgolette dentro il testo."),
+    ])
+  );
+}
+
 function renderRoute() {
   teardownCurrentView();
-  const { route, param } = parseHash();
+  try {
+    const { route, param } = parseHash();
 
-  switch (route) {
-    case "project":
-      renderProject(param);
-      break;
-    case "archive":
-      renderArchive();
-      break;
-    case "contacts":
-      renderContacts();
-      break;
-    case "about":
-      renderAbout();
-      break;
-    case "home":
-    case "":
-    default:
-      renderHome();
-      break;
+    switch (route) {
+      case "project":
+        renderProject(param);
+        break;
+      case "archive":
+        renderArchive();
+        break;
+      case "contacts":
+        renderContacts();
+        break;
+      case "about":
+        renderAbout();
+        break;
+      case "home":
+      case "":
+      default:
+        renderHome();
+        break;
+    }
+  } catch (error) {
+    console.error(error);
+    showFatalError(error);
   }
 
   window.scrollTo(0, 0);

@@ -21,7 +21,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: "TeX Gyre Heros", Helvetica, Arial, sans-serif;
-  font-weight: 400;
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -58,8 +58,8 @@ button {
 .page {
   position: relative;
   width: min(100%, var(--panel-width));
-  min-height: 100vh;
-  margin: 0 auto;
+  min-height: calc(100vh - 40px);
+  margin: 20px auto;
   background: var(--paper);
   padding: 32px 40px 56px;
   display: flex;
@@ -77,6 +77,7 @@ button {
   .page {
     width: 100%;
     min-height: 100dvh;
+    margin: 0 auto;
     padding: 24px 20px 40px;
   }
 }
@@ -234,11 +235,14 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  cursor: zoom-in;
 }
 
 .photo figcaption {
   padding: 14px 0 0;
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
   font-size: 0.8rem;
+  font-weight: 400;
   color: var(--muted);
   text-align: center;
 }
@@ -293,6 +297,52 @@ button {
 }
 
 /* ==========================================================================
+   LIGHTBOX — clic su una foto per ingrandirla. Mostra solo la foto (niente
+   testo/topbar), su uno sfondo scuro identico al resto del sito, senza
+   riempire tutto lo schermo: l'immagine resta contenuta con un margine.
+   ========================================================================== */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  cursor: zoom-out;
+}
+
+.lightbox img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  cursor: default;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 301;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: var(--paper);
+  opacity: 0.7;
+}
+
+.lightbox-close:hover {
+  opacity: 1;
+}
+
+@media (max-width: 700px) {
+  .lightbox { padding: 20px; }
+}
+
+/* ==========================================================================
    MODALITÀ MODIFICA — regolare le dimensioni trascinando, non a numeri.
    ==========================================================================
    Il bottoncino "⇲" in basso a destra attiva/disattiva la modalità. Con la
@@ -304,32 +354,35 @@ button {
    soddisfatto, apri "Esporta dimensioni" per avere il testo pronto da
    incollare in content.js e rendere le modifiche permanenti sul sito
    pubblicato. In modalità modifica i link (voci della lista, frecce,
-   hamburger) sono disattivati per non navigare per sbaglio mentre trascini.
+   hamburger) e il lightbox sono disattivati per non navigare/ingrandire
+   per sbaglio mentre trascini.
    ------------------------------------------------------------------------- */
 .edit-toggle,
 .export-toggle {
   position: fixed;
   right: 16px;
   z-index: 100;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #2b2b28;
   color: var(--paper);
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.35;
-  transition: opacity 0.2s ease;
+  opacity: 0.6;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .edit-toggle { bottom: 16px; }
-.export-toggle { bottom: 64px; display: none; }
+.export-toggle { bottom: 68px; display: none; }
 
 .edit-toggle:hover,
 .export-toggle:hover {
   opacity: 1;
+  transform: scale(1.05);
 }
 
 body.edit-mode .edit-toggle {
@@ -346,12 +399,13 @@ body.edit-mode .description,
 body.edit-mode .photo-frame {
   resize: both;
   overflow: auto;
-  outline: 1px dashed rgba(43, 43, 40, 0.5);
+  outline: 2px dashed #8a3b2b;
   outline-offset: 3px;
 }
 
 body.edit-mode .photo-frame {
   overflow: hidden; /* niente scrollbar su una foto, solo crop */
+  cursor: default;
 }
 
 .resizable-label {
@@ -359,10 +413,10 @@ body.edit-mode .photo-frame {
   top: 4px;
   left: 4px;
   font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
-  font-size: 0.68rem;
-  background: rgba(43, 43, 40, 0.85);
+  font-size: 0.7rem;
+  background: #8a3b2b;
   color: var(--paper);
-  padding: 2px 6px;
+  padding: 3px 7px;
   border-radius: 3px;
   pointer-events: none;
   z-index: 2;
