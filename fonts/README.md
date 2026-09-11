@@ -1,12 +1,12 @@
 # Font
 
-In uso ora:
+In uso:
 
 ```
-fonts/TeXGyreHerosCn-Regular.otf     file originale che mi hai dato
-fonts/TeXGyreHerosCn-Regular.woff2   stessa font, convertita per un caricamento più leggero
+fonts/TeXGyreHeros-Regular.otf     file originale
+fonts/TeXGyreHeros-Regular.woff2   stessa font, convertita per un caricamento più leggero
 ```
 
-⚠️ **Nota**: il file che mi hai mandato è **TeX Gyre Heros Cn** — la "Cn" sta per *Condensed*, cioè la variante **stretta** della famiglia, diversa dalla "TeX Gyre Heros" normale (più larga) usata come riferimento visivo iniziale. Il sito la usa comunque, quindi le lettere sono un po' più strette di quanto visto negli screenshot di partenza.
+Questa è la "TeX Gyre Heros" normale (larghezza standard), verificata dai metadati interni del file. È collegata in `css/style.css` via `@font-face`, niente altro da configurare.
 
-Se invece volevi la larghezza normale: cercami il file `TeXGyreHeros-Regular.otf` (senza "Cn") nello stesso pacchetto font da cui hai preso questo, mandamelo e sostituisco i due file qui sopra — non serve toccare nient'altro, `css/style.css` punta già a questi nomi file.
+(In una versione precedente era stata usata per errore la variante "Cn"/Condensed, più stretta — è stata sostituita con questa.)
