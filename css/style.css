@@ -218,6 +218,7 @@ button {
 .photo {
   flex: 0 0 100%;
   width: 100%;
+  margin: 0; /* <figure> ha un margine di default del browser (~40px ai lati): lo azzeriamo */
   padding: 0 40px 72px;
 }
 
