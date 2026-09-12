@@ -3,10 +3,10 @@
 In uso:
 
 ```
-fonts/TeXGyreHeros-Regular.otf     file originale
-fonts/TeXGyreHeros-Regular.woff2   stessa font, convertita per un caricamento più leggero
+fonts/HankenGrotesk-Regular.ttf     file originale
+fonts/HankenGrotesk-Regular.woff2   stessa font, convertita per un caricamento più leggero
 ```
 
-Questa è la "TeX Gyre Heros" normale (larghezza standard), verificata dai metadati interni del file. È collegata in `css/style.css` via `@font-face`, niente altro da configurare.
+**Hanken Grotesk**, licenza SIL Open Font License 1.1 — libera per qualsiasi uso, incluso web e commerciale, nessuna restrizione. Scelta come alternativa gratuita a ABC Diatype (font a pagamento, licenza trial non utilizzabile su un sito pubblico).
 
-(In una versione precedente era stata usata per errore la variante "Cn"/Condensed, più stretta — è stata sostituita con questa.)
+Nota: abbiamo solo il peso **Regular (400)**, ma il sito lo usa a **peso 500** (`font-weight: 500` in `style.css`) — senza un vero file "Medium", il browser lo inspessisce artificialmente (bold finto). Se vuoi un peso 500 "vero", scarica anche `HankenGrotesk-Medium.ttf` dalla stessa famiglia (es. da Google Fonts) e aggiungi un secondo blocco `@font-face` con `font-weight: 500` che punti a quel file — il resto del sito non cambia.
