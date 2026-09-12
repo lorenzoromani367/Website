@@ -110,11 +110,53 @@ function makeResizable(node, key, defaults = {}) {
 
   const observer = new ResizeObserver(() => {
     updateLabel();
-    if (isEditMode()) {
-      saveSizeOverride(key, { width: node.style.width, height: node.style.height });
-    }
   });
   observer.observe(node);
+
+  // Maniglia disegnata da noi (vedi commento in style.css sul perché non
+  // usiamo il resize nativo del browser): trascinala per cambiare
+  // larghezza/altezza. Funziona con mouse e dito (pointer events).
+  const handle = el("div", { class: "resize-handle" });
+  node.appendChild(handle);
+
+  let dragStart = null; // { pointerId, startX, startY, startWidth, startHeight }
+
+  function onPointerMove(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    const dx = e.clientX - dragStart.startX;
+    const dy = e.clientY - dragStart.startY;
+    const newWidth = Math.max(40, Math.round(dragStart.startWidth + dx));
+    const newHeight = Math.max(40, Math.round(dragStart.startHeight + dy));
+    node.style.width = `${newWidth}px`;
+    node.style.height = `${newHeight}px`;
+    updateLabel();
+  }
+
+  function onPointerUp(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    handle.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    saveSizeOverride(key, { width: node.style.width, height: node.style.height });
+    dragStart = null;
+  }
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (!isEditMode()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = node.getBoundingClientRect();
+    dragStart = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startWidth: rect.width,
+      startHeight: rect.height,
+    };
+    handle.classList.add("is-dragging");
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  });
 
   return observer;
 }
