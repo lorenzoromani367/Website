@@ -1,11 +1,11 @@
 /* ==========================================================================
-   TYPE — Hanken Grotesk (SIL OFL, uso libero anche commerciale/web)
+   TYPE — IBM Plex Sans (SIL OFL, uso libero anche commerciale/web)
    ========================================================================== */
 @font-face {
-  font-family: "Hanken Grotesk";
+  font-family: "IBM Plex Sans";
   src:
-    url("../fonts/HankenGrotesk-Regular.woff2") format("woff2"),
-    url("../fonts/HankenGrotesk-Regular.ttf") format("truetype");
+    url("../fonts/IBMPlexSans-Regular.woff2") format("woff2"),
+    url("../fonts/IBMPlexSans-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -20,7 +20,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Hanken Grotesk", Helvetica, Arial, sans-serif;
+  font-family: "IBM Plex Sans", Helvetica, Arial, sans-serif;
   font-weight: 500;
   -webkit-font-smoothing: antialiased;
 }
@@ -396,17 +396,15 @@ body.edit-mode .export-toggle {
 }
 
 body.edit-mode .home-list,
-body.edit-mode .description,
-body.edit-mode .photo-frame {
-  resize: both;
+body.edit-mode .description {
   overflow: auto;
-  outline: 2px dashed #8a3b2b;
-  outline-offset: 3px;
 }
 
+body.edit-mode .home-list,
+body.edit-mode .description,
 body.edit-mode .photo-frame {
-  overflow: hidden; /* niente scrollbar su una foto, solo crop */
-  cursor: default;
+  outline: 2px dashed #8a3b2b;
+  outline-offset: 3px;
 }
 
 .resizable-label {
@@ -429,10 +427,52 @@ body.edit-mode .resizable-label {
   display: block;
 }
 
+/* Maniglia di resize disegnata da noi (non quella nativa del browser,
+   troppo piccola/incoerente tra browser diversi): un quadratino ben
+   visibile nell'angolo in basso a destra, trascinabile col mouse o col
+   dito. Sta leggermente FUORI dal bordo dell'elemento (right/bottom
+   negativi) così è sempre raggiungibile anche se il contenuto arriva
+   fino al bordo. */
+.resize-handle {
+  display: none;
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: #8a3b2b;
+  border: 2px solid var(--paper);
+  cursor: nwse-resize;
+  z-index: 3;
+  touch-action: none;
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--paper);
+  border-bottom: 2px solid var(--paper);
+}
+
+body.edit-mode .resize-handle {
+  display: block;
+}
+
+body.edit-mode .resize-handle:hover,
+.resize-handle.is-dragging {
+  background: #b04d38;
+}
+
 body.edit-mode .home-list a,
 body.edit-mode .hamburger,
 body.edit-mode .nav-arrow,
-body.edit-mode .footer-link {
+body.edit-mode .footer-link,
+body.edit-mode .photo-frame img {
   pointer-events: none;
 }
 
