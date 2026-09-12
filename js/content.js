@@ -55,13 +55,9 @@ const PROJECTS = [
     slug: "lines",
     name: "Lines",
     description: [
-      "I'm drawn to ordinary architecture, anonymous buildings, unremarkable structures, the kind of places that don't ask to be looked at. What interests me is what happens when you look anyway: the geometry that becomes visible when context falls away, the weight of a wall, the line where two materials meet, the moment when something background becomes the thing itself.
-
-
-I shoot on film, which slows the process down and changes what I notice. Light and grain do work that description can't.
-
-
-Each image is a single encounter with a specific place and a specific quality of light. As for my stills, they form a growing archive, i will endlessly keep returning to.",
+      "I'm drawn to ordinary architecture, anonymous buildings, unremarkable structures, the kind of places that don't ask to be looked at. What interests me is what happens when you look anyway: the geometry that becomes visible when context falls away, the weight of a wall, the line where two materials meet, the moment when something background becomes the thing itself.",
+      "I shoot on film, which slows the process down and changes what I notice. Light and grain do work that description can't.",
+      "Each image is a single encounter with a specific place and a specific quality of light. As for my stills, they form a growing archive, i will endlessly keep returning to.",
     ],
     // descriptionBox: { width: "620px" },  // <- decommenta per sovrascrivere LAYOUT.gallery.descriptionWidth per questo solo progetto
     images: [
