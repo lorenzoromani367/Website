@@ -131,6 +131,75 @@ function currentImageOrder(key, length) {
   return Array.from({ length }, (_, i) => i);
 }
 
+/* -------------------------------------------------------------------------
+   Posizione libera a trascinamento (per ora solo le didascalie: si spostano
+   indipendentemente dalla loro foto, non seguono l'ordine/resize della
+   foto). A differenza di makeReorderable, qui non si scambia posto con un
+   fratello: l'elemento si sposta liberamente di quanto trascinato.
+   ------------------------------------------------------------------------- */
+const POSITION_STORE_KEY = "site-position-overrides-v1";
+
+function loadPositionOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(POSITION_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function savePositionOverride(key, pos) {
+  const all = loadPositionOverrides();
+  all[key] = pos;
+  try {
+    localStorage.setItem(POSITION_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la posizione resta comunque applicata per questa sessione */
+  }
+}
+
+// Rende "node" spostabile liberamente (in alto/basso/sinistra/destra) con
+// una maniglia verde dedicata, indipendente da resize e riordino. "key"
+// identifica l'elemento (es. "project.lines.caption.0", indice ORIGINALE
+// della foto, così la didascalia resta legata alla foto giusta anche se
+// la foto viene riordinata).
+function makeMovableFree(node, key) {
+  if (!node.style.position) node.style.position = "relative";
+
+  const pos = Object.assign({ x: 0, y: 0 }, loadPositionOverrides()[key]);
+  if (pos.x || pos.y) node.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+
+  const handle = el("div", { class: "move-handle free-move", title: "Trascina per spostare la didascalia" });
+  node.appendChild(handle);
+
+  let dragState = null;
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (!isEditMode()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragState = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y };
+    handle.classList.add("is-dragging");
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  });
+
+  function onPointerMove(e) {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    pos.x = dragState.baseX + (e.clientX - dragState.startX);
+    pos.y = dragState.baseY + (e.clientY - dragState.startY);
+    node.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+  }
+
+  function onPointerUp(e) {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    handle.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    dragState = null;
+    savePositionOverride(key, { x: pos.x, y: pos.y });
+  }
+}
+
 // Rende "item" trascinabile per riordinarlo tra i suoi fratelli dentro
 // "container", lungo l'asse "axis" ('x' per una fila orizzontale come le
 // foto, 'y' per una lista verticale come la home). "onReorder(from, to)"
@@ -295,14 +364,26 @@ function describeOrderKey(key) {
   return key;
 }
 
+function describePositionKey(key) {
+  const captionMatch = key.match(/^project\.(.+)\.caption\.(\d+)$/);
+  if (captionMatch) return `Progetto "${captionMatch[1]}", didascalia foto #${Number(captionMatch[2]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di "images"`;
+
+  const archiveCaptionMatch = key.match(/^archive\.caption\.(\d+)$/);
+  if (archiveCaptionMatch) return `Core archive, didascalia foto #${Number(archiveCaptionMatch[1]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di ARCHIVE.images`;
+
+  return key;
+}
+
 function buildExportText() {
   const sizeOverrides = loadSizeOverrides();
   const orderOverrides = loadOrderOverrides();
+  const positionOverrides = loadPositionOverrides();
   const sizeKeys = Object.keys(sizeOverrides);
   const orderKeys = Object.keys(orderOverrides);
+  const positionKeys = Object.keys(positionOverrides);
 
-  if (!sizeKeys.length && !orderKeys.length) {
-    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): trascina l'angolo in basso a destra di un blocco per ridimensionarlo, o l'icona ⠿ per riordinarlo. Poi torna qui.";
+  if (!sizeKeys.length && !orderKeys.length && !positionKeys.length) {
+    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente la didascalia. Poi torna qui.";
   }
 
   const lines = [
@@ -327,6 +408,16 @@ function buildExportText() {
     orderKeys.forEach((key) => {
       lines.push(`# ${describeOrderKey(key)}`);
       lines.push(`  ${JSON.stringify(orderOverrides[key])}`);
+      lines.push("");
+    });
+  }
+
+  if (positionKeys.length) {
+    lines.push("=== POSIZIONE DIDASCALIE ===", "");
+    positionKeys.forEach((key) => {
+      const pos = positionOverrides[key];
+      lines.push(`# ${describePositionKey(key)}`);
+      lines.push(`  { x: ${Math.round(pos.x)}, y: ${Math.round(pos.y)} }`);
       lines.push("");
     });
   }
@@ -358,6 +449,7 @@ function openExportPanel() {
   resetBtn.addEventListener("click", () => {
     localStorage.removeItem(SIZE_STORE_KEY);
     localStorage.removeItem(ORDER_STORE_KEY);
+    localStorage.removeItem(POSITION_STORE_KEY);
     location.reload();
   });
 
@@ -383,7 +475,7 @@ function ensureEditModeUI() {
   if (editModeUIReady) return;
   editModeUIReady = true;
 
-  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: trascina l'angolo per ridimensionare, l'icona ⠿ per riordinare" }, "⇲");
+  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta la didascalia" }, "⇲");
   const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta modifiche", title: "Esporta modifiche" }, "⇩");
 
   toggle.addEventListener("click", () => {
@@ -559,19 +651,21 @@ function renderGallery({ total, title, description, descriptionBox, images, imag
   );
 
   const figures = images.map((image, i) => {
+    const origIndex = image._index != null ? image._index : i;
     const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
     const frame = el("div", { class: "photo-frame" }, [img]);
     resizeObservers.push(
-      makeResizable(frame, `${sizeKeyPrefix}.image.${i}`, {
+      makeResizable(frame, `${sizeKeyPrefix}.image.${origIndex}`, {
         width: image.width || LAYOUT.gallery.imageWidth,
         height: image.height || LAYOUT.gallery.imageHeight,
       })
     );
     makeZoomable(frame, img);
-    return el("figure", { class: "photo", "data-index": i }, [
-      frame,
-      image.caption ? el("figcaption", {}, image.caption) : null,
-    ]);
+
+    const figcaption = image.caption ? el("figcaption", {}, image.caption) : null;
+    if (figcaption) makeMovableFree(figcaption, `${sizeKeyPrefix}.caption.${origIndex}`);
+
+    return el("figure", { class: "photo", "data-index": i }, [frame, figcaption]);
   });
 
   const track = el("div", { class: "photo-track" }, figures);
@@ -711,7 +805,7 @@ function renderProject(slug) {
   const order = currentImageOrder(orderKey, project.images.length);
   const images = order.map((origIndex) => {
     const img = project.images[origIndex];
-    return { ...img, _src: resolveImageSrc(project.slug, origIndex, img) };
+    return { ...img, _index: origIndex, _src: resolveImageSrc(project.slug, origIndex, img) };
   });
 
   const orderedProjects = getOrderedProjects();
@@ -736,7 +830,7 @@ function renderArchive() {
   const order = currentImageOrder(orderKey, ARCHIVE.images.length);
   const images = order.map((origIndex) => {
     const img = ARCHIVE.images[origIndex];
-    return { ...img, _src: resolveImageSrc("archive", origIndex, img) };
+    return { ...img, _index: origIndex, _src: resolveImageSrc("archive", origIndex, img) };
   });
   renderGallery({
     total: images.length,
