@@ -344,19 +344,21 @@ button {
 }
 
 /* ==========================================================================
-   MODALITÀ MODIFICA — regolare le dimensioni trascinando, non a numeri.
+   MODALITÀ MODIFICA — regolare dimensioni e ordine trascinando, non a numeri.
    ==========================================================================
    Il bottoncino "⇲" in basso a destra attiva/disattiva la modalità. Con la
-   modalità attiva, il blocco lista in home, il testo di descrizione e ogni
-   foto mostrano una maniglia di ridimensionamento nell'angolo in basso a
-   destra (il cursore diventa una doppia freccia): trascinala per cambiare
-   larghezza/altezza a vista. Ogni dimensione scelta resta salvata nel
-   browser (localStorage) e viene riproposta ad ogni visita. Quando sei
-   soddisfatto, apri "Esporta dimensioni" per avere il testo pronto da
-   incollare in content.js e rendere le modifiche permanenti sul sito
-   pubblicato. In modalità modifica i link (voci della lista, frecce,
-   hamburger) e il lightbox sono disattivati per non navigare/ingrandire
-   per sbaglio mentre trascini.
+   modalità attiva, ogni blocco (lista home, testo, foto) mostra:
+     - un'etichetta in alto a sinistra con le dimensioni attuali;
+     - una maniglia rossa in basso a destra per ridimensionare (cursore a
+       doppia freccia);
+     - una maniglia blu con l'icona ⠿ per riordinarlo tra i suoi vicini
+       (in alto a destra sulle foto, prima del nome nella lista home).
+   Ogni modifica resta salvata nel browser (localStorage) e viene riproposta
+   ad ogni visita. Quando sei soddisfatto, apri "Esporta modifiche" per
+   avere il testo pronto da incollare in content.js e renderle permanenti
+   sul sito pubblicato. In modalità modifica i link (voci della lista,
+   frecce, hamburger) e il lightbox sono disattivati per non navigare/
+   ingrandire per sbaglio mentre trascini.
    ------------------------------------------------------------------------- */
 .edit-toggle,
 .export-toggle {
@@ -446,6 +448,62 @@ body.edit-mode .resizable-label {
   cursor: nwse-resize;
   z-index: 3;
   touch-action: none;
+}
+
+/* Maniglia di riordino: trascinala per cambiare la posizione di una foto
+   dentro la galleria (orizzontale) o di un nome nella lista home
+   (verticale). Colore diverso da quella di resize per non confonderle. */
+.move-handle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: #2b6e8a;
+  border: 2px solid var(--paper);
+  color: var(--paper);
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
+  z-index: 3;
+  touch-action: none;
+  flex: 0 0 auto;
+}
+
+.move-handle::before {
+  content: "⠿";
+}
+
+body.edit-mode .move-handle {
+  display: inline-flex;
+}
+
+body.edit-mode .move-handle:hover,
+.move-handle.is-dragging {
+  background: #3a8ab0;
+  cursor: grabbing;
+}
+
+/* dentro una foto: angolo in alto a destra (il resize resta in basso a
+   destra, l'etichetta con le misure in alto a sinistra) */
+.photo-frame .move-handle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+/* dentro la lista home: icona inline prima del nome, solo in modalità
+   modifica (il resto del tempo la lista resta un elenco normale) */
+body.edit-mode .home-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.is-dragging-item {
+  opacity: 0.55;
+  z-index: 20;
 }
 
 .resize-handle::after {

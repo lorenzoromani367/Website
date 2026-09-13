@@ -84,6 +84,112 @@ function saveSizeOverride(key, size) {
   }
 }
 
+/* -------------------------------------------------------------------------
+   Ordine regolabile a trascinamento (riordinare i progetti in home, o le
+   foto dentro una galleria) — stessa logica di salvataggio delle dimensioni,
+   store separato.
+   ------------------------------------------------------------------------- */
+const ORDER_STORE_KEY = "site-order-overrides-v1";
+
+function loadOrderOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(ORDER_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveOrderOverride(key, order) {
+  const all = loadOrderOverrides();
+  all[key] = order;
+  try {
+    localStorage.setItem(ORDER_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: l'ordine resta comunque applicato per questa sessione */
+  }
+}
+
+// L'ordine dei progetti in home (e quindi anche dei "progetto precedente/
+// successivo" nelle frecce), se è stato cambiato trascinando; altrimenti
+// l'ordine originale di content.js.
+function getOrderedProjects() {
+  const order = loadOrderOverrides()["home.order"];
+  if (!order) return PROJECTS.slice();
+  const bySlug = new Map(PROJECTS.map((p) => [p.slug, p]));
+  const ordered = order.map((slug) => bySlug.get(slug)).filter(Boolean);
+  PROJECTS.forEach((p) => {
+    if (!ordered.includes(p)) ordered.push(p); // progetti nuovi non ancora nell'ordine salvato
+  });
+  return ordered;
+}
+
+// L'ordine delle foto di una galleria (progetto o archivio), come array di
+// indici ORIGINALI di content.js — es. [2,0,1] mostra prima la terza foto.
+function currentImageOrder(key, length) {
+  const stored = loadOrderOverrides()[key];
+  if (stored && stored.length === length) return stored.slice();
+  return Array.from({ length }, (_, i) => i);
+}
+
+// Rende "item" trascinabile per riordinarlo tra i suoi fratelli dentro
+// "container", lungo l'asse "axis" ('x' per una fila orizzontale come le
+// foto, 'y' per una lista verticale come la home). "onReorder(from, to)"
+// riceve gli indici e si occupa di salvare il nuovo ordine e ridisegnare.
+function makeReorderable(item, { container, axis, onReorder, handleParent }) {
+  if (!item.style.position) item.style.position = "relative";
+  const handle = el("div", { class: "move-handle", title: "Trascina per riordinare" });
+  const anchor = handleParent || item;
+  if (!anchor.style.position) anchor.style.position = "relative";
+  anchor.appendChild(handle);
+
+  let dragState = null;
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (!isEditMode()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragState = {
+      pointerId: e.pointerId,
+      startPos: axis === "x" ? e.clientX : e.clientY,
+      targetIndex: Array.from(container.children).indexOf(item),
+    };
+    item.classList.add("is-dragging-item");
+    handle.classList.add("is-dragging");
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  });
+
+  function onPointerMove(e) {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    const pointerPos = axis === "x" ? e.clientX : e.clientY;
+    const siblings = Array.from(container.children);
+    // spostamento visivo: l'elemento segue esattamente il movimento del puntatore
+    const delta = pointerPos - dragState.startPos;
+    item.style.transform = axis === "x" ? `translateX(${delta}px)` : `translateY(${delta}px)`;
+
+    dragState.targetIndex = siblings.filter((sib) => {
+      if (sib === item) return false;
+      const rect = sib.getBoundingClientRect();
+      const mid = axis === "x" ? rect.left + rect.width / 2 : rect.top + rect.height / 2;
+      return mid < pointerPos;
+    }).length;
+  }
+
+  function onPointerUp(e) {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    item.style.transform = "";
+    item.classList.remove("is-dragging-item");
+    handle.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+
+    const fromIndex = Array.from(container.children).indexOf(item);
+    const toIndex = dragState.targetIndex;
+    dragState = null;
+    if (toIndex != null && toIndex !== fromIndex) onReorder(fromIndex, toIndex);
+  }
+}
+
 // Rende "node" ridimensionabile a trascinamento in modalità modifica.
 // "key" identifica il blocco (es. "project.lines.image.0") per salvare e
 // riproporre la dimensione scelta. "defaults" sono width/height di partenza
@@ -178,24 +284,53 @@ function describeOverrideKey(key) {
   return key;
 }
 
+function describeOrderKey(key) {
+  if (key === "home.order") return `Home  →  riordina l'array PROJECTS in content.js mettendo i progetti in quest'ordine`;
+
+  const imgOrderMatch = key.match(/^project\.(.+)\.imageOrder$/);
+  if (imgOrderMatch) return `Progetto "${imgOrderMatch[1]}"  →  riordina l'array "images" mettendo le foto in quest'ordine (0 = prima foto originale, 1 = seconda, ...)`;
+
+  if (key === "archive.imageOrder") return `Core archive  →  riordina l'array ARCHIVE.images mettendo le foto in quest'ordine (0 = prima foto originale, 1 = seconda, ...)`;
+
+  return key;
+}
+
 function buildExportText() {
-  const overrides = loadSizeOverrides();
-  const keys = Object.keys(overrides);
-  if (!keys.length) {
-    return "Non hai ancora ridimensionato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra), trascina l'angolo in basso a destra di un blocco per cambiarne larghezza/altezza, poi torna qui.";
+  const sizeOverrides = loadSizeOverrides();
+  const orderOverrides = loadOrderOverrides();
+  const sizeKeys = Object.keys(sizeOverrides);
+  const orderKeys = Object.keys(orderOverrides);
+
+  if (!sizeKeys.length && !orderKeys.length) {
+    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): trascina l'angolo in basso a destra di un blocco per ridimensionarlo, o l'icona ⠿ per riordinarlo. Poi torna qui.";
   }
+
   const lines = [
-    "Dimensioni personalizzate — copia i valori qui sotto (o manda a me",
-    "questo testo) per aggiornare content.js e rendere le modifiche",
-    "permanenti sul sito pubblicato.",
+    "Modifiche personalizzate — copia i valori qui sotto (o manda a me",
+    "questo testo) per aggiornare content.js e renderle permanenti sul",
+    "sito pubblicato.",
     "",
   ];
-  keys.forEach((key) => {
-    const size = overrides[key];
-    lines.push(`# ${describeOverrideKey(key)}`);
-    lines.push(`  width: "${size.width || "auto"}", height: "${size.height || "auto"}"`);
-    lines.push("");
-  });
+
+  if (sizeKeys.length) {
+    lines.push("=== DIMENSIONI ===", "");
+    sizeKeys.forEach((key) => {
+      const size = sizeOverrides[key];
+      lines.push(`# ${describeOverrideKey(key)}`);
+      lines.push(`  width: "${size.width || "auto"}", height: "${size.height || "auto"}"`);
+      lines.push("");
+    });
+  }
+
+  if (orderKeys.length) {
+    lines.push("=== ORDINE ===", "");
+    orderKeys.forEach((key) => {
+      lines.push(`# ${describeOrderKey(key)}`);
+      lines.push(`  ${JSON.stringify(orderOverrides[key])}`);
+      lines.push("");
+    });
+  }
+
   return lines.join("\n");
 }
 
@@ -205,7 +340,7 @@ function openExportPanel() {
   textarea.value = buildExportText();
 
   const copyBtn = el("button", {}, "Copia");
-  const resetBtn = el("button", {}, "Reset dimensioni");
+  const resetBtn = el("button", {}, "Reset modifiche");
   const closeBtn = el("button", {}, "Chiudi");
 
   copyBtn.addEventListener("click", async () => {
@@ -222,6 +357,7 @@ function openExportPanel() {
 
   resetBtn.addEventListener("click", () => {
     localStorage.removeItem(SIZE_STORE_KEY);
+    localStorage.removeItem(ORDER_STORE_KEY);
     location.reload();
   });
 
@@ -231,8 +367,8 @@ function openExportPanel() {
   });
 
   const inner = el("div", { class: "export-panel-inner" }, [
-    el("h2", {}, "Esporta dimensioni"),
-    el("p", {}, "Queste sono le dimensioni che hai regolato trascinando. Copiale (o mandami questo testo in chat) per renderle permanenti sul sito pubblicato."),
+    el("h2", {}, "Esporta modifiche"),
+    el("p", {}, "Queste sono le dimensioni e l'ordine che hai regolato trascinando. Copiali (o mandami questo testo in chat) per renderli permanenti sul sito pubblicato."),
     textarea,
     el("div", { class: "export-panel-actions" }, [copyBtn, resetBtn, closeBtn]),
   ]);
@@ -247,8 +383,8 @@ function ensureEditModeUI() {
   if (editModeUIReady) return;
   editModeUIReady = true;
 
-  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica dimensioni", title: "Modifica dimensioni: trascina gli angoli di testo e foto" }, "⇲");
-  const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta dimensioni", title: "Esporta dimensioni" }, "⇩");
+  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: trascina l'angolo per ridimensionare, l'icona ⠿ per riordinare" }, "⇲");
+  const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta modifiche", title: "Esporta modifiche" }, "⇩");
 
   toggle.addEventListener("click", () => {
     document.body.classList.toggle("edit-mode");
@@ -346,13 +482,25 @@ function renderHome() {
     el("span", { class: "author" }, SITE.author),
   ]);
 
-  const list = el(
-    "ul",
-    { class: "home-list" },
-    PROJECTS.map((p) =>
-      el("li", {}, [el("a", { href: `#/project/${p.slug}` }, p.name)])
-    )
+  const orderedProjects = getOrderedProjects();
+  const listItems = orderedProjects.map((p) =>
+    el("li", {}, [el("a", { href: `#/project/${p.slug}` }, p.name)])
   );
+  const list = el("ul", { class: "home-list" }, listItems);
+
+  listItems.forEach((li) => {
+    makeReorderable(li, {
+      container: list,
+      axis: "y",
+      onReorder: (from, to) => {
+        const order = orderedProjects.map((p) => p.slug);
+        const [moved] = order.splice(from, 1);
+        order.splice(to, 0, moved);
+        saveOrderOverride("home.order", order);
+        renderRoute();
+      },
+    });
+  });
 
   const spacer = el("div", { class: "home-spacer" });
 
@@ -382,7 +530,7 @@ function renderHome() {
    successivo (passa "projectNav"); per core archive, invece, scorrono le
    foto della selezione (projectNav assente).
    ------------------------------------------------------------------------- */
-function renderGallery({ total, title, description, descriptionBox, images, projectNav }) {
+function renderGallery({ total, title, description, descriptionBox, images, imageOrderKey, imageOrder, projectNav }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
   ensureEditModeUI();
@@ -428,6 +576,22 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
 
   const track = el("div", { class: "photo-track" }, figures);
   const viewport = el("div", { class: "photo-viewport" }, [track]);
+
+  figures.forEach((figure) => {
+    const frame = figure.querySelector(".photo-frame");
+    makeReorderable(figure, {
+      container: track,
+      axis: "x",
+      handleParent: frame,
+      onReorder: (from, to) => {
+        const newOrder = imageOrder.slice();
+        const [moved] = newOrder.splice(from, 1);
+        newOrder.splice(to, 0, moved);
+        saveOrderOverride(imageOrderKey, newOrder);
+        renderRoute();
+      },
+    });
+  });
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
@@ -543,11 +707,17 @@ function renderProject(slug) {
     renderNotFound();
     return;
   }
-  const images = project.images.map((img, i) => ({ ...img, _src: resolveImageSrc(project.slug, i, img) }));
+  const orderKey = `project.${project.slug}.imageOrder`;
+  const order = currentImageOrder(orderKey, project.images.length);
+  const images = order.map((origIndex) => {
+    const img = project.images[origIndex];
+    return { ...img, _src: resolveImageSrc(project.slug, origIndex, img) };
+  });
 
-  const idx = PROJECTS.indexOf(project);
-  const prevSlug = PROJECTS[(idx - 1 + PROJECTS.length) % PROJECTS.length].slug;
-  const nextSlug = PROJECTS[(idx + 1) % PROJECTS.length].slug;
+  const orderedProjects = getOrderedProjects();
+  const idx = orderedProjects.findIndex((p) => p.slug === project.slug);
+  const prevSlug = orderedProjects[(idx - 1 + orderedProjects.length) % orderedProjects.length].slug;
+  const nextSlug = orderedProjects[(idx + 1) % orderedProjects.length].slug;
 
   renderGallery({
     total: images.length,
@@ -555,17 +725,26 @@ function renderProject(slug) {
     description: project.description,
     descriptionBox: project.descriptionBox,
     images,
+    imageOrderKey: orderKey,
+    imageOrder: order,
     projectNav: { slug: project.slug, prevSlug, nextSlug },
   });
 }
 
 function renderArchive() {
-  const images = ARCHIVE.images.map((img, i) => ({ ...img, _src: resolveImageSrc("archive", i, img) }));
+  const orderKey = "archive.imageOrder";
+  const order = currentImageOrder(orderKey, ARCHIVE.images.length);
+  const images = order.map((origIndex) => {
+    const img = ARCHIVE.images[origIndex];
+    return { ...img, _src: resolveImageSrc("archive", origIndex, img) };
+  });
   renderGallery({
     total: images.length,
     title: ARCHIVE.title,
     description: ARCHIVE.description,
     images,
+    imageOrderKey: orderKey,
+    imageOrder: order,
   });
 }
 
