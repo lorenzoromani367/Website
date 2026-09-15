@@ -23,7 +23,7 @@
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 5000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 2000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const TRANSITION_MS = 3000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 
 /* -------------------------------------------------------------------------
@@ -277,8 +277,14 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
 // Rende "node" ridimensionabile a trascinamento in modalità modifica.
 // "key" identifica il blocco (es. "project.lines.image.0") per salvare e
 // riproporre la dimensione scelta. "defaults" sono width/height di partenza
-// (da LAYOUT o dal singolo progetto/foto in content.js).
-function makeResizable(node, key, defaults = {}) {
+// (da LAYOUT o dal singolo progetto/foto in content.js). Se si passa
+// "lockRatioTo" (l'elemento <img> dentro node), il blocco è una foto: le
+// maniglie NON devono mai tagliarla, quindi ridimensionano SEMPRE
+// mantenendo le proporzioni naturali della foto (la ingrandiscono o
+// rimpiccioliscono nel suo insieme, non ne modificano l'inquadratura). In
+// quel caso si aggiunge anche una seconda maniglia a sinistra, non solo
+// quella di default a destra.
+function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
   node.classList.add("resizable");
   if (!node.style.position) node.style.position = "relative";
 
@@ -303,50 +309,79 @@ function makeResizable(node, key, defaults = {}) {
   });
   observer.observe(node);
 
+  // Proporzioni naturali della foto (larghezza/altezza del file originale).
+  // Se l'immagine non è ancora caricata (naturalWidth/Height a 0), usiamo
+  // per quella sola volta le proporzioni attuali del riquadro come ripiego:
+  // capita solo nella primissima interazione prima che la foto arrivi dalla
+  // rete, e si autocorregge da sola al ridimensionamento successivo.
+  function currentAspectRatio() {
+    if (lockRatioTo && lockRatioTo.naturalWidth && lockRatioTo.naturalHeight) {
+      return lockRatioTo.naturalWidth / lockRatioTo.naturalHeight;
+    }
+    const r = node.getBoundingClientRect();
+    return r.width / r.height;
+  }
+
   // Maniglia disegnata da noi (vedi commento in style.css sul perché non
   // usiamo il resize nativo del browser): trascinala per cambiare
   // larghezza/altezza. Funziona con mouse e dito (pointer events).
-  const handle = el("div", { class: "resize-handle" });
-  node.appendChild(handle);
+  // "signX" inverte il segno dello spostamento orizzontale per la maniglia
+  // di sinistra, così trascinarla verso sinistra ingrandisce (e verso
+  // destra rimpicciolisce), speculare rispetto a quella di destra.
+  function addHandle(extraClass, signX) {
+    const handle = el("div", { class: extraClass ? `resize-handle ${extraClass}` : "resize-handle" });
+    node.appendChild(handle);
 
-  let dragStart = null; // { pointerId, startX, startY, startWidth, startHeight }
+    let dragStart = null; // { pointerId, startX, startY, startWidth, startHeight, aspectRatio }
 
-  function onPointerMove(e) {
-    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
-    const dx = e.clientX - dragStart.startX;
-    const dy = e.clientY - dragStart.startY;
-    const newWidth = snapToGrid(Math.max(40, dragStart.startWidth + dx));
-    const newHeight = snapToGrid(Math.max(40, dragStart.startHeight + dy));
-    node.style.width = `${newWidth}px`;
-    node.style.height = `${newHeight}px`;
-    updateLabel();
+    function onPointerMove(e) {
+      if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+      const dx = (e.clientX - dragStart.startX) * signX;
+      const newWidth = snapToGrid(Math.max(40, dragStart.startWidth + dx));
+      let newHeight;
+      if (dragStart.aspectRatio) {
+        // Foto: l'altezza segue sempre la larghezza secondo il taglio
+        // originale, non si tocca mai in modo indipendente (niente crop).
+        newHeight = Math.max(40, Math.round(newWidth / dragStart.aspectRatio));
+      } else {
+        const dy = e.clientY - dragStart.startY;
+        newHeight = snapToGrid(Math.max(40, dragStart.startHeight + dy));
+      }
+      node.style.width = `${newWidth}px`;
+      node.style.height = `${newHeight}px`;
+      updateLabel();
+    }
+
+    function onPointerUp(e) {
+      if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+      handle.classList.remove("is-dragging");
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      saveSizeOverride(key, { width: node.style.width, height: node.style.height });
+      dragStart = null;
+    }
+
+    handle.addEventListener("pointerdown", (e) => {
+      if (!isEditMode()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = node.getBoundingClientRect();
+      dragStart = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: rect.width,
+        startHeight: rect.height,
+        aspectRatio: lockRatioTo ? currentAspectRatio() : null,
+      };
+      handle.classList.add("is-dragging");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
   }
 
-  function onPointerUp(e) {
-    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
-    handle.classList.remove("is-dragging");
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerUp);
-    saveSizeOverride(key, { width: node.style.width, height: node.style.height });
-    dragStart = null;
-  }
-
-  handle.addEventListener("pointerdown", (e) => {
-    if (!isEditMode()) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = node.getBoundingClientRect();
-    dragStart = {
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      startWidth: rect.width,
-      startHeight: rect.height,
-    };
-    handle.classList.add("is-dragging");
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
-  });
+  addHandle(null, 1);
+  if (lockRatioTo) addHandle("resize-handle-left", -1);
 
   return observer;
 }
@@ -670,10 +705,15 @@ function renderGallery({ total, title, description, descriptionBox, images, imag
     const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
     const frame = el("div", { class: "photo-frame" }, [img]);
     resizeObservers.push(
-      makeResizable(frame, `${sizeKeyPrefix}.image.${origIndex}`, {
-        width: image.width || LAYOUT.gallery.imageWidth,
-        height: image.height || LAYOUT.gallery.imageHeight,
-      })
+      makeResizable(
+        frame,
+        `${sizeKeyPrefix}.image.${origIndex}`,
+        {
+          width: image.width || LAYOUT.gallery.imageWidth,
+          height: image.height || LAYOUT.gallery.imageHeight,
+        },
+        { lockRatioTo: img }
+      )
     );
     makeZoomable(frame, img);
 
