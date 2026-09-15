@@ -43,10 +43,13 @@ const LAYOUT = {
   gallery: {
     // Larghezza di default del blocco di descrizione sopra le foto.
     descriptionWidth: "620px",
-    // Dimensioni di default di OGNI foto in galleria, sovrascrivibili
-    // singolarmente (vedi esempio in "lines" qui sotto).
-    imageWidth: "100%",
-    imageHeight: "auto",
+    // Le foto NON hanno più una larghezza/altezza di default qui: finché
+    // non le tocchi hanno tutte la STESSA ALTEZZA, calcolata automatica-
+    // mente da app.js in base allo spazio che resta libero sotto il testo
+    // (si aggiorna da sola se il testo cambia altezza o la finestra viene
+    // ridimensionata). Vuoi una foto diversa dalle altre? Aggiungi
+    // "width"/"height" su quella singola voce di "images" (vedi esempio
+    // in "lines" qui sotto), o trascina le sue maniglie rosse.
   },
 };
 
@@ -61,21 +64,21 @@ const PROJECTS = [
     ],
     // descriptionBox: { width: "620px" },  // <- decommenta per sovrascrivere LAYOUT.gallery.descriptionWidth per questo solo progetto
     images: [
-      { caption: "", src: "images/lines/lines-1.jpg" },
-      { caption: "", src: "images/lines/lines-2.jpg" },
-      { caption: "", src: "images/lines/lines-3.jpg" },
-      { caption: "", src: "images/lines/lines-4.jpg" },
-      { caption: "", src: "images/lines/lines-5.jpg" },
-      { caption: "", src: "images/lines/lines-6.jpg" },
-      { caption: "", src: "images/lines/lines-7.jpg" },
-      { caption: "", src: "images/lines/lines-8.jpg" },
-      { caption: "", src: "images/lines/lines-9.jpg" },
-      { caption: "", src: "images/lines/lines-10.jpg" },
-      { caption: "", src: "images/lines/lines-11.jpg" },
-      { caption: "", src: "images/lines/lines-12.jpg" },
-      { caption: "", src: "images/lines/lines-13.jpg" },
+      { caption: "house, norway", src: "images/lines/lines-1.jpg" },
+      { caption: "winery, sicily", src: "images/lines/lines-2.jpg" },
+      { caption: "church", src: "images/lines/lines-3.jpg" },
+      { caption: "cement", src: "images/lines/lines-4.jpg" },
+      { caption: "mountain pasture", src: "images/lines/lines-5.jpg" },
+      { caption: "armenia", src: "images/lines/lines-6.jpg" },
+      { caption: "unfinished", src: "images/lines/lines-7.jpg" },
+      { caption: "fields", src: "images/lines/lines-8.jpg" },
+      { caption: "athens", src: "images/lines/lines-9.jpg" },
+      { caption: "pillar", src: "images/lines/lines-10.jpg" },
+      { caption: "door and window", src: "images/lines/lines-11.jpg" },
+      { caption: "landscape", src: "images/lines/lines-12.jpg" },
+      { caption: "cypress", src: "images/lines/lines-13.jpg" },
       // Esempio di dimensioni personalizzate per una singola foto:
-      // { caption: "cocoon", src: "images/lines/lines-1.jpg", width: "480px", height: "600px" },
+      // { caption: "cypress", src: "images/lines/lines-13.jpg", width: "480px", height: "600px" },
     ],
   },
   {
