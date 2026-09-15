@@ -1,11 +1,11 @@
 /* ==========================================================================
-   TYPE — IBM Plex Sans (SIL OFL, uso libero anche commerciale/web)
+   TYPE — Inter (SIL OFL, uso libero anche commerciale/web)
    ========================================================================== */
 @font-face {
-  font-family: "IBM Plex Sans";
+  font-family: "Inter";
   src:
-    url("../fonts/IBMPlexSans-Regular.woff2") format("woff2"),
-    url("../fonts/IBMPlexSans-Regular.ttf") format("truetype");
+    url("../fonts/Inter-Regular.woff2") format("woff2"),
+    url("../fonts/Inter-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -20,7 +20,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: "IBM Plex Sans", Helvetica, Arial, sans-serif;
+  font-family: "Inter", Helvetica, Arial, sans-serif;
   font-weight: 600;
   -webkit-font-smoothing: antialiased;
 }
@@ -45,7 +45,7 @@ button {
   --muted: #8a877c;
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
-  --transition-ms: 2000ms;
+  --transition-ms: 3000ms;
 }
 
 .mono {
@@ -235,7 +235,13 @@ button {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* "contain", non "cover": la foto non va mai tagliata. Le maniglie di
+     resize mantengono già le proporzioni naturali della foto (vedi
+     makeResizable in app.js), quindi in pratica il riquadro combacia
+     sempre con l'immagine; "contain" è qui solo come rete di sicurezza
+     (es. prima che una foto finisca di caricare, o su misure salvate in
+     precedenza) così non si vede mai un pezzo di foto tagliato via. */
+  object-fit: contain;
   cursor: zoom-in;
 }
 
@@ -463,6 +469,15 @@ body.edit-mode .resizable-label {
   cursor: nwse-resize;
   z-index: 3;
   touch-action: none;
+}
+
+/* Sulle foto c'è anche una maniglia speculare a sinistra (oltre a quella
+   di default a destra), così si può ridimensionare tirando da entrambi i
+   lati: cursore ruotato di conseguenza (nesw invece di nwse). */
+.resize-handle.resize-handle-left {
+  right: auto;
+  left: 4px;
+  cursor: nesw-resize;
 }
 
 /* Maniglia di riordino: trascinala per cambiare la posizione di una foto
