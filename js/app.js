@@ -432,6 +432,11 @@ function describePositionKey(key) {
   const archiveImagePosMatch = key.match(/^archive\.imagePos\.(\d+)$/);
   if (archiveImagePosMatch) return `Core archive, foto #${Number(archiveImagePosMatch[1]) + 1}  →  aggiungi "offset: { x, y }" su quella voce di ARCHIVE.images`;
 
+  const descPosMatch = key.match(/^project\.(.+)\.descriptionPos$/);
+  if (descPosMatch) return `Progetto "${descPosMatch[1]}", testo  →  aggiungi "descriptionBox: { offset: { x, y } }" su quel progetto`;
+
+  if (key === "archive.descriptionPos") return `Core archive, testo  →  aggiungi "descriptionBox: { offset: { x, y } }" su ARCHIVE`;
+
   return key;
 }
 
@@ -692,10 +697,12 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
 
   const topbar = el("div", { class: "topbar" }, [
-    el("span", { class: "topbar-index" }, String(total)),
-    el("span", { class: "topbar-title" }, title),
-    el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
-      el("span", {}), el("span", {}), el("span", {}),
+    el("div", { class: "topbar-row" }, [el("span", { class: "topbar-index" }, String(total))]),
+    el("div", { class: "topbar-row" }, [
+      el("span", { class: "topbar-title" }, title),
+      el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
+        el("span", {}), el("span", {}), el("span", {}),
+      ]),
     ]),
   ]);
 
@@ -715,6 +722,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
       height: descriptionBox && descriptionBox.height,
     })
   );
+  makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo");
 
   const figures = images.map((image, i) => {
     const origIndex = image._index != null ? image._index : i;
@@ -724,10 +732,11 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
       makeResizable(
         frame,
         `${sizeKeyPrefix}.image.${origIndex}`,
-        {
-          width: image.width || LAYOUT.gallery.imageWidth,
-          height: image.height || LAYOUT.gallery.imageHeight,
-        },
+        // Niente default qui: se non c'è né un salvataggio né una misura
+        // esplicita in content.js, l'altezza la calcola/applica
+        // applyDefaultPhotoHeights() più sotto (stessa altezza per tutte
+        // le foto, in base allo spazio lasciato libero dal testo).
+        { width: image.width, height: image.height },
         { lockRatioTo: img }
       )
     );
@@ -741,7 +750,13 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   });
 
   const track = el("div", { class: "photo-track" }, figures);
-  const viewport = el("div", { class: "photo-viewport" }, [track]);
+  // Frecce per passare da una foto all'altra senza aspettare lo
+  // scorrimento automatico. Sono fisse ai lati del riquadro (dentro
+  // .photo-viewport ma fuori da .photo-track, così non scorrono via
+  // insieme alle foto) e stanno nel margine laterale, non sopra la foto.
+  const photoPrevBtn = el("button", { class: "photo-nav-arrow prev", "aria-label": "Foto precedente" }, "←");
+  const photoNextBtn = el("button", { class: "photo-nav-arrow next", "aria-label": "Foto successiva" }, "→");
+  const viewport = el("div", { class: "photo-viewport" }, [track, photoPrevBtn, photoNextBtn]);
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
@@ -753,14 +768,99 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   app.appendChild(viewport);
   app.appendChild(footerBar);
 
-  // Velocità di lettura costante indipendentemente da quanto è lungo il
-  // testo: più paragrafi = giro più lungo, non più veloce. scrollHeight
-  // del binario è già DOPPIO (due copie del testo), quindi lo dimezziamo
-  // per avere l'altezza di una sola copia (= quanto deve viaggiare prima
-  // di ripetersi).
-  const MARQUEE_PX_PER_SEC = 28;
-  const oneCopyHeight = descTrack.scrollHeight / 2;
-  descTrack.style.animationDuration = `${Math.max(8, oneCopyHeight / MARQUEE_PX_PER_SEC)}s`;
+  // Marquee del testo: guidato da requestAnimationFrame (non da
+  // un'animazione CSS) proprio per poterlo anche trascinare a mano.
+  // "marqueePos" è quanto si è già scorso (0..marqueeDistance, in px);
+  // trascinando lo si sposta direttamente, e l'avanzamento automatico
+  // riprende da lì al rilascio, senza scattare indietro. La distanza è
+  // quella ESATTA misurata sul DOM (non una percentuale) — vedi il
+  // commento in style.css sul perché "50%" darebbe un salto visibile.
+  const MARQUEE_PX_PER_SEC = 56; // ~0.5s a riga
+  let marqueeDistance = 0;
+  let marqueePos = 0;
+  let marqueeLastTs = null;
+  let marqueeDragState = null;
+
+  // Senza un'altezza esplicita, .description crescerebbe per contenere
+  // ENTRAMBE le copie del testo (quella nascosta per gli screen reader
+  // compresa) invece di inquadrarne una sola e lasciar scorrere il resto:
+  // si vedrebbe il testo ripetuto due volte invece del marquee. Se non
+  // c'è già una misura salvata o esplicita in content.js, l'altezza di
+  // default è esattamente quella di UNA copia, così "overflow: hidden"
+  // nasconde il resto com'è giusto che sia. Controlliamo i dati reali
+  // (non lo style inline già applicato) per sapere se toccarla di nuovo
+  // dopo il ricalcolo a font caricato — altrimenti la prima chiamata
+  // "inquinerebbe" il controllo per la seconda.
+  const hasExplicitDescHeight = Boolean(
+    (descriptionBox && descriptionBox.height) || loadSizeOverrides()[`${sizeKeyPrefix}.description`]?.height
+  );
+  function measureMarqueeDistance() {
+    marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
+    marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
+    if (!hasExplicitDescHeight) {
+      descBlock.style.height = `${marqueeDistance}px`;
+    }
+  }
+  function applyMarqueeTransform() {
+    descTrack.style.transform = `translateY(${marqueePos - marqueeDistance}px)`;
+  }
+  function marqueeTick(ts) {
+    if (marqueeLastTs == null) marqueeLastTs = ts;
+    const dt = (ts - marqueeLastTs) / 1000;
+    marqueeLastTs = ts;
+    if (!marqueeDragState && !isEditMode() && marqueeDistance > 0) {
+      marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
+      applyMarqueeTransform();
+    }
+    marqueeRafId = requestAnimationFrame(marqueeTick);
+  }
+  measureMarqueeDistance();
+  applyMarqueeTransform();
+  let marqueeRafId = requestAnimationFrame(marqueeTick);
+
+  // Il font (Inter) carica con font-display:swap: il testo appare subito
+  // con un font di scorta dalle proporzioni diverse, poi "scatta" su Inter
+  // quando arriva, cambiando l'altezza reale del testo. Rimisuriamo
+  // quando il font vero è pronto.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      measureMarqueeDistance();
+      applyMarqueeTransform();
+    });
+  }
+
+  // Trascinamento a mano: solo fuori dalla modalità modifica (lì il
+  // testo resta fermo — vedi ensureEditModeUI/isEditMode — e si legge
+  // scrollando normalmente col mouse/dito, come .description in edit
+  // mode già permette).
+  descTrack.classList.add("draggable");
+  descTrack.addEventListener("pointerdown", (e) => {
+    if (isEditMode()) return;
+    e.preventDefault();
+    marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos };
+    descTrack.classList.add("is-dragging");
+    document.addEventListener("pointermove", onMarqueeDragMove);
+    document.addEventListener("pointerup", onMarqueeDragEnd);
+  });
+  function onMarqueeDragMove(e) {
+    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+    const dy = e.clientY - marqueeDragState.startY;
+    // trascinare verso il basso "torna indietro" nel testo (come si
+    // trascina un foglio per rivelare quello che c'è sopra); verso
+    // l'alto avanza — coerente con lo scorrimento automatico dall'alto
+    // verso il basso.
+    let next = (marqueeDragState.startPos - dy) % marqueeDistance;
+    if (next < 0) next += marqueeDistance;
+    marqueePos = next;
+    applyMarqueeTransform();
+  }
+  function onMarqueeDragEnd(e) {
+    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+    marqueeDragState = null;
+    descTrack.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onMarqueeDragMove);
+    document.removeEventListener("pointerup", onMarqueeDragEnd);
+  }
 
   /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----
      Questo scorrimento automatico tra le foto della galleria funziona
@@ -825,6 +925,19 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     prevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
     nextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
   }
+
+  // Frecce dedicate a passare da una foto all'altra (a differenza di
+  // prevBtn/nextBtn, che su un progetto navigano tra progetti): utili per
+  // chi non vuole aspettare i 5 secondi di autoplay. Se c'è una foto sola
+  // non hanno nulla da fare, restano nascoste.
+  if (figures.length < 2) {
+    photoPrevBtn.style.display = "none";
+    photoNextBtn.style.display = "none";
+  } else {
+    photoPrevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
+    photoNextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
+  }
+
   viewport.addEventListener("mouseenter", handlePause);
   viewport.addEventListener("mouseleave", handleResume);
   viewport.addEventListener("touchstart", handlePause, { passive: true });
@@ -850,12 +963,63 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
 
   window.addEventListener("resize", updateViewportHeight);
 
+  // Finché non la tocchi, ogni foto ha la STESSA ALTEZZA: lo spazio che
+  // resta nella finestra dopo topbar + testo + barra in fondo — così le
+  // foto si adattano da sole a quanto è alto il testo sopra di loro (o a
+  // quanto spazio c'è sullo schermo). Un tetto basato su un rapporto
+  // largo/alto "ragionevole" (16:9) evita che una foto molto orizzontale
+  // sfori la larghezza del pannello quando lo spazio verticale disponibile
+  // è ampio (schermi alti, testo corto). Una foto toccata a mano (misura
+  // salvata o width/height espliciti in content.js) non viene toccata qui.
+  const MIN_PHOTO_HEIGHT = 240;
+  const MAX_ASSUMED_ASPECT_RATIO = 16 / 9;
+  function applyDefaultPhotoHeights() {
+    if (!figures.length) return;
+    const photoStyle = getComputedStyle(figures[0]);
+    const paddingBottom = parseFloat(photoStyle.paddingBottom) || 0;
+    const paddingLeft = parseFloat(photoStyle.paddingLeft) || 0;
+    const paddingRight = parseFloat(photoStyle.paddingRight) || 0;
+    const availableWidth = viewport.getBoundingClientRect().width - paddingLeft - paddingRight;
+    const availableHeight =
+      window.innerHeight -
+      topbar.getBoundingClientRect().height -
+      descBlock.getBoundingClientRect().height -
+      footerBar.getBoundingClientRect().height -
+      paddingBottom;
+    const maxHeightForWidth = availableWidth / MAX_ASSUMED_ASPECT_RATIO;
+    const targetHeight = Math.max(MIN_PHOTO_HEIGHT, Math.min(availableHeight, maxHeightForWidth));
+
+    const overrides = loadSizeOverrides();
+    figures.forEach((figure, i) => {
+      const key = `${sizeKeyPrefix}.image.${images[i]._index}`;
+      const saved = overrides[key];
+      const hasSavedOverride = saved && (saved.width || saved.height);
+      const hasContentDefault = images[i].width || images[i].height;
+      if (hasSavedOverride || hasContentDefault) return;
+      const frame = figure.querySelector(".photo-frame");
+      frame.style.width = "auto";
+      frame.style.height = `${targetHeight}px`;
+    });
+    updateViewportHeight();
+  }
+  applyDefaultPhotoHeights();
+  window.addEventListener("resize", applyDefaultPhotoHeights);
+  // Il testo può cambiare altezza (progetto diverso, o ridimensionato a
+  // mano in modalità modifica): quando succede, ricalcoliamo.
+  const descHeightObserver = new ResizeObserver(() => applyDefaultPhotoHeights());
+  descHeightObserver.observe(descBlock);
+  resizeObservers.push(descHeightObserver);
+
   applyPosition();
   scheduleNext();
 
   currentTeardown = () => {
     clearTimeout(autoplayTimer);
+    cancelAnimationFrame(marqueeRafId);
+    document.removeEventListener("pointermove", onMarqueeDragMove);
+    document.removeEventListener("pointerup", onMarqueeDragEnd);
     window.removeEventListener("resize", updateViewportHeight);
+    window.removeEventListener("resize", applyDefaultPhotoHeights);
     resizeObservers.forEach((o) => o.disconnect());
   };
 }
@@ -912,10 +1076,12 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   ensureEditModeUI();
 
   const topbar = el("div", { class: "topbar" }, [
-    el("span", { class: "topbar-index" }, ""),
-    el("span", { class: "topbar-title" }, title.toLowerCase()),
-    el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
-      el("span", {}), el("span", {}), el("span", {}),
+    el("div", { class: "topbar-row" }, [el("span", { class: "topbar-index" }, "")]),
+    el("div", { class: "topbar-row" }, [
+      el("span", { class: "topbar-title" }, title.toLowerCase()),
+      el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
+        el("span", {}), el("span", {}), el("span", {}),
+      ]),
     ]),
   ]);
 

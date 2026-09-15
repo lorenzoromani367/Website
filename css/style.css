@@ -141,16 +141,24 @@ button {
    nel suo insieme scorre invece in verticale quando testo o foto non
    entrano nello schermo, per poterli vedere per intero.
    ------------------------------------------------------------------------- */
+/* Due righe: l'indice sopra, titolo+hamburger sotto (non più tutto in
+   una riga sola). */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 5;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 6px;
   background: var(--paper);
   padding: 28px 40px;
   border-bottom: 1px solid transparent;
+}
+
+.topbar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .topbar-index {
@@ -182,11 +190,15 @@ button {
 
 /* La larghezza/altezza di .description viene impostata da JS leggendo
    LAYOUT.gallery.descriptionWidth (o descriptionBox del singolo progetto).
-   Il testo scorre verticalmente in loop continuo, come un marquee: dentro
-   c'è un'unica striscia (.description-track) con il testo ripetuto due
-   volte una sotto l'altra, che si anima da translateY(0) a translateY(-50%)
-   — arrivata a metà corsa (cioè esattamente dopo la prima copia) si vede
-   identica al punto di partenza, quindi il loop è impercettibile. */
+   Il testo scorre verticalmente dall'alto verso il basso in loop continuo,
+   come un marquee: dentro c'è un'unica striscia (.description-track) con
+   il testo ripetuto due volte una sotto l'altra. Lo scorrimento è guidato
+   da JS (requestAnimationFrame in app.js), non da un'animazione CSS,
+   proprio per poterlo anche trascinare a mano — vedi il commento su
+   "marqueePos" in app.js per il perché e per come resta un loop
+   impercettibile (distanza esatta misurata sul DOM, non una percentuale
+   come "50%", che con dei gap tra paragrafi produrrebbe un piccolo
+   scatto visibile a ogni giro). */
 .description {
   padding: 8px 40px 40px;
   font-size: 0.95rem;
@@ -196,21 +208,14 @@ button {
   overflow: hidden;
 }
 
-.description-track {
-  /* durata di default; app.js la ricalcola in base alla lunghezza del
-     testo, così la velocità di lettura resta simile per ogni progetto. */
-  animation: marquee-vertical 30s linear infinite;
+.description-track.draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
-@keyframes marquee-vertical {
-  from { transform: translateY(0); }
-  to { transform: translateY(-50%); }
-}
-
-/* In modalità modifica il testo resta fermo e scrollabile normalmente,
-   per non dover ridimensionare/leggere mentre scorre. */
-body.edit-mode .description-track {
-  animation-play-state: paused;
+.description-track.draggable.is-dragging {
+  cursor: grabbing;
 }
 
 .description p + p {
@@ -243,21 +248,27 @@ body.edit-mode .description-track {
   width: 100%;
   margin: 0; /* <figure> ha un margine di default del browser (~40px ai lati): lo azzeriamo */
   padding: 0 40px 72px;
+  text-align: center; /* centra .photo-frame quando è "inline-block" a larghezza automatica */
 }
 
-/* Larghezza/altezza di ogni .photo-frame vengono impostate da JS leggendo
-   LAYOUT.gallery.imageWidth/imageHeight, sovrascrivibili per singola foto
-   (o trascinando l'angolo in modalità modifica). */
+/* Finché non la tocchi, ogni foto ha la STESSA ALTEZZA (calcolata da JS
+   in base allo spazio rimasto sotto il testo, vedi applyDefaultPhotoHeights
+   in app.js) e la larghezza segue automaticamente le sue proporzioni
+   naturali — per questo "inline-block": si restringe/allarga sul
+   contenuto invece di riempire per forza tutta la riga. Se invece la
+   ridimensioni a mano (maniglie rosse), width/height diventano entrambe
+   esplicite e questo non cambia nulla. */
 .photo-frame {
-  margin: 0 auto;
+  display: inline-block;
   overflow: hidden;
   position: relative;
 }
 
 .photo-frame img {
   display: block;
-  width: 100%;
   height: 100%;
+  width: auto;
+  max-width: 100%; /* rete di sicurezza: mai più larga del riquadro disponibile */
   /* "contain", non "cover": la foto non va mai tagliata. Le maniglie di
      resize mantengono già le proporzioni naturali della foto (vedi
      makeResizable in app.js), quindi in pratica il riquadro combacia
@@ -307,6 +318,34 @@ body.edit-mode .description-track {
 .nav-counter {
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+/* Frecce per passare da una foto all'altra della stessa galleria, senza
+   aspettare l'autoplay. Stanno nel margine laterale di .photo-viewport
+   (fuori da .photo-track, così restano ferme mentre le foto scorrono),
+   MAI sopra la foto: per questo sono vicine al bordo, dentro il padding
+   laterale di .photo, non centrate sull'immagine. */
+.photo-nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  font-size: 1rem;
+  padding: 6px 8px;
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+
+.photo-nav-arrow:hover {
+  opacity: 1;
+}
+
+.photo-nav-arrow.prev { left: 2px; }
+.photo-nav-arrow.next { right: 2px; }
+
+@media (max-width: 700px) {
+  .photo-nav-arrow.prev { left: 0; }
+  .photo-nav-arrow.next { right: 0; }
 }
 
 @media (max-width: 700px) {
@@ -538,9 +577,11 @@ body.edit-mode .move-handle:hover,
   cursor: grabbing;
 }
 
-/* dentro una foto: angolo in alto a destra (il resize resta in basso a
-   destra, l'etichetta con le misure in alto a sinistra) */
-.photo-frame .move-handle {
+/* dentro una foto o nel blocco di testo: angolo in alto a destra (il
+   resize resta in basso a destra, l'etichetta con le misure in alto a
+   sinistra) */
+.photo-frame .move-handle,
+.description .move-handle {
   position: absolute;
   top: 4px;
   right: 4px;
@@ -606,6 +647,7 @@ body.edit-mode .resize-handle:hover,
 body.edit-mode .home-list a,
 body.edit-mode .hamburger,
 body.edit-mode .nav-arrow,
+body.edit-mode .photo-nav-arrow,
 body.edit-mode .footer-link,
 body.edit-mode .photo-frame img {
   pointer-events: none;
