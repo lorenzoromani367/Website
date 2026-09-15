@@ -181,13 +181,36 @@ button {
 }
 
 /* La larghezza/altezza di .description viene impostata da JS leggendo
-   LAYOUT.gallery.descriptionWidth (o descriptionBox del singolo progetto). */
+   LAYOUT.gallery.descriptionWidth (o descriptionBox del singolo progetto).
+   Il testo scorre verticalmente in loop continuo, come un marquee: dentro
+   c'è un'unica striscia (.description-track) con il testo ripetuto due
+   volte una sotto l'altra, che si anima da translateY(0) a translateY(-50%)
+   — arrivata a metà corsa (cioè esattamente dopo la prima copia) si vede
+   identica al punto di partenza, quindi il loop è impercettibile. */
 .description {
   padding: 8px 40px 40px;
   font-size: 0.95rem;
   line-height: 1.65;
   max-width: 100%;
   position: relative;
+  overflow: hidden;
+}
+
+.description-track {
+  /* durata di default; app.js la ricalcola in base alla lunghezza del
+     testo, così la velocità di lettura resta simile per ogni progetto. */
+  animation: marquee-vertical 30s linear infinite;
+}
+
+@keyframes marquee-vertical {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+/* In modalità modifica il testo resta fermo e scrollabile normalmente,
+   per non dover ridimensionare/leggere mentre scorre. */
+body.edit-mode .description-track {
+  animation-play-state: paused;
 }
 
 .description p + p {
