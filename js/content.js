@@ -43,10 +43,13 @@ const LAYOUT = {
   gallery: {
     // Larghezza di default del blocco di descrizione sopra le foto.
     descriptionWidth: "620px",
-    // Dimensioni di default di OGNI foto in galleria, sovrascrivibili
-    // singolarmente (vedi esempio in "lines" qui sotto).
-    imageWidth: "100%",
-    imageHeight: "auto",
+    // Le foto NON hanno più una larghezza/altezza di default qui: finché
+    // non le tocchi hanno tutte la STESSA ALTEZZA, calcolata automatica-
+    // mente da app.js in base allo spazio che resta libero sotto il testo
+    // (si aggiorna da sola se il testo cambia altezza o la finestra viene
+    // ridimensionata). Vuoi una foto diversa dalle altre? Aggiungi
+    // "width"/"height" su quella singola voce di "images" (vedi esempio
+    // in "lines" qui sotto), o trascina le sue maniglie rosse.
   },
 };
 
