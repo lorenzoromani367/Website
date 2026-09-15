@@ -432,6 +432,11 @@ function describePositionKey(key) {
   const archiveImagePosMatch = key.match(/^archive\.imagePos\.(\d+)$/);
   if (archiveImagePosMatch) return `Core archive, foto #${Number(archiveImagePosMatch[1]) + 1}  →  aggiungi "offset: { x, y }" su quella voce di ARCHIVE.images`;
 
+  const descPosMatch = key.match(/^project\.(.+)\.descriptionPos$/);
+  if (descPosMatch) return `Progetto "${descPosMatch[1]}", testo  →  aggiungi "descriptionBox: { offset: { x, y } }" su quel progetto`;
+
+  if (key === "archive.descriptionPos") return `Core archive, testo  →  aggiungi "descriptionBox: { offset: { x, y } }" su ARCHIVE`;
+
   return key;
 }
 
@@ -715,6 +720,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
       height: descriptionBox && descriptionBox.height,
     })
   );
+  makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo");
 
   const figures = images.map((image, i) => {
     const origIndex = image._index != null ? image._index : i;
@@ -753,14 +759,27 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   app.appendChild(viewport);
   app.appendChild(footerBar);
 
-  // Velocità di lettura costante indipendentemente da quanto è lungo il
-  // testo: più paragrafi = giro più lungo, non più veloce. scrollHeight
-  // del binario è già DOPPIO (due copie del testo), quindi lo dimezziamo
-  // per avere l'altezza di una sola copia (= quanto deve viaggiare prima
-  // di ripetersi).
+  // Distanza ESATTA (in px, non "50%"): dove inizia davvero la seconda
+  // copia del testo, misurata sul DOM reale — vedi il commento su
+  // .description-track in style.css sul perché "50%" produce uno scatto
+  // visibile quando i paragrafi hanno margini tra loro. Velocità di
+  // lettura costante indipendentemente da quanto è lungo il testo: più
+  // paragrafi = giro più lungo, non più veloce.
   const MARQUEE_PX_PER_SEC = 28;
-  const oneCopyHeight = descTrack.scrollHeight / 2;
-  descTrack.style.animationDuration = `${Math.max(8, oneCopyHeight / MARQUEE_PX_PER_SEC)}s`;
+  function measureMarquee() {
+    const distance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
+    descTrack.style.setProperty("--marquee-distance", `${distance}px`);
+    descTrack.style.animationDuration = `${Math.max(8, distance / MARQUEE_PX_PER_SEC)}s`;
+  }
+  measureMarquee();
+  // Il font (Inter) carica con font-display:swap: il testo appare subito
+  // con un font di scorta dalle proporzioni diverse, poi "scatta" su Inter
+  // quando arriva. Se avessimo misurato solo una volta, prima dello swap,
+  // la distanza sarebbe rimasta quella (sbagliata) del font di scorta.
+  // Rimisuriamo quando il font vero è pronto.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(measureMarquee);
+  }
 
   /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----
      Questo scorrimento automatico tra le foto della galleria funziona
