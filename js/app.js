@@ -765,11 +765,11 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   // visibile quando i paragrafi hanno margini tra loro. Velocità di
   // lettura costante indipendentemente da quanto è lungo il testo: più
   // paragrafi = giro più lungo, non più veloce.
-  const MARQUEE_PX_PER_SEC = 28;
+  const MARQUEE_PX_PER_SEC = 56; // ~0.5s a riga
   function measureMarquee() {
     const distance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
     descTrack.style.setProperty("--marquee-distance", `${distance}px`);
-    descTrack.style.animationDuration = `${Math.max(8, distance / MARQUEE_PX_PER_SEC)}s`;
+    descTrack.style.animationDuration = `${Math.max(4, distance / MARQUEE_PX_PER_SEC)}s`;
   }
   measureMarquee();
   // Il font (Inter) carica con font-display:swap: il testo appare subito
