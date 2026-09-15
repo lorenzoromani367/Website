@@ -167,17 +167,28 @@ function savePositionOverride(key, pos) {
 }
 
 // Rende "node" spostabile liberamente (in alto/basso/sinistra/destra) con
-// una maniglia verde dedicata, indipendente da resize e riordino. "key"
-// identifica l'elemento (es. "project.lines.caption.0", indice ORIGINALE
-// della foto, così la didascalia resta legata alla foto giusta anche se
-// la foto viene riordinata).
-function makeMovableFree(node, key) {
+// una maniglia verde dedicata, indipendente da resize. "key" identifica
+// l'elemento (es. "project.lines.caption.0", indice ORIGINALE della foto,
+// così la didascalia/foto resta legata alla foto giusta anche se le foto
+// vengono riordinate altrove). Usata sia per le didascalie sia per le
+// foto stesse: a differenza di makeReorderable (pensata per liste dove
+// TUTTI i fratelli sono visibili fianco a fianco, come la lista home),
+// qui non c'è alcun concetto di "ordine tra fratelli" — l'elemento si
+// sposta di preciso dove lo trascini e resta lì, punto. Per le foto della
+// galleria è la scelta giusta anche perché lì i fratelli non sono
+// visibili tutti insieme (si vede una foto alla volta): un riordino
+// "a soglia" richiederebbe di trascinare per centinaia di pixel prima di
+// avere un effetto, e senza aver raggiunto la soglia l'elemento tornava
+// sempre al punto di partenza — sembrava "magnetico"/rotto. Qui invece
+// qualunque trascinamento, anche piccolo, sposta la foto esattamente lì
+// e ce la lascia.
+function makeMovableFree(node, key, title = "Trascina per spostare") {
   if (!node.style.position) node.style.position = "relative";
 
   const pos = Object.assign({ x: 0, y: 0 }, loadPositionOverrides()[key]);
   if (pos.x || pos.y) node.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
 
-  const handle = el("div", { class: "move-handle free-move", title: "Trascina per spostare la didascalia" });
+  const handle = el("div", { class: "move-handle free-move", title });
   node.appendChild(handle);
 
   let dragState = null;
@@ -210,23 +221,10 @@ function makeMovableFree(node, key) {
 }
 
 // Rende "item" trascinabile per riordinarlo tra i suoi fratelli dentro
-// "container", lungo l'asse "axis" ('x' per una fila orizzontale come le
-// foto, 'y' per una lista verticale come la home). "onReorder(from, to)"
-// riceve gli indici e si occupa di salvare il nuovo ordine e ridisegnare.
-//
-// "stepPx" (solo per le foto in galleria) sostituisce il calcolo basato
-// sulla posizione REALE dei fratelli con uno basato sulla DISTANZA
-// trascinata: nella galleria si vede una foto sola alla volta (le altre
-// sono fuori schermo, spostate di quasi un'intera larghezza di viewport
-// dalla corrente), quindi confrontare il puntatore con la posizione vera
-// di un fratello richiederebbe trascinare per 700-1000px prima di
-// ottenere un effetto — quasi nessun trascinamento normale ci arriva, e
-// il pezzo torna sempre alla posizione di partenza. Con "stepPx" invece
-// ogni "stepPx" pixel trascinati spostano la foto di una posizione nella
-// sequenza, un gesto naturale che funziona a qualunque distanza dello
-// schermo. La lista home (righe tutte visibili una sopra l'altra) non
-// passa "stepPx" e continua a usare il confronto con la posizione reale.
-function makeReorderable(item, { container, axis, onReorder, handleParent, stepPx }) {
+// "container", lungo l'asse "axis" ('y' per la lista verticale della
+// home — l'unico caso che la usa: le foto in galleria usano invece
+// makeMovableFree, vedi lì il perché).
+function makeReorderable(item, { container, axis, onReorder, handleParent }) {
   if (!item.style.position) item.style.position = "relative";
   const handle = el("div", { class: "move-handle", title: "Trascina per riordinare" });
   const anchor = handleParent || item;
@@ -244,7 +242,6 @@ function makeReorderable(item, { container, axis, onReorder, handleParent, stepP
       startX: e.clientX,
       startY: e.clientY,
       startPos: axis === "x" ? e.clientX : e.clientY,
-      startIndex: Array.from(container.children).indexOf(item),
       targetIndex: Array.from(container.children).indexOf(item),
     };
     item.classList.add("is-dragging-item");
@@ -257,25 +254,14 @@ function makeReorderable(item, { container, axis, onReorder, handleParent, stepP
     if (!dragState || e.pointerId !== dragState.pointerId) return;
     const pointerPos = axis === "x" ? e.clientX : e.clientY;
     const siblings = Array.from(container.children);
-    // spostamento visivo: l'elemento segue il puntatore in ENTRAMBE le
-    // direzioni (non solo lungo "axis"), così il trascinamento si sente
-    // naturale anche muovendo il mouse/dito in diagonale o in verticale;
-    // solo il calcolo di QUALE posizione assegnare resta legato all'asse
-    // lungo cui i fratelli sono davvero disposti (x per le foto, y per la
-    // lista home).
     item.style.transform = `translate(${e.clientX - dragState.startX}px, ${e.clientY - dragState.startY}px)`;
 
-    if (stepPx) {
-      const steps = Math.round((pointerPos - dragState.startPos) / stepPx);
-      dragState.targetIndex = Math.max(0, Math.min(siblings.length - 1, dragState.startIndex + steps));
-    } else {
-      dragState.targetIndex = siblings.filter((sib) => {
-        if (sib === item) return false;
-        const rect = sib.getBoundingClientRect();
-        const mid = axis === "x" ? rect.left + rect.width / 2 : rect.top + rect.height / 2;
-        return mid < pointerPos;
-      }).length;
-    }
+    dragState.targetIndex = siblings.filter((sib) => {
+      if (sib === item) return false;
+      const rect = sib.getBoundingClientRect();
+      const mid = axis === "x" ? rect.left + rect.width / 2 : rect.top + rect.height / 2;
+      return mid < pointerPos;
+    }).length;
   }
 
   function onPointerUp(e) {
@@ -439,6 +425,12 @@ function describePositionKey(key) {
 
   const archiveCaptionMatch = key.match(/^archive\.caption\.(\d+)$/);
   if (archiveCaptionMatch) return `Core archive, didascalia foto #${Number(archiveCaptionMatch[1]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di ARCHIVE.images`;
+
+  const imagePosMatch = key.match(/^project\.(.+)\.imagePos\.(\d+)$/);
+  if (imagePosMatch) return `Progetto "${imagePosMatch[1]}", foto #${Number(imagePosMatch[2]) + 1}  →  aggiungi "offset: { x, y }" su quella voce di "images"`;
+
+  const archiveImagePosMatch = key.match(/^archive\.imagePos\.(\d+)$/);
+  if (archiveImagePosMatch) return `Core archive, foto #${Number(archiveImagePosMatch[1]) + 1}  →  aggiungi "offset: { x, y }" su quella voce di ARCHIVE.images`;
 
   return key;
 }
@@ -691,7 +683,7 @@ function renderHome() {
    successivo (passa "projectNav"); per core archive, invece, scorrono le
    foto della selezione (projectNav assente).
    ------------------------------------------------------------------------- */
-function renderGallery({ total, title, description, descriptionBox, images, imageOrderKey, imageOrder, projectNav }) {
+function renderGallery({ total, title, description, descriptionBox, images, projectNav }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
   ensureEditModeUI();
@@ -707,11 +699,16 @@ function renderGallery({ total, title, description, descriptionBox, images, imag
     ]),
   ]);
 
-  const descBlock = el(
-    "div",
-    { class: "description" },
-    description.map((paragraph) => el("p", {}, paragraph))
-  );
+  // Il testo scorre in verticale in loop continuo (marquee): il contenuto
+  // è ripetuto due volte in fila dentro ".description-track", che si anima
+  // di metà della propria altezza — la seconda copia (nascosta a chi usa
+  // uno screen reader) prende il posto della prima esattamente quando
+  // questa esce di scena, quindi il giro si ripete senza scatti visibili.
+  const makeParagraphs = () => description.map((paragraph) => el("p", {}, paragraph));
+  const secondCopy = makeParagraphs();
+  secondCopy.forEach((p) => p.setAttribute("aria-hidden", "true"));
+  const descTrack = el("div", { class: "description-track" }, [...makeParagraphs(), ...secondCopy]);
+  const descBlock = el("div", { class: "description" }, [descTrack]);
   resizeObservers.push(
     makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
       width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
@@ -735,32 +732,16 @@ function renderGallery({ total, title, description, descriptionBox, images, imag
       )
     );
     makeZoomable(frame, img);
+    makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto");
 
     const figcaption = image.caption ? el("figcaption", {}, image.caption) : null;
-    if (figcaption) makeMovableFree(figcaption, `${sizeKeyPrefix}.caption.${origIndex}`);
+    if (figcaption) makeMovableFree(figcaption, `${sizeKeyPrefix}.caption.${origIndex}`, "Trascina per spostare la didascalia");
 
     return el("figure", { class: "photo", "data-index": i }, [frame, figcaption]);
   });
 
   const track = el("div", { class: "photo-track" }, figures);
   const viewport = el("div", { class: "photo-viewport" }, [track]);
-
-  figures.forEach((figure) => {
-    const frame = figure.querySelector(".photo-frame");
-    makeReorderable(figure, {
-      container: track,
-      axis: "x",
-      handleParent: frame,
-      stepPx: 120, // vedi commento su makeReorderable: qui i fratelli sono fuori schermo, serve un passo a distanza fissa
-      onReorder: (from, to) => {
-        const newOrder = imageOrder.slice();
-        const [moved] = newOrder.splice(from, 1);
-        newOrder.splice(to, 0, moved);
-        saveOrderOverride(imageOrderKey, newOrder);
-        renderRoute();
-      },
-    });
-  });
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
@@ -771,6 +752,15 @@ function renderGallery({ total, title, description, descriptionBox, images, imag
   app.appendChild(descBlock);
   app.appendChild(viewport);
   app.appendChild(footerBar);
+
+  // Velocità di lettura costante indipendentemente da quanto è lungo il
+  // testo: più paragrafi = giro più lungo, non più veloce. scrollHeight
+  // del binario è già DOPPIO (due copie del testo), quindi lo dimezziamo
+  // per avere l'altezza di una sola copia (= quanto deve viaggiare prima
+  // di ripetersi).
+  const MARQUEE_PX_PER_SEC = 28;
+  const oneCopyHeight = descTrack.scrollHeight / 2;
+  descTrack.style.animationDuration = `${Math.max(8, oneCopyHeight / MARQUEE_PX_PER_SEC)}s`;
 
   /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----
      Questo scorrimento automatico tra le foto della galleria funziona
@@ -894,8 +884,6 @@ function renderProject(slug) {
     description: project.description,
     descriptionBox: project.descriptionBox,
     images,
-    imageOrderKey: orderKey,
-    imageOrder: order,
     projectNav: { slug: project.slug, prevSlug, nextSlug },
   });
 }
@@ -912,8 +900,6 @@ function renderArchive() {
     title: ARCHIVE.title,
     description: ARCHIVE.description,
     images,
-    imageOrderKey: orderKey,
-    imageOrder: order,
   });
 }
 
