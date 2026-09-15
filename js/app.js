@@ -213,7 +213,20 @@ function makeMovableFree(node, key) {
 // "container", lungo l'asse "axis" ('x' per una fila orizzontale come le
 // foto, 'y' per una lista verticale come la home). "onReorder(from, to)"
 // riceve gli indici e si occupa di salvare il nuovo ordine e ridisegnare.
-function makeReorderable(item, { container, axis, onReorder, handleParent }) {
+//
+// "stepPx" (solo per le foto in galleria) sostituisce il calcolo basato
+// sulla posizione REALE dei fratelli con uno basato sulla DISTANZA
+// trascinata: nella galleria si vede una foto sola alla volta (le altre
+// sono fuori schermo, spostate di quasi un'intera larghezza di viewport
+// dalla corrente), quindi confrontare il puntatore con la posizione vera
+// di un fratello richiederebbe trascinare per 700-1000px prima di
+// ottenere un effetto — quasi nessun trascinamento normale ci arriva, e
+// il pezzo torna sempre alla posizione di partenza. Con "stepPx" invece
+// ogni "stepPx" pixel trascinati spostano la foto di una posizione nella
+// sequenza, un gesto naturale che funziona a qualunque distanza dello
+// schermo. La lista home (righe tutte visibili una sopra l'altra) non
+// passa "stepPx" e continua a usare il confronto con la posizione reale.
+function makeReorderable(item, { container, axis, onReorder, handleParent, stepPx }) {
   if (!item.style.position) item.style.position = "relative";
   const handle = el("div", { class: "move-handle", title: "Trascina per riordinare" });
   const anchor = handleParent || item;
@@ -231,6 +244,7 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
       startX: e.clientX,
       startY: e.clientY,
       startPos: axis === "x" ? e.clientX : e.clientY,
+      startIndex: Array.from(container.children).indexOf(item),
       targetIndex: Array.from(container.children).indexOf(item),
     };
     item.classList.add("is-dragging-item");
@@ -251,12 +265,17 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
     // lista home).
     item.style.transform = `translate(${e.clientX - dragState.startX}px, ${e.clientY - dragState.startY}px)`;
 
-    dragState.targetIndex = siblings.filter((sib) => {
-      if (sib === item) return false;
-      const rect = sib.getBoundingClientRect();
-      const mid = axis === "x" ? rect.left + rect.width / 2 : rect.top + rect.height / 2;
-      return mid < pointerPos;
-    }).length;
+    if (stepPx) {
+      const steps = Math.round((pointerPos - dragState.startPos) / stepPx);
+      dragState.targetIndex = Math.max(0, Math.min(siblings.length - 1, dragState.startIndex + steps));
+    } else {
+      dragState.targetIndex = siblings.filter((sib) => {
+        if (sib === item) return false;
+        const rect = sib.getBoundingClientRect();
+        const mid = axis === "x" ? rect.left + rect.width / 2 : rect.top + rect.height / 2;
+        return mid < pointerPos;
+      }).length;
+    }
   }
 
   function onPointerUp(e) {
@@ -732,6 +751,7 @@ function renderGallery({ total, title, description, descriptionBox, images, imag
       container: track,
       axis: "x",
       handleParent: frame,
+      stepPx: 120, // vedi commento su makeReorderable: qui i fratelli sono fuori schermo, serve un passo a distanza fissa
       onReorder: (from, to) => {
         const newOrder = imageOrder.slice();
         const [moved] = newOrder.splice(from, 1);
