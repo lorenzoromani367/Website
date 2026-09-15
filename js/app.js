@@ -23,7 +23,8 @@
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 5000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 2000;    // durata dello slide orizzontale tra le foto
+const TRANSITION_MS = 2000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 
 /* -------------------------------------------------------------------------
    2. Helpers generici
@@ -51,6 +52,14 @@ function findProject(slug) {
 
 function isEditMode() {
   return document.body.classList.contains("edit-mode");
+}
+
+// Arrotonda un valore in px al multiplo di GRID_SIZE più vicino — usato da
+// resize, riordino e spostamento libero così che, agganciandosi tutti alla
+// stessa griglia, foto e blocchi diversi finiscono per allinearsi tra loro
+// invece di fermarsi su misure leggermente diverse l'uno dall'altro.
+function snapToGrid(value) {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
 }
 
 // Tiene traccia degli event listener/timer/observer della vista corrente,
@@ -185,8 +194,8 @@ function makeMovableFree(node, key) {
 
   function onPointerMove(e) {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
-    pos.x = dragState.baseX + (e.clientX - dragState.startX);
-    pos.y = dragState.baseY + (e.clientY - dragState.startY);
+    pos.x = snapToGrid(dragState.baseX + (e.clientX - dragState.startX));
+    pos.y = snapToGrid(dragState.baseY + (e.clientY - dragState.startY));
     node.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
   }
 
@@ -219,6 +228,8 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
     e.stopPropagation();
     dragState = {
       pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
       startPos: axis === "x" ? e.clientX : e.clientY,
       targetIndex: Array.from(container.children).indexOf(item),
     };
@@ -232,9 +243,13 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
     const pointerPos = axis === "x" ? e.clientX : e.clientY;
     const siblings = Array.from(container.children);
-    // spostamento visivo: l'elemento segue esattamente il movimento del puntatore
-    const delta = pointerPos - dragState.startPos;
-    item.style.transform = axis === "x" ? `translateX(${delta}px)` : `translateY(${delta}px)`;
+    // spostamento visivo: l'elemento segue il puntatore in ENTRAMBE le
+    // direzioni (non solo lungo "axis"), così il trascinamento si sente
+    // naturale anche muovendo il mouse/dito in diagonale o in verticale;
+    // solo il calcolo di QUALE posizione assegnare resta legato all'asse
+    // lungo cui i fratelli sono davvero disposti (x per le foto, y per la
+    // lista home).
+    item.style.transform = `translate(${e.clientX - dragState.startX}px, ${e.clientY - dragState.startY}px)`;
 
     dragState.targetIndex = siblings.filter((sib) => {
       if (sib === item) return false;
@@ -300,8 +315,8 @@ function makeResizable(node, key, defaults = {}) {
     if (!dragStart || e.pointerId !== dragStart.pointerId) return;
     const dx = e.clientX - dragStart.startX;
     const dy = e.clientY - dragStart.startY;
-    const newWidth = Math.max(40, Math.round(dragStart.startWidth + dx));
-    const newHeight = Math.max(40, Math.round(dragStart.startHeight + dy));
+    const newWidth = snapToGrid(Math.max(40, dragStart.startWidth + dx));
+    const newHeight = snapToGrid(Math.max(40, dragStart.startHeight + dy));
     node.style.width = `${newWidth}px`;
     node.style.height = `${newHeight}px`;
     updateLabel();
