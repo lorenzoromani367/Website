@@ -166,6 +166,17 @@ function savePositionOverride(key, pos) {
   }
 }
 
+function clearPositionOverride(key) {
+  const all = loadPositionOverrides();
+  if (!(key in all)) return;
+  delete all[key];
+  try {
+    localStorage.setItem(POSITION_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile */
+  }
+}
+
 // Rende "node" spostabile liberamente (in alto/basso/sinistra/destra) con
 // una maniglia verde dedicata, indipendente da resize. "key" identifica
 // l'elemento (es. "project.lines.caption.0", indice ORIGINALE della foto,
@@ -218,6 +229,14 @@ function makeMovableFree(node, key, title = "Trascina per spostare") {
     dragState = null;
     savePositionOverride(key, { x: pos.x, y: pos.y });
   }
+
+  return {
+    reset() {
+      pos.x = 0;
+      pos.y = 0;
+      node.style.transform = "";
+    },
+  };
 }
 
 // Rende "item" trascinabile per riordinarlo tra i suoi fratelli dentro
@@ -289,7 +308,7 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
 // rimpiccioliscono nel suo insieme, non ne modificano l'inquadratura). In
 // quel caso si aggiunge anche una seconda maniglia a sinistra, non solo
 // quella di default a destra.
-function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
+function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd } = {}) {
   node.classList.add("resizable");
   if (!node.style.position) node.style.position = "relative";
 
@@ -363,6 +382,7 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
       saveSizeOverride(key, { width: node.style.width, height: node.style.height });
+      if (onResizeEnd) onResizeEnd();
       dragStart = null;
     }
 
@@ -738,6 +758,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     const origIndex = image._index != null ? image._index : i;
     const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
     const frame = el("div", { class: "photo-frame" }, [img]);
+    let captionMove = null;
     resizeObservers.push(
       makeResizable(
         frame,
@@ -747,31 +768,33 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
         // applyDefaultPhotoHeights() più sotto (stessa altezza per tutte
         // le foto, in base allo spazio lasciato libero dal testo).
         { width: image.width, height: image.height },
-        { lockRatioTo: img }
+        {
+          lockRatioTo: img,
+          onResizeEnd: () => {
+            // Ridimensionando la foto la didascalia può finire fuori posto
+            // (spostamento manuale pensato per una foto di altra misura):
+            // la si riporta alla posizione naturale sotto la nuova foto.
+            clearPositionOverride(`${sizeKeyPrefix}.caption.${origIndex}`);
+            if (captionMove) captionMove.reset();
+          },
+        }
       )
     );
     makeZoomable(frame, img);
     makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto");
 
     const figcaption = image.caption ? el("figcaption", {}, image.caption) : null;
-    if (figcaption) makeMovableFree(figcaption, `${sizeKeyPrefix}.caption.${origIndex}`, "Trascina per spostare la didascalia");
+    if (figcaption) captionMove = makeMovableFree(figcaption, `${sizeKeyPrefix}.caption.${origIndex}`, "Trascina per spostare la didascalia");
 
     return el("figure", { class: "photo", "data-index": i }, [frame, figcaption]);
   });
 
   const track = el("div", { class: "photo-track" }, figures);
-  // Frecce per passare da una foto all'altra senza aspettare lo
-  // scorrimento automatico. Sono fisse ai lati del riquadro (dentro
-  // .photo-viewport ma fuori da .photo-track, così non scorrono via
-  // insieme alle foto) e stanno nel margine laterale, non sopra la foto.
-  const photoPrevBtn = el("button", { class: "photo-nav-arrow prev", "aria-label": "Foto precedente" }, "←");
-  const photoNextBtn = el("button", { class: "photo-nav-arrow next", "aria-label": "Foto successiva" }, "→");
-  const viewport = el("div", { class: "photo-viewport" }, [track, photoPrevBtn, photoNextBtn]);
+  const viewport = el("div", { class: "photo-viewport" }, [track]);
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
-  const counter = el("span", { class: "nav-counter" }, `${images.length ? 1 : 0} / ${images.length}`);
-  const footerBar = el("div", { class: "gallerybar" }, [prevBtn, counter, nextBtn]);
+  const footerBar = el("div", { class: "gallerybar" }, [prevBtn, nextBtn]);
 
   app.appendChild(topbar);
   app.appendChild(descBlock);
@@ -793,6 +816,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   let marqueeLastTs = null;
   let marqueeDragState = null;
   let marqueeRafId = null;
+  let marqueeHoverPaused = false;
 
   const measureMarqueeDistance = () => {
     marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
@@ -818,7 +842,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     if (marqueeLastTs == null) marqueeLastTs = ts;
     const dt = (ts - marqueeLastTs) / 1000;
     marqueeLastTs = ts;
-    if (!marqueeDragState && !isEditMode() && marqueeDistance > 0) {
+    if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
       marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
       applyMarqueeTransform();
     }
@@ -827,6 +851,12 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   measureMarqueeDistance();
   applyMarqueeTransform();
   marqueeRafId = requestAnimationFrame(marqueeTick);
+
+  // Come per l'autoplay delle foto: passandoci sopra il mouse lo scorrimento
+  // automatico del testo si ferma (utile per leggerlo con calma), e riparte
+  // togliendo il mouse — senza scattare indietro, riprende da dov'era.
+  descBlock.addEventListener("mouseenter", () => { marqueeHoverPaused = true; });
+  descBlock.addEventListener("mouseleave", () => { marqueeHoverPaused = false; });
 
   // Il font (Inter) carica con font-display:swap: il testo appare subito
   // con un font di scorta dalle proporzioni diverse, poi "scatta" su
@@ -881,14 +911,23 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   let autoplayTimer = null;
   let paused = false;
 
-  function updateCounter() {
-    counter.textContent = `${current + 1} / ${images.length}`;
-  }
-
-  function updateViewportHeight() {
+  function updateViewportHeight({ instant = false } = {}) {
     const activeFigure = figures[current];
     if (!activeFigure) return;
-    viewport.style.height = `${activeFigure.getBoundingClientRect().height}px`;
+    const newHeight = `${activeFigure.getBoundingClientRect().height}px`;
+    if (instant) {
+      // Scatto senza transizione: per correzioni "tecniche" dell'altezza
+      // (ridimensionamento a mano di una foto, resize della finestra,
+      // arrivo tardivo delle dimensioni di una foto lazy) che non devono
+      // animare per 6 secondi come il cambio di foto in applyPosition().
+      const prevTransition = viewport.style.transition;
+      viewport.style.transition = "none";
+      viewport.style.height = newHeight;
+      viewport.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
+      viewport.style.transition = prevTransition;
+    } else {
+      viewport.style.height = newHeight;
+    }
   }
 
   function applyPosition({ instant = false, position = current } = {}) {
@@ -906,7 +945,6 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
       track.style.transform = `translateX(-${position * 100}%)`;
     }
     updateViewportHeight();
-    updateCounter();
   }
 
   // Chiudere il giro (dall'ultima foto alla prima, o viceversa) deve
@@ -1009,18 +1047,6 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     nextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
   }
 
-  // Frecce dedicate a passare da una foto all'altra (a differenza di
-  // prevBtn/nextBtn, che su un progetto navigano tra progetti): utili per
-  // chi non vuole aspettare i 5 secondi di autoplay. Se c'è una foto sola
-  // non hanno nulla da fare, restano nascoste.
-  if (figures.length < 2) {
-    photoPrevBtn.style.display = "none";
-    photoNextBtn.style.display = "none";
-  } else {
-    photoPrevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
-    photoNextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
-  }
-
   viewport.addEventListener("mouseenter", handlePause);
   viewport.addEventListener("mouseleave", handleResume);
   viewport.addEventListener("touchstart", handlePause, { passive: true });
@@ -1083,7 +1109,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
       frame.style.width = "auto";
       frame.style.height = `${targetHeight}px`;
     });
-    updateViewportHeight();
+    updateViewportHeight({ instant: true });
   }
   applyDefaultPhotoHeights();
   window.addEventListener("resize", applyDefaultPhotoHeights);
@@ -1096,11 +1122,23 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     const img = figure.querySelector("img");
     img.addEventListener("load", () => {
       applyDefaultPhotoHeights();
-      if (i === current) updateViewportHeight();
+      if (i === current) updateViewportHeight({ instant: true });
     });
   });
 
-  window.addEventListener("resize", updateViewportHeight);
+  const updateViewportHeightInstant = () => updateViewportHeight({ instant: true });
+  window.addEventListener("resize", updateViewportHeightInstant);
+
+  // Se la foto attiva viene ridimensionata (anche durante il trascinamento
+  // della maniglia, non solo al rilascio), l'altezza del viewport deve
+  // seguirla subito: altrimenti "overflow: hidden" taglia il pezzo che
+  // eccede l'altezza precedente, rimasta più bassa (foto "tagliate").
+  const frameResizeObserver = new ResizeObserver(updateViewportHeightInstant);
+  figures.forEach((figure) => {
+    const frame = figure.querySelector(".photo-frame");
+    if (frame) frameResizeObserver.observe(frame);
+  });
+  resizeObservers.push(frameResizeObserver);
 
   applyPosition();
   scheduleNext();
@@ -1111,7 +1149,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     cancelAnimationFrame(marqueeRafId);
     document.removeEventListener("pointermove", onMarqueeDragMove);
     document.removeEventListener("pointerup", onMarqueeDragEnd);
-    window.removeEventListener("resize", updateViewportHeight);
+    window.removeEventListener("resize", updateViewportHeightInstant);
     window.removeEventListener("resize", applyDefaultPhotoHeights);
     resizeObservers.forEach((o) => o.disconnect());
   };
