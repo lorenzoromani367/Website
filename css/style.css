@@ -208,6 +208,14 @@ button {
   overflow: hidden;
 }
 
+.description-track {
+  /* Promuove il livello a un layer GPU dedicato, così ogni frame del
+     marquee è una semplice ricomposizione invece di un repaint — a
+     velocità così basse (pochi px/sec) è il repaint che si nota come un
+     piccolo scatto, non lo spostamento in sé. */
+  will-change: transform;
+}
+
 .description-track.draggable {
   cursor: grab;
   touch-action: none;

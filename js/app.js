@@ -706,31 +706,21 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     ]),
   ]);
 
-  // Di norma il testo NON scorre: si vede tutto, per intero, quanto è alto
-  // serve (la pagina scrolla se serve — vedi più sotto). Il marquee (testo
-  // duplicato che scorre in loop, per non perdere contenuto) scatta SOLO
-  // se il blocco ha un'altezza esplicita (impostata a mano trascinando la
-  // maniglia rossa, o scritta in content.js) più bassa del testo per
-  // intero: in quel caso, e solo in quel caso, ha senso far scorrere
-  // qualcosa che altrimenti verrebbe tagliato via.
+  // Il testo scorre SEMPRE, lentissimo — un movimento ambientale continuo,
+  // non solo un modo per non perdere contenuto: anche quando il blocco è
+  // già alto abbastanza da contenere tutto (il caso di default, vedi più
+  // sotto), scorre comunque piano piano. Il contenuto è ripetuto due
+  // volte in fila dentro ".description-track": la seconda copia (nascosta
+  // a chi usa uno screen reader) prende il posto della prima esattamente
+  // quando questa esce di scena, quindi il giro si ripete senza scatti
+  // visibili.
   const hasExplicitDescHeight = Boolean(
     (descriptionBox && descriptionBox.height) || loadSizeOverrides()[`${sizeKeyPrefix}.description`]?.height
   );
-
-  let descTrack, secondCopy;
-  if (hasExplicitDescHeight) {
-    // Il contenuto è ripetuto due volte in fila: la seconda copia
-    // (nascosta a chi usa uno screen reader) prende il posto della prima
-    // esattamente quando questa esce di scena, quindi il giro si ripete
-    // senza scatti visibili.
-    const makeParagraphs = () => description.map((paragraph) => el("p", {}, paragraph));
-    secondCopy = makeParagraphs();
-    secondCopy.forEach((p) => p.setAttribute("aria-hidden", "true"));
-    descTrack = el("div", { class: "description-track" }, [...makeParagraphs(), ...secondCopy]);
-  } else {
-    secondCopy = null;
-    descTrack = el("div", { class: "description-track" }, description.map((paragraph) => el("p", {}, paragraph)));
-  }
+  const makeParagraphs = () => description.map((paragraph) => el("p", {}, paragraph));
+  const secondCopy = makeParagraphs();
+  secondCopy.forEach((p) => p.setAttribute("aria-hidden", "true"));
+  const descTrack = el("div", { class: "description-track" }, [...makeParagraphs(), ...secondCopy]);
   const descBlock = el("div", { class: "description" }, [descTrack]);
   resizeObservers.push(
     makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
@@ -784,89 +774,98 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   app.appendChild(viewport);
   app.appendChild(footerBar);
 
-  // Marquee del testo (solo quando "secondCopy" esiste, cioè quando il
-  // blocco ha un'altezza esplicita più bassa del testo per intero — vedi
-  // sopra): guidato da requestAnimationFrame (non da un'animazione CSS)
-  // proprio per poterlo anche trascinare a mano. "marqueePos" è quanto si
-  // è già scorso (0..marqueeDistance, in px); trascinando lo si sposta
+  // Marquee del testo: SEMPRE attivo, velocità volutamente minima (un
+  // filo di movimento continuo, non una lettura a scorrimento). Guidato
+  // da requestAnimationFrame (non da un'animazione CSS) proprio per
+  // poterlo anche trascinare a mano. "marqueePos" è quanto si è già
+  // scorso (0..marqueeDistance, in px); trascinando lo si sposta
   // direttamente, e l'avanzamento automatico riprende da lì al rilascio,
   // senza scattare indietro. La distanza è quella ESATTA misurata sul DOM
   // (non una percentuale) — vedi il commento in style.css sul perché
   // "50%" darebbe un salto visibile.
-  const MARQUEE_PX_PER_SEC = 28;
+  const MARQUEE_PX_PER_SEC = 8;
   let marqueeDistance = 0;
   let marqueePos = 0;
   let marqueeLastTs = null;
   let marqueeDragState = null;
   let marqueeRafId = null;
-  let onMarqueeDragMove = null;
-  let onMarqueeDragEnd = null;
 
-  if (secondCopy) {
-    const measureMarqueeDistance = () => {
-      marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
-      marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
-    };
-    const applyMarqueeTransform = () => {
-      descTrack.style.transform = `translateY(${marqueePos - marqueeDistance}px)`;
-    };
-    const marqueeTick = (ts) => {
-      if (marqueeLastTs == null) marqueeLastTs = ts;
-      const dt = (ts - marqueeLastTs) / 1000;
-      marqueeLastTs = ts;
-      if (!marqueeDragState && !isEditMode() && marqueeDistance > 0) {
-        marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
-        applyMarqueeTransform();
-      }
-      marqueeRafId = requestAnimationFrame(marqueeTick);
-    };
-    measureMarqueeDistance();
-    applyMarqueeTransform();
-    marqueeRafId = requestAnimationFrame(marqueeTick);
-
-    // Il font (Inter) carica con font-display:swap: il testo appare subito
-    // con un font di scorta dalle proporzioni diverse, poi "scatta" su
-    // Inter quando arriva, cambiando l'altezza reale del testo.
-    // Rimisuriamo quando il font vero è pronto.
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => {
-        measureMarqueeDistance();
-        applyMarqueeTransform();
-      });
+  const measureMarqueeDistance = () => {
+    marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
+    marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
+    // Se il blocco non ha un'altezza esplicita (misura salvata o
+    // descriptionBox in content.js), il default è l'altezza esatta di
+    // UNA copia: il testo si vede tutto (non ne manca un pezzo), e scorre
+    // comunque piano per il movimento ambientale — non perché ne avanzi
+    // altro da rivelare.
+    if (!hasExplicitDescHeight) {
+      descBlock.style.height = `${marqueeDistance}px`;
     }
-
-    // Trascinamento a mano: solo fuori dalla modalità modifica (lì il
-    // testo resta fermo — vedi ensureEditModeUI/isEditMode — e si legge
-    // scrollando normalmente col mouse/dito, come .description in edit
-    // mode già permette).
-    descTrack.classList.add("draggable");
-    descTrack.addEventListener("pointerdown", (e) => {
-      if (isEditMode()) return;
-      e.preventDefault();
-      marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos };
-      descTrack.classList.add("is-dragging");
-      document.addEventListener("pointermove", onMarqueeDragMove);
-      document.addEventListener("pointerup", onMarqueeDragEnd);
-    });
-    onMarqueeDragMove = (e) => {
-      if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
-      const dy = e.clientY - marqueeDragState.startY;
-      // trascinare verso il basso "torna indietro" nel testo (come si
-      // trascina un foglio per rivelare quello che c'è sopra); verso
-      // l'alto avanza — coerente con lo scorrimento automatico dall'alto
-      // verso il basso.
-      let next = (marqueeDragState.startPos - dy) % marqueeDistance;
-      if (next < 0) next += marqueeDistance;
-      marqueePos = next;
+  };
+  const applyMarqueeTransform = () => {
+    // translate3d, non translateY: forza la composizione su GPU con
+    // precisione sub-pixel. A una velocità così bassa (pochi px/sec) ogni
+    // fotogramma si muove di una frazione di pixel — senza questo, alcuni
+    // browser arrotondano al pixel intero più vicino, e il movimento si
+    // vede a scatti invece che fluido.
+    descTrack.style.transform = `translate3d(0, ${marqueePos - marqueeDistance}px, 0)`;
+  };
+  const marqueeTick = (ts) => {
+    if (marqueeLastTs == null) marqueeLastTs = ts;
+    const dt = (ts - marqueeLastTs) / 1000;
+    marqueeLastTs = ts;
+    if (!marqueeDragState && !isEditMode() && marqueeDistance > 0) {
+      marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
       applyMarqueeTransform();
-    };
-    onMarqueeDragEnd = (e) => {
-      if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
-      marqueeDragState = null;
-      descTrack.classList.remove("is-dragging");
-      document.removeEventListener("pointermove", onMarqueeDragMove);
-      document.removeEventListener("pointerup", onMarqueeDragEnd);
-    };
+    }
+    marqueeRafId = requestAnimationFrame(marqueeTick);
+  };
+  measureMarqueeDistance();
+  applyMarqueeTransform();
+  marqueeRafId = requestAnimationFrame(marqueeTick);
+
+  // Il font (Inter) carica con font-display:swap: il testo appare subito
+  // con un font di scorta dalle proporzioni diverse, poi "scatta" su
+  // Inter quando arriva, cambiando l'altezza reale del testo. Rimisuriamo
+  // quando il font vero è pronto.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      measureMarqueeDistance();
+      applyMarqueeTransform();
+    });
+  }
+
+  // Trascinamento a mano: solo fuori dalla modalità modifica (lì il
+  // testo resta fermo — vedi ensureEditModeUI/isEditMode — e si legge
+  // scrollando normalmente col mouse/dito, come .description in edit
+  // mode già permette).
+  descTrack.classList.add("draggable");
+  descTrack.addEventListener("pointerdown", (e) => {
+    if (isEditMode()) return;
+    e.preventDefault();
+    marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos };
+    descTrack.classList.add("is-dragging");
+    document.addEventListener("pointermove", onMarqueeDragMove);
+    document.addEventListener("pointerup", onMarqueeDragEnd);
+  });
+  function onMarqueeDragMove(e) {
+    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+    const dy = e.clientY - marqueeDragState.startY;
+    // trascinare verso il basso "torna indietro" nel testo (come si
+    // trascina un foglio per rivelare quello che c'è sopra); verso
+    // l'alto avanza — coerente con lo scorrimento automatico dall'alto
+    // verso il basso.
+    let next = (marqueeDragState.startPos - dy) % marqueeDistance;
+    if (next < 0) next += marqueeDistance;
+    marqueePos = next;
+    applyMarqueeTransform();
+  }
+  function onMarqueeDragEnd(e) {
+    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+    marqueeDragState = null;
+    descTrack.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onMarqueeDragMove);
+    document.removeEventListener("pointerup", onMarqueeDragEnd);
   }
 
   /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----
