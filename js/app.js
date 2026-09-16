@@ -690,8 +690,8 @@ function ensureEditModeUI() {
 
   toggle.addEventListener("click", () => {
     document.body.classList.toggle("edit-mode");
-    document.querySelectorAll(".photo .caption-text").forEach((el) => {
-      el.contentEditable = isEditMode() ? "true" : "false";
+    document.querySelectorAll(".photo .caption-input").forEach((input) => {
+      input.readOnly = !isEditMode();
     });
   });
   exportBtn.addEventListener("click", () => openExportPanel());
@@ -1002,36 +1002,29 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
     const frame = el("div", { class: "photo-frame" }, [img]);
 
-    // Didascalia: il testo si scrive/corregge cliccandoci sopra in
-    // modalità modifica (contentEditable), anche per le foto che non ne
-    // hanno ancora una — lo slot resta vuoto (e invisibile fuori dalla
-    // modalità modifica) finché non ci scrivi qualcosa. La posizione
-    // invece si trascina con la maniglia verde, come le foto: se in
-    // seguito ridimensioni la foto, la posizione della didascalia torna
-    // automaticamente a quella naturale sotto la nuova foto (onResizeEnd
-    // qui sotto), altrimenti resterebbe dov'era per la foto di prima.
-    // Il testo vive in uno SPAN interno separato dal contenitore
-    // <figcaption> che si trascina: <figcaption> altrimenti avrebbe
-    // sempre almeno un figlio (la maniglia stessa), e non risulterebbe
-    // mai ":empty" in CSS — né per nasconderla quando non c'è ancora una
-    // didascalia, né per mostrare il testo segnaposto.
+    // Didascalia: un rettangolo sempre presente nella struttura della
+    // pagina (mai nascosto, non importa se è vuoto o meno), che si
+    // trascina con la maniglia verde. Il testo è un normale <input>, non
+    // un contentEditable: si salva a ogni tasto premuto (evento "input"),
+    // non solo quando perdi il focus — niente più testo perso se prendi
+    // la maniglia per trascinarlo subito dopo aver scritto, e niente più
+    // trucchi CSS ":empty"/"::before" per il segnaposto o per nasconderlo.
     const captionKey = `${sizeKeyPrefix}.captionText.${origIndex}`;
     const captionOverride = captionOverrides[captionKey];
     const captionText = captionOverride != null ? captionOverride : image.caption || "";
-    const captionTextEl = el("span", { class: "caption-text" }, captionText ? captionText : []);
-    captionTextEl.contentEditable = isEditMode() ? "true" : "false";
-    captionTextEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        captionTextEl.blur();
-      }
+    const captionInput = el("input", {
+      type: "text",
+      class: "caption-input",
+      placeholder: "scrivi qui la didascalia",
+      value: captionText,
     });
-    captionTextEl.addEventListener("blur", () => {
-      const text = captionTextEl.textContent.trim();
+    captionInput.readOnly = !isEditMode();
+    captionInput.addEventListener("input", () => {
+      const text = captionInput.value.trim();
       if (text) saveCaptionOverride(captionKey, text);
       else clearCaptionOverride(captionKey);
     });
-    const figcaption = el("figcaption", {}, [captionTextEl]);
+    const figcaption = el("figcaption", { class: "caption-box" }, [captionInput]);
     const captionMove = makeMovableFree(figcaption, `${sizeKeyPrefix}.captionPos.${origIndex}`, "Trascina per spostare la didascalia");
 
     resizeObservers.push(
