@@ -254,6 +254,14 @@ function makeMovableFree(node, key, title = "Trascina per spostare") {
 
   handle.addEventListener("pointerdown", (e) => {
     if (!isEditMode()) return;
+    // Se dentro "node" c'è un testo in modifica (es. la didascalia) con
+    // ancora il cursore attivo, va salvato ORA: il preventDefault() qui
+    // sotto impedisce anche lo sfocamento naturale che cliccando altrove
+    // lo salverebbe da solo, quindi iniziare subito a trascinare senza
+    // prima aver cliccato via avrebbe perso quello che hai appena scritto.
+    if (document.activeElement && document.activeElement !== handle && node.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
     e.preventDefault();
     e.stopPropagation();
     dragState = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y };
