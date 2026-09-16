@@ -177,6 +177,45 @@ function clearPositionOverride(key) {
   }
 }
 
+/* -------------------------------------------------------------------------
+   Testo delle didascalie modificato direttamente in modalità modifica
+   (contentEditable sulla didascalia stessa) — niente più trascinamento
+   libero per le didascalie: si è rivelato fragile (finivano sopra la foto
+   dopo un ridimensionamento, senza un modo affidabile per rimetterle a
+   posto). Restano sempre nella loro posizione naturale sotto la foto;
+   qui si salva solo il TESTO, se diverso da quello in content.js.
+   ------------------------------------------------------------------------- */
+const CAPTION_STORE_KEY = "site-caption-overrides-v1";
+
+function loadCaptionOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(CAPTION_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveCaptionOverride(key, text) {
+  const all = loadCaptionOverrides();
+  all[key] = text;
+  try {
+    localStorage.setItem(CAPTION_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: il testo resta comunque applicato per questa sessione */
+  }
+}
+
+function clearCaptionOverride(key) {
+  const all = loadCaptionOverrides();
+  if (!(key in all)) return;
+  delete all[key];
+  try {
+    localStorage.setItem(CAPTION_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile */
+  }
+}
+
 // Rende "node" spostabile liberamente (in alto/basso/sinistra/destra) con
 // una maniglia verde dedicata, indipendente da resize. "key" identifica
 // l'elemento (es. "project.lines.caption.0", indice ORIGINALE della foto,
@@ -229,14 +268,6 @@ function makeMovableFree(node, key, title = "Trascina per spostare") {
     dragState = null;
     savePositionOverride(key, { x: pos.x, y: pos.y });
   }
-
-  return {
-    reset() {
-      pos.x = 0;
-      pos.y = 0;
-      node.style.transform = "";
-    },
-  };
 }
 
 // Rende "item" trascinabile per riordinarlo tra i suoi fratelli dentro
@@ -308,7 +339,7 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
 // rimpiccioliscono nel suo insieme, non ne modificano l'inquadratura). In
 // quel caso si aggiunge anche una seconda maniglia a sinistra, non solo
 // quella di default a destra.
-function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd } = {}) {
+function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
   node.classList.add("resizable");
   if (!node.style.position) node.style.position = "relative";
 
@@ -382,7 +413,6 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd } = 
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
       saveSizeOverride(key, { width: node.style.width, height: node.style.height });
-      if (onResizeEnd) onResizeEnd();
       dragStart = null;
     }
 
@@ -460,16 +490,28 @@ function describePositionKey(key) {
   return key;
 }
 
+function describeCaptionKey(key) {
+  const captionMatch = key.match(/^project\.(.+)\.captionText\.(\d+)$/);
+  if (captionMatch) return `Progetto "${captionMatch[1]}", foto #${Number(captionMatch[2]) + 1}  →  aggiorna "caption" su quella voce di "images"`;
+
+  const archiveCaptionMatch = key.match(/^archive\.captionText\.(\d+)$/);
+  if (archiveCaptionMatch) return `Core archive, foto #${Number(archiveCaptionMatch[1]) + 1}  →  aggiorna "caption" su quella voce di ARCHIVE.images`;
+
+  return key;
+}
+
 function buildExportText() {
   const sizeOverrides = loadSizeOverrides();
   const orderOverrides = loadOrderOverrides();
   const positionOverrides = loadPositionOverrides();
+  const captionOverrides = loadCaptionOverrides();
   const sizeKeys = Object.keys(sizeOverrides);
   const orderKeys = Object.keys(orderOverrides);
   const positionKeys = Object.keys(positionOverrides);
+  const captionKeys = Object.keys(captionOverrides);
 
-  if (!sizeKeys.length && !orderKeys.length && !positionKeys.length) {
-    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente la didascalia. Poi torna qui.";
+  if (!sizeKeys.length && !orderKeys.length && !positionKeys.length && !captionKeys.length) {
+    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
   }
 
   const lines = [
@@ -508,6 +550,15 @@ function buildExportText() {
     });
   }
 
+  if (captionKeys.length) {
+    lines.push("=== TESTO DIDASCALIE ===", "");
+    captionKeys.forEach((key) => {
+      lines.push(`# ${describeCaptionKey(key)}`);
+      lines.push(`  caption: "${captionOverrides[key]}"`);
+      lines.push("");
+    });
+  }
+
   return lines.join("\n");
 }
 
@@ -536,6 +587,7 @@ function openExportPanel() {
     localStorage.removeItem(SIZE_STORE_KEY);
     localStorage.removeItem(ORDER_STORE_KEY);
     localStorage.removeItem(POSITION_STORE_KEY);
+    localStorage.removeItem(CAPTION_STORE_KEY);
     location.reload();
   });
 
@@ -561,11 +613,14 @@ function ensureEditModeUI() {
   if (editModeUIReady) return;
   editModeUIReady = true;
 
-  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta la didascalia" }, "⇲");
+  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, clicca su una didascalia per scriverla/correggerla" }, "⇲");
   const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta modifiche", title: "Esporta modifiche" }, "⇩");
 
   toggle.addEventListener("click", () => {
     document.body.classList.toggle("edit-mode");
+    document.querySelectorAll(".photo figcaption").forEach((fc) => {
+      fc.contentEditable = isEditMode() ? "true" : "false";
+    });
   });
   exportBtn.addEventListener("click", () => openExportPanel());
 
@@ -708,7 +763,7 @@ function renderHome() {
    successivo (passa "projectNav"); per core archive, invece, scorrono le
    foto della selezione (projectNav assente).
    ------------------------------------------------------------------------- */
-function renderGallery({ total, title, description, descriptionBox, images, projectNav }) {
+function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
   ensureEditModeUI();
@@ -716,7 +771,15 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   const resizeObservers = [];
   const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
 
-  const topbarIndexEl = el("span", { class: "topbar-index" }, String(total));
+  // Le didascalie non si trascinano più (vedi più sotto): eventuali
+  // vecchie posizioni salvate da versioni precedenti del sito non vanno
+  // più applicate da nessuna parte, quindi le puliamo per non lasciarle
+  // in giro nello storage (es. nel pannello "Esporta modifiche").
+  Object.keys(loadPositionOverrides()).forEach((key) => {
+    if (key.startsWith(`${sizeKeyPrefix}.caption.`)) clearPositionOverride(key);
+  });
+
+  const topbarIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
   const topbarTitleEl = el("span", { class: "topbar-title" }, title);
   makeMovableFree(topbarIndexEl, `${sizeKeyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
   makeMovableFree(topbarTitleEl, `${sizeKeyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
@@ -754,11 +817,12 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   );
   makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo");
 
+  const captionOverrides = loadCaptionOverrides();
+
   const figures = images.map((image, i) => {
     const origIndex = image._index != null ? image._index : i;
     const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
     const frame = el("div", { class: "photo-frame" }, [img]);
-    let captionMove = null;
     resizeObservers.push(
       makeResizable(
         frame,
@@ -768,33 +832,52 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
         // applyDefaultPhotoHeights() più sotto (stessa altezza per tutte
         // le foto, in base allo spazio lasciato libero dal testo).
         { width: image.width, height: image.height },
-        {
-          lockRatioTo: img,
-          onResizeEnd: () => {
-            // Ridimensionando la foto la didascalia può finire fuori posto
-            // (spostamento manuale pensato per una foto di altra misura):
-            // la si riporta alla posizione naturale sotto la nuova foto.
-            clearPositionOverride(`${sizeKeyPrefix}.caption.${origIndex}`);
-            if (captionMove) captionMove.reset();
-          },
-        }
+        { lockRatioTo: img }
       )
     );
     makeZoomable(frame, img);
     makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto");
 
-    const figcaption = image.caption ? el("figcaption", {}, image.caption) : null;
-    if (figcaption) captionMove = makeMovableFree(figcaption, `${sizeKeyPrefix}.caption.${origIndex}`, "Trascina per spostare la didascalia");
+    // Didascalia: niente più maniglia per trascinarla (restava troppo
+    // facilmente sopra la foto dopo un ridimensionamento). Resta sempre
+    // nella sua posizione naturale sotto la foto; il testo però si può
+    // scrivere/correggere direttamente cliccandoci sopra in modalità
+    // modifica (contentEditable), anche per le foto che non ne hanno
+    // ancora una — lo "slot" resta semplicemente vuoto (e invisibile
+    // fuori dalla modalità modifica) finché non ci scrivi qualcosa.
+    const captionKey = `${sizeKeyPrefix}.captionText.${origIndex}`;
+    const captionOverride = captionOverrides[captionKey];
+    const captionText = captionOverride != null ? captionOverride : image.caption || "";
+    const figcaption = el("figcaption", {}, captionText ? captionText : []);
+    figcaption.contentEditable = isEditMode() ? "true" : "false";
+    figcaption.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        figcaption.blur();
+      }
+    });
+    figcaption.addEventListener("blur", () => {
+      const text = figcaption.textContent.trim();
+      if (text) saveCaptionOverride(captionKey, text);
+      else clearCaptionOverride(captionKey);
+    });
 
     return el("figure", { class: "photo", "data-index": i }, [frame, figcaption]);
   });
 
   const track = el("div", { class: "photo-track" }, figures);
-  const viewport = el("div", { class: "photo-viewport" }, [track]);
+  // Frecce per passare da una foto all'altra senza aspettare lo
+  // scorrimento automatico: la FUNZIONE resta (utile per chi clicca ai
+  // lati della foto per abitudine), ma il bottone in sé non deve mai
+  // essere visibile (vedi .photo-nav-arrow in style.css: opacity 0 fissa).
+  const photoPrevBtn = el("button", { class: "photo-nav-arrow prev", "aria-label": "Foto precedente" }, "←");
+  const photoNextBtn = el("button", { class: "photo-nav-arrow next", "aria-label": "Foto successiva" }, "→");
+  const viewport = el("div", { class: "photo-viewport" }, [track, photoPrevBtn, photoNextBtn]);
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
-  const footerBar = el("div", { class: "gallerybar" }, [prevBtn, nextBtn]);
+  const bottomIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
+  const footerBar = el("div", { class: "gallerybar" }, [prevBtn, bottomIndexEl, nextBtn]);
 
   app.appendChild(topbar);
   app.appendChild(descBlock);
@@ -1047,6 +1130,18 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     nextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
   }
 
+  // Frecce (invisibili) dedicate a passare da una foto all'altra della
+  // stessa galleria, a differenza di prevBtn/nextBtn che su un progetto
+  // navigano invece tra progetti: utili per chi non vuole aspettare
+  // l'autoplay. Se c'è una foto sola non hanno nulla da fare.
+  if (figures.length < 2) {
+    photoPrevBtn.style.display = "none";
+    photoNextBtn.style.display = "none";
+  } else {
+    photoPrevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
+    photoNextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
+  }
+
   viewport.addEventListener("mouseenter", handlePause);
   viewport.addEventListener("mouseleave", handleResume);
   viewport.addEventListener("touchstart", handlePause, { passive: true });
@@ -1174,7 +1269,9 @@ function renderProject(slug) {
   const nextSlug = orderedProjects[(idx + 1) % orderedProjects.length].slug;
 
   renderGallery({
-    total: images.length,
+    // Il numero mostrato è la posizione del progetto in home (1 = primo),
+    // non il numero di foto della galleria.
+    indexNumber: idx + 1,
     title: project.name.toLowerCase(),
     description: project.description,
     descriptionBox: project.descriptionBox,
@@ -1191,7 +1288,9 @@ function renderArchive() {
     return { ...img, _index: origIndex, _src: resolveImageSrc("archive", origIndex, img) };
   });
   renderGallery({
-    total: images.length,
+    // Core archive non fa parte della lista progetti: qui il numero resta
+    // il conteggio delle foto (non c'è una "posizione" a cui riferirsi).
+    indexNumber: images.length,
     title: ARCHIVE.title,
     description: ARCHIVE.description,
     images,
