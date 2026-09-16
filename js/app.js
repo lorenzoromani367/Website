@@ -22,8 +22,8 @@
 /* -------------------------------------------------------------------------
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
-const AUTOPLAY_DELAY = 5000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 3000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
+const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 
 /* -------------------------------------------------------------------------
@@ -696,10 +696,14 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   const resizeObservers = [];
   const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
 
+  const topbarIndexEl = el("span", { class: "topbar-index" }, String(total));
+  const topbarTitleEl = el("span", { class: "topbar-title" }, title);
+  makeMovableFree(topbarIndexEl, `${sizeKeyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
+  makeMovableFree(topbarTitleEl, `${sizeKeyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
   const topbar = el("div", { class: "topbar" }, [
-    el("div", { class: "topbar-row" }, [el("span", { class: "topbar-index" }, String(total))]),
+    el("div", { class: "topbar-row" }, [topbarIndexEl]),
     el("div", { class: "topbar-row" }, [
-      el("span", { class: "topbar-title" }, title),
+      topbarTitleEl,
       el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
         el("span", {}), el("span", {}), el("span", {}),
       ]),
@@ -887,32 +891,89 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     viewport.style.height = `${activeFigure.getBoundingClientRect().height}px`;
   }
 
-  function applyPosition({ instant = false } = {}) {
+  function applyPosition({ instant = false, position = current } = {}) {
     if (instant) {
-      // Scatto senza transizione: usato solo quando si chiude il giro
-      // (dall'ultima foto alla prima, o viceversa) — vedi goTo(). Senza
-      // questo, il carosello "riavvolgerebbe" scorrendo visivamente
-      // attraverso TUTTE le foto di mezzo nello stesso tempo di una
-      // transizione normale (una sola foto), sembrando un riavvolgimento
-      // troppo veloce invece di un normale passo avanti/indietro.
+      // Scatto senza transizione: usato solo per i riancoraggi invisibili
+      // del trucco del "loop infinito" — vedi goTo(). Non è mai quello che
+      // l'utente vede muoversi: o mostra esattamente la stessa foto di
+      // prima (nessun cambiamento visibile), o avviene DOPO che lo slide
+      // animato è già arrivato al clone (vedi sotto).
       track.style.transition = "none";
-      track.style.transform = `translateX(-${current * 100}%)`;
+      track.style.transform = `translateX(-${position * 100}%)`;
       track.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
       track.style.transition = "";
     } else {
-      track.style.transform = `translateX(-${current * 100}%)`;
+      track.style.transform = `translateX(-${position * 100}%)`;
     }
     updateViewportHeight();
     updateCounter();
   }
 
+  // Chiudere il giro (dall'ultima foto alla prima, o viceversa) deve
+  // sembrare un passo avanti/indietro NORMALE, alla stessa velocità delle
+  // altre transizioni — non uno scatto istantaneo né un riavvolgimento
+  // veloce attraverso tutte le foto di mezzo. Trucco standard dei
+  // caroselli infiniti: si clona temporaneamente la foto di arrivo,
+  // agganciandola subito dopo (o prima) di quella attuale nel binario, e
+  // ci si anima sopra normalmente; a transizione finita il clone (identico
+  // in tutto e per tutto alla foto vera) sparisce e si riancora
+  // all'istante sulla foto vera, senza che si veda alcuna differenza.
+  let pendingWrapCleanup = null;
+
+  function makePhotoClone(sourceIndex) {
+    const clone = figures[sourceIndex].cloneNode(true);
+    clone.classList.add("photo-clone");
+    clone.querySelectorAll(".resize-handle, .move-handle, .resizable-label").forEach((el) => el.remove());
+    return clone;
+  }
+
   function goTo(i, { user = false } = {}) {
     if (!figures.length) return;
+    if (pendingWrapCleanup) {
+      clearTimeout(pendingWrapCleanup.timer);
+      pendingWrapCleanup.cleanup();
+      pendingWrapCleanup = null;
+    }
+
     const n = figures.length;
     const wrapForward = current === n - 1 && i === current + 1;
     const wrapBackward = current === 0 && i === current - 1;
     current = (i + n) % n;
-    applyPosition({ instant: wrapForward || wrapBackward });
+
+    if (wrapForward) {
+      const clone = makePhotoClone(0);
+      track.appendChild(clone);
+      applyPosition({ position: n }); // un passo avanti normale, verso il clone appena aggiunto in coda
+      const timer = setTimeout(() => {
+        clone.remove();
+        applyPosition({ instant: true, position: current }); // current = 0, identico al clone: nessun cambiamento visibile
+        pendingWrapCleanup = null;
+      }, TRANSITION_MS);
+      pendingWrapCleanup = {
+        timer,
+        cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
+      };
+    } else if (wrapBackward) {
+      const clone = makePhotoClone(n - 1);
+      track.insertBefore(clone, track.firstChild);
+      // Inserire il clone in testa sposta la foto reale attuale (era in
+      // posizione 0) alla posizione 1: la riancoriamo lì all'istante,
+      // senza transizione, così finora non è cambiato nulla di visibile.
+      applyPosition({ instant: true, position: 1 });
+      applyPosition({ position: 0 }); // un passo indietro normale, verso il clone appena aggiunto in testa
+      const timer = setTimeout(() => {
+        clone.remove();
+        applyPosition({ instant: true, position: current }); // current = n-1, identico al clone: nessun cambiamento visibile
+        pendingWrapCleanup = null;
+      }, TRANSITION_MS);
+      pendingWrapCleanup = {
+        timer,
+        cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
+      };
+    } else {
+      applyPosition();
+    }
+
     if (user) restartAutoplay();
   }
 
@@ -1046,6 +1107,7 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
 
   currentTeardown = () => {
     clearTimeout(autoplayTimer);
+    if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
     cancelAnimationFrame(marqueeRafId);
     document.removeEventListener("pointermove", onMarqueeDragMove);
     document.removeEventListener("pointerup", onMarqueeDragEnd);
@@ -1106,10 +1168,15 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   app.classList.add("has-fixed-bars");
   ensureEditModeUI();
 
+  const simpleKeyPrefix = `simple.${title.toLowerCase()}`;
+  const topbarIndexEl = el("span", { class: "topbar-index" }, "");
+  const topbarTitleEl = el("span", { class: "topbar-title" }, title.toLowerCase());
+  makeMovableFree(topbarIndexEl, `${simpleKeyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
+  makeMovableFree(topbarTitleEl, `${simpleKeyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
   const topbar = el("div", { class: "topbar" }, [
-    el("div", { class: "topbar-row" }, [el("span", { class: "topbar-index" }, "")]),
+    el("div", { class: "topbar-row" }, [topbarIndexEl]),
     el("div", { class: "topbar-row" }, [
-      el("span", { class: "topbar-title" }, title.toLowerCase()),
+      topbarTitleEl,
       el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
         el("span", {}), el("span", {}), el("span", {}),
       ]),

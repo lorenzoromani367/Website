@@ -45,7 +45,7 @@ button {
   --muted: #8a877c;
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
-  --transition-ms: 3000ms;
+  --transition-ms: 6000ms;
 }
 
 .mono {
@@ -164,11 +164,25 @@ button {
 .topbar-index {
   font-size: 0.95rem;
   min-width: 1.5em;
+  position: relative;
 }
 
 .topbar-title {
   font-size: 0.95rem;
   flex: 1;
+  position: relative;
+}
+
+/* La maniglia sta a destra del testo (non sopra): "13" o un titolo corto
+   sarebbero più stretti della maniglia stessa, quindi la copriremmo se la
+   mettessimo dentro come sulle foto. */
+.topbar-index .move-handle,
+.topbar-title .move-handle {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  margin-left: 6px;
+  transform: translateY(-50%);
 }
 
 /* L'hamburger è un link che torna alla home (niente menu a comparsa). */
