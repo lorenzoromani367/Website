@@ -178,12 +178,9 @@ function clearPositionOverride(key) {
 }
 
 /* -------------------------------------------------------------------------
-   Testo delle didascalie modificato direttamente in modalità modifica
-   (contentEditable sulla didascalia stessa) — niente più trascinamento
-   libero per le didascalie: si è rivelato fragile (finivano sopra la foto
-   dopo un ridimensionamento, senza un modo affidabile per rimetterle a
-   posto). Restano sempre nella loro posizione naturale sotto la foto;
-   qui si salva solo il TESTO, se diverso da quello in content.js.
+   Testo delle didascalie, se diverso da quello in content.js — scritto in
+   un <input> dentro il rettangolo trascinabile della didascalia (vedi
+   .caption-box/.caption-input più sotto).
    ------------------------------------------------------------------------- */
 const CAPTION_STORE_KEY = "site-caption-overrides-v1";
 
@@ -215,6 +212,33 @@ function clearCaptionOverride(key) {
     /* storage non disponibile */
   }
 }
+
+// Migrazione una tantum (gira una sola volta per browser, mai più dopo):
+// le didascalie sono state ricostruite da zero, ma la posizione trascinata
+// usa la stessa chiave ("...captionPos.N") delle versioni precedenti
+// (prima col trascinamento libero poi tolto, poi rimesso). Chi aveva
+// trascinato una didascalia in una di quelle versioni si ritroverebbe il
+// nuovo rettangolo esattamente in quel punto — magari fuori dallo schermo
+// visibile, sembrando "sparito". Si riparte puliti: posizione a zero per
+// tutte, il testo che hai già scritto resta.
+(function resetStaleCaptionPositionsOnce() {
+  const FLAG_KEY = "site-caption-rebuild-v1";
+  try {
+    if (localStorage.getItem(FLAG_KEY)) return;
+    const all = loadPositionOverrides();
+    let changed = false;
+    Object.keys(all).forEach((key) => {
+      if (/\.captionPos\.\d+$/.test(key) || /\.caption\.\d+$/.test(key)) {
+        delete all[key];
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem(POSITION_STORE_KEY, JSON.stringify(all));
+    localStorage.setItem(FLAG_KEY, "1");
+  } catch (e) {
+    /* storage non disponibile: non c'è nulla da migrare */
+  }
+})();
 
 // Rende "node" spostabile liberamente (in alto/basso/sinistra/destra) con
 // una maniglia verde dedicata, indipendente da resize. "key" identifica
@@ -945,15 +969,6 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const resizeObservers = [];
   const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
-
-  // Pulizia una tantum: le vecchie posizioni delle didascalie salvate da
-  // una versione precedente del sito usavano una chiave diversa
-  // ("...caption.N", non più letta da nessuna parte — quella attuale è
-  // "...captionPos.N", vedi più sotto) e restavano altrimenti in giro
-  // nello storage inutilmente (es. nel pannello "Esporta modifiche").
-  Object.keys(loadPositionOverrides()).forEach((key) => {
-    if (key.startsWith(`${sizeKeyPrefix}.caption.`)) clearPositionOverride(key);
-  });
 
   const topbarIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
   const topbarTitleEl = el("span", { class: "topbar-title" }, title);
