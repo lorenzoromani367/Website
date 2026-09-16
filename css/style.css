@@ -333,6 +333,7 @@ body.edit-mode .photo figcaption:focus {
   .topbar { padding: 20px 20px; gap: 20px; }
   .description { padding: 40px 20px 28px; }
   .photo { padding: 32px 20px 48px; }
+  .gallerybar-index { left: 20px; }
 }
 
 .gallerybar {
@@ -341,6 +342,20 @@ body.edit-mode .photo figcaption:focus {
   justify-content: space-between;
   background: var(--paper);
   padding: 32px 40px 36px;
+  position: relative;
+}
+
+/* Allineato con il numero in alto: .topbar e .gallerybar hanno lo stesso
+   padding laterale (40px), quindi "left: 40px" qui riproduce esattamente
+   la stessa colonna di .topbar-index lassù — non è più centrato tra le
+   frecce, che restano dove sono (vedi .gallerybar sopra, ancora
+   space-between: tolto questo dal flusso, si dispongono da sole ai due
+   bordi). */
+.gallerybar-index {
+  position: absolute;
+  left: 40px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .nav-arrow {
@@ -352,25 +367,6 @@ body.edit-mode .photo figcaption:focus {
 .nav-arrow:hover {
   opacity: 0.5;
 }
-
-/* Frecce per passare da una foto all'altra della stessa galleria senza
-   aspettare l'autoplay: la FUNZIONE resta (utile per chi clicca ai lati
-   della foto per abitudine), ma il bottone non deve mai essere visibile
-   — per questo opacity 0 fissa, niente hover che lo riveli. Stanno nel
-   margine laterale di .photo-viewport (fuori da .photo-track, così
-   restano ferme mentre le foto scorrono). */
-.photo-nav-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
-  font-size: 1rem;
-  padding: 6px 8px;
-  opacity: 0;
-}
-
-.photo-nav-arrow.prev { left: 2px; }
-.photo-nav-arrow.next { right: 2px; }
 
 @media (max-width: 700px) {
   .gallerybar { padding: 24px 20px 28px; }
@@ -406,16 +402,46 @@ body.edit-mode .photo figcaption:focus {
   cursor: zoom-out;
 }
 
-.lightbox img {
+/* La dimensione la decide chi guarda il sito trascinando la maniglia
+   (vedi makeLightboxResizable in app.js): di default è quella "contain"
+   classica (la foto il più grande possibile senza mai essere tagliata),
+   calcolata al volo in JS anziché in CSS proprio perché deve poter
+   diventare una misura esplicita in px una volta trascinata. Il
+   riquadro è .lightbox-frame (non l'img direttamente) per poterci
+   appoggiare la maniglia di resize: le <img> sono elementi "replaced",
+   non possono avere figli visibili al loro interno. */
+.lightbox-frame {
+  position: relative;
+}
+
+.lightbox-frame img {
   display: block;
-  /* Ingrandimento dimezzato rispetto a prima (era 100%, quindi quasi a
-     tutto schermo): la foto resta grande ma ben lontana dai bordi. */
-  max-width: 50%;
-  max-height: 50%;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
+  /* rete di sicurezza, es. mentre la foto non è ancora caricata o se la
+     misura salvata non rispetta più le proporzioni naturali della foto */
   object-fit: contain;
   cursor: default;
+}
+
+/* Linee guida (come la griglia della modalità modifica): compaiono solo
+   mentre trascini la maniglia di resize, per mostrare che l'immagine
+   resta sempre esattamente centrata sullo sfondo scuro qualunque misura
+   tu scelga (è .lightbox stesso, con align/justify-content:center, a
+   garantirlo — le linee sono solo un riscontro visivo). */
+.lightbox-guide {
+  position: absolute;
+  background: rgba(237, 235, 224, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.lightbox-guide-v { top: 0; bottom: 0; left: 50%; width: 1px; }
+.lightbox-guide-h { left: 0; right: 0; top: 50%; height: 1px; }
+
+.lightbox:has(.resize-handle.is-dragging) .lightbox-guide {
+  opacity: 1;
 }
 
 .lightbox-close {
@@ -559,6 +585,22 @@ body.edit-mode .resizable-label {
   touch-action: none;
 }
 
+/* Blocco vuoto trascinabile in altezza (vedi makeHeightResizable in
+   app.js): a piena larghezza, quindi la sua maniglia sta centrata invece
+   che nell'angolo, e il cursore è quello di un ridimensionamento solo
+   verticale. */
+.gallery-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.gallery-spacer .resize-handle {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
 /* Sulle foto c'è anche una maniglia speculare a sinistra (oltre a quella
    di default a destra), così si può ridimensionare tirando da entrambi i
    lati: cursore ruotato di conseguenza (nesw invece di nwse). */
@@ -657,7 +699,15 @@ body.edit-mode .resize-handle {
   display: block;
 }
 
+/* Eccezione: nel lightbox la maniglia per decidere lo zoom è sempre
+   visibile, non solo in modalità modifica — vedi il commento su
+   makeLightboxResizable in app.js sul perché. */
+.resize-handle.always-visible {
+  display: block;
+}
+
 body.edit-mode .resize-handle:hover,
+.resize-handle.always-visible:hover,
 .resize-handle.is-dragging {
   background: #b04d38;
 }
@@ -665,7 +715,6 @@ body.edit-mode .resize-handle:hover,
 body.edit-mode .home-list a,
 body.edit-mode .hamburger,
 body.edit-mode .nav-arrow,
-body.edit-mode .photo-nav-arrow,
 body.edit-mode .footer-link,
 body.edit-mode .photo-frame img {
   pointer-events: none;

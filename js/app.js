@@ -441,6 +441,47 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
   return observer;
 }
 
+// Blocco "vuoto" trascinabile in altezza (a differenza di makeResizable,
+// che con la sua unica maniglia d'angolo cambia anche la larghezza — qui
+// invece il blocco è sempre a piena larghezza, cambiarla non avrebbe
+// senso). Usato per lasciare all'utente il controllo diretto di quanta
+// aria vuole tra un blocco e l'altro (e quindi, di riflesso, di quanto
+// allungare il "foglio" beige): di default alto 0px, cioè invisibile e
+// senza alcun effetto finché non lo trascini tu stesso.
+function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio") {
+  const saved = loadSizeOverrides()[key];
+  node.style.height = (saved && saved.height) || "0px";
+
+  const handle = el("div", { class: "resize-handle", title });
+  node.appendChild(handle);
+
+  let dragStart = null;
+
+  function onPointerMove(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    const dy = e.clientY - dragStart.startY;
+    const newHeight = snapToGrid(Math.max(0, dragStart.startHeight + dy));
+    node.style.height = `${newHeight}px`;
+  }
+  function onPointerUp(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    handle.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    saveSizeOverride(key, { height: node.style.height });
+    dragStart = null;
+  }
+  handle.addEventListener("pointerdown", (e) => {
+    if (!isEditMode()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragStart = { pointerId: e.pointerId, startY: e.clientY, startHeight: node.getBoundingClientRect().height };
+    handle.classList.add("is-dragging");
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  });
+}
+
 function describeOverrideKey(key) {
   if (key === "home.list") return `LAYOUT.home  →  aggiorna listWidth/listHeight in content.js`;
 
@@ -454,6 +495,8 @@ function describeOverrideKey(key) {
 
   const archiveImgMatch = key.match(/^archive\.image\.(\d+)$/);
   if (archiveImgMatch) return `Core archive, foto #${Number(archiveImgMatch[1]) + 1}  →  aggiorna width/height su quella voce di ARCHIVE.images`;
+
+  if (key === "lightbox.image") return `Dimensione dell'ingrandimento (lightbox), uguale per tutte le foto  →  solo una preferenza salvata nel browser, non c'è un equivalente in content.js`;
 
   return key;
 }
@@ -634,21 +677,124 @@ function ensureEditModeUI() {
    contenuta con un margine). Disattivo in modalità modifica, per non
    aprirlo per sbaglio mentre si trascina una maniglia di resize.
    ------------------------------------------------------------------------- */
+// Chiave UNICA e condivisa da tutte le foto: la misura scelta trascinando
+// la maniglia si applica a ogni foto che apri dopo (non è per-foto), così
+// tutte le foto ingrandite hanno una dimensione coerente fra loro.
+const LIGHTBOX_SIZE_KEY = "lightbox.image";
+
+// Maniglia di resize sempre visibile (non solo in modalità modifica): a
+// differenza di makeResizable, qui non c'è un "sito in modalità modifica"
+// da attivare prima — il lightbox è già di per sé una vista a parte,
+// raggiungibile solo aprendo una foto, quindi la maniglia per decidere
+// quanto deve essere grande lo zoom è sempre lì, pronta all'uso.
+function makeLightboxResizable(frame, img, { onResizeEnd } = {}) {
+  const handle = el("div", { class: "resize-handle always-visible" });
+  frame.appendChild(handle);
+  handle.addEventListener("click", (e) => e.stopPropagation()); // non deve mai chiudere il lightbox
+
+  let dragStart = null;
+
+  function onPointerMove(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    const dx = e.clientX - dragStart.startX;
+    const newWidth = Math.max(120, dragStart.startWidth + dx);
+    const newHeight = Math.round(newWidth / dragStart.aspectRatio);
+    frame.style.width = `${Math.round(newWidth)}px`;
+    frame.style.height = `${newHeight}px`;
+  }
+  function onPointerUp(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    handle.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    saveSizeOverride(LIGHTBOX_SIZE_KEY, { width: frame.style.width, height: frame.style.height });
+    dragStart = null;
+    // Il riquadro resta centrato dal flex del lightbox: se si restringe,
+    // il bordo che stai trascinando si sposta di MENO di quanto ti sei
+    // mosso tu col mouse (il centro non si muove, quindi ogni bordo fa
+    // solo metà strada). La maniglia, agganciata al bordo, resta quindi
+    // "indietro" rispetto al cursore, e il rilascio del clic finisce per
+    // cadere sul riquadro invece che su di lei: onResizeEnd avvisa
+    // openLightbox di ignorare quell'unico clic (altrimenti chiuderebbe
+    // il lightbox appena finito di ridimensionare).
+    if (onResizeEnd) onResizeEnd();
+  }
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = frame.getBoundingClientRect();
+    dragStart = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startWidth: rect.width,
+      aspectRatio: img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : rect.width / rect.height,
+    };
+    handle.classList.add("is-dragging");
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  });
+}
+
 function openLightbox(src, alt) {
-  const overlay = el("div", { class: "lightbox" }, [
-    el("img", { src, alt: alt || "" }),
-  ]);
+  const img = el("img", { src, alt: alt || "" });
+  const frame = el("div", { class: "lightbox-frame" }, [img]);
+  const guideV = el("div", { class: "lightbox-guide lightbox-guide-v" });
+  const guideH = el("div", { class: "lightbox-guide lightbox-guide-h" });
+  const overlay = el("div", { class: "lightbox" }, [frame, guideV, guideH]);
   const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
+
+  // Dimensione di default: la foto quanto più grande possibile restando
+  // interamente visibile nello spazio disponibile (esattamente come
+  // "contain" — nessun taglio). Se hai già trascinato la maniglia in
+  // precedenza, si usa invece quella misura per tutte le foto.
+  function applyDefaultSize() {
+    const saved = loadSizeOverrides()[LIGHTBOX_SIZE_KEY];
+    if (saved && saved.width && saved.height) {
+      frame.style.width = saved.width;
+      frame.style.height = saved.height;
+      return;
+    }
+    if (!img.naturalWidth || !img.naturalHeight) return; // non ancora caricata: riproviamo al load
+    const availableWidth = window.innerWidth - 96; // 48px di padding di .lightbox per lato
+    const availableHeight = window.innerHeight - 96;
+    const ratio = img.naturalWidth / img.naturalHeight;
+    let w = availableWidth;
+    let h = w / ratio;
+    if (h > availableHeight) {
+      h = availableHeight;
+      w = h * ratio;
+    }
+    frame.style.width = `${Math.round(w)}px`;
+    frame.style.height = `${Math.round(h)}px`;
+  }
+  if (img.complete) applyDefaultSize();
+  img.addEventListener("load", applyDefaultSize);
+  // Solo se NON hai già impostato tu una misura: la ridisegna quando
+  // ridimensioni la finestra del browser mentre il lightbox è aperto.
+  function onWindowResize() {
+    if (!loadSizeOverrides()[LIGHTBOX_SIZE_KEY]) applyDefaultSize();
+  }
+  window.addEventListener("resize", onWindowResize);
+
+  let justResized = false;
+  makeLightboxResizable(frame, img, { onResizeEnd: () => { justResized = true; } });
 
   function close() {
     overlay.remove();
+    window.removeEventListener("resize", onWindowResize);
     document.removeEventListener("keydown", onKeydown);
   }
   function onKeydown(e) {
     if (e.key === "Escape") close();
   }
 
-  overlay.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => {
+    // Il clic che chiude il rilascio della maniglia di resize non deve
+    // chiudere anche il lightbox — vedi il commento in makeLightboxResizable.
+    if (justResized) { justResized = false; return; }
+    if (e.target.closest(".resize-handle")) return;
+    close();
+  });
   closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
   document.addEventListener("keydown", onKeydown);
 
@@ -866,23 +1012,34 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   });
 
   const track = el("div", { class: "photo-track" }, figures);
-  // Frecce per passare da una foto all'altra senza aspettare lo
-  // scorrimento automatico: la FUNZIONE resta (utile per chi clicca ai
-  // lati della foto per abitudine), ma il bottone in sé non deve mai
-  // essere visibile (vedi .photo-nav-arrow in style.css: opacity 0 fissa).
-  const photoPrevBtn = el("button", { class: "photo-nav-arrow prev", "aria-label": "Foto precedente" }, "←");
-  const photoNextBtn = el("button", { class: "photo-nav-arrow next", "aria-label": "Foto successiva" }, "→");
-  const viewport = el("div", { class: "photo-viewport" }, [track, photoPrevBtn, photoNextBtn]);
+  const viewport = el("div", { class: "photo-viewport" }, [track]);
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
-  const bottomIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
+  // Allineato in orizzontale con il numero in alto (stessa "colonna"),
+  // non centrato tra le frecce: per questo esce dal flusso della riga e
+  // si posiziona da solo (vedi .gallerybar-index in style.css).
+  const bottomIndexEl = el("span", { class: "topbar-index gallerybar-index" }, String(indexNumber));
   const footerBar = el("div", { class: "gallerybar" }, [prevBtn, bottomIndexEl, nextBtn]);
+
+  // Due blocchi "vuoti" trascinabili in altezza (maniglia rossa, come sulle
+  // foto — visibile solo in modalità modifica), per lasciare all'utente il
+  // controllo diretto di quanta aria vuole: uno prima delle frecce in
+  // basso (tra la foto/didascalia e la gallerybar), uno in fondo del
+  // tutto (per allungare il "foglio" beige oltre quanto basterebbe al
+  // contenuto). Di default entrambi alti 0px: nessun cambiamento finché
+  // non li trascini tu stesso.
+  const spacerBeforeBar = el("div", { class: "gallery-spacer" });
+  makeHeightResizable(spacerBeforeBar, `${sizeKeyPrefix}.spacerBeforeBar`, "Trascina per aggiungere spazio prima delle frecce");
+  const spacerBottom = el("div", { class: "gallery-spacer" });
+  makeHeightResizable(spacerBottom, `${sizeKeyPrefix}.spacerBottom`, "Trascina per allungare la pagina");
 
   app.appendChild(topbar);
   app.appendChild(descBlock);
   app.appendChild(viewport);
+  app.appendChild(spacerBeforeBar);
   app.appendChild(footerBar);
+  app.appendChild(spacerBottom);
 
   // Marquee del testo: SEMPRE attivo, velocità volutamente minima (un
   // filo di movimento continuo, non una lettura a scorrimento). Guidato
@@ -994,22 +1151,29 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let autoplayTimer = null;
   let paused = false;
 
-  function updateViewportHeight({ instant = false } = {}) {
+  function updateViewportHeight() {
     const activeFigure = figures[current];
     if (!activeFigure) return;
-    const newHeight = `${activeFigure.getBoundingClientRect().height}px`;
-    if (instant) {
-      // Scatto senza transizione: per correzioni "tecniche" dell'altezza
-      // (ridimensionamento a mano di una foto, resize della finestra,
-      // arrivo tardivo delle dimensioni di una foto lazy) che non devono
-      // animare per 6 secondi come il cambio di foto in applyPosition().
+    const newHeightPx = activeFigure.getBoundingClientRect().height;
+    const currentHeightPx = viewport.getBoundingClientRect().height;
+    if (newHeightPx > currentHeightPx) {
+      // Se la foto in arrivo è più alta di quella attuale, lo scatto è
+      // ISTANTANEO invece che animato in 6 secondi: altrimenti, per tutta
+      // la durata della transizione, il riquadro resterebbe più basso di
+      // quanto serve alla foto che sta scorrendo in vista, e
+      // "overflow: hidden" (necessario per lo slide orizzontale) ne
+      // taglierebbe il fondo finché l'altezza non recupera (confermato:
+      // subito dopo l'inizio di una transizione verso una foto molto più
+      // alta, il riquadro può restare centinaia di px più basso del
+      // necessario). Se invece la foto in arrivo è più bassa, restringersi
+      // non taglia mai nulla, quindi lì la transizione morbida resta.
       const prevTransition = viewport.style.transition;
       viewport.style.transition = "none";
-      viewport.style.height = newHeight;
+      viewport.style.height = `${newHeightPx}px`;
       viewport.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
       viewport.style.transition = prevTransition;
     } else {
-      viewport.style.height = newHeight;
+      viewport.style.height = `${newHeightPx}px`;
     }
   }
 
@@ -1098,13 +1262,25 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     if (user) restartAutoplay();
   }
 
-  function scheduleNext() {
+  function scheduleNext(isAtRest = false) {
     clearTimeout(autoplayTimer);
     if (paused || figures.length < 2) return;
+    // Se una transizione è appena partita (autoplay o click dell'utente),
+    // la prossima non deve scattare dopo AUTOPLAY_DELAY dall'INIZIO di
+    // questa, ma dopo che questa è FINITA di arrivare (TRANSITION_MS) più
+    // il tempo di sosta vero e proprio: altrimenti, con transizione e
+    // sosta impostate entrambe a 6s, la prossima partiva esattamente nel
+    // momento in cui l'attuale finiva di arrivare — la foto restava ferma
+    // a schermo per 0 secondi (bene solo la primissima, mostrata subito
+    // senza transizione in arrivo). "isAtRest" è vero solo quando non c'è
+    // nessuna transizione in corso (mostra iniziale, o ripresa dopo pausa:
+    // la transizione, se c'era, è comunque già finita mentre eravamo in
+    // pausa, dato che la pausa ferma solo il timer, non la transizione CSS).
+    const wait = isAtRest ? AUTOPLAY_DELAY : AUTOPLAY_DELAY + TRANSITION_MS;
     autoplayTimer = setTimeout(() => {
       goTo(current + 1);
       scheduleNext();
-    }, AUTOPLAY_DELAY);
+    }, wait);
   }
 
   function restartAutoplay() {
@@ -1117,7 +1293,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
   function handleResume() {
     paused = false;
-    scheduleNext();
+    scheduleNext(true);
   }
 
   // Le frecce, su un progetto, portano al progetto precedente/successivo
@@ -1130,17 +1306,22 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     nextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
   }
 
-  // Frecce (invisibili) dedicate a passare da una foto all'altra della
-  // stessa galleria, a differenza di prevBtn/nextBtn che su un progetto
-  // navigano invece tra progetti: utili per chi non vuole aspettare
-  // l'autoplay. Se c'è una foto sola non hanno nulla da fare.
-  if (figures.length < 2) {
-    photoPrevBtn.style.display = "none";
-    photoNextBtn.style.display = "none";
-  } else {
-    photoPrevBtn.addEventListener("click", () => goTo(current - 1, { user: true }));
-    photoNextBtn.addEventListener("click", () => goTo(current + 1, { user: true }));
-  }
+  // Passare da una foto all'altra della galleria senza aspettare
+  // l'autoplay (a differenza di prevBtn/nextBtn, che su un progetto
+  // navigano invece tra progetti): niente bottoni invisibili con un'area
+  // cliccabile minuscola — TUTTA la fascia beige ai lati della foto,
+  // dentro .photo-viewport, è attiva. Un clic sulla foto stessa (dentro
+  // il riquadro) resta gestito da makeZoomable (ingrandimento), quindi
+  // qui basta controllare se il clic è fuori dal riquadro della foto
+  // corrente, a sinistra o a destra.
+  viewport.addEventListener("click", (e) => {
+    if (isEditMode() || figures.length < 2) return;
+    const activeFrame = figures[current].querySelector(".photo-frame");
+    const r = activeFrame.getBoundingClientRect();
+    if (e.clientY < r.top || e.clientY > r.bottom) return; // sopra/sotto la foto (didascalia, margini): non fare nulla
+    if (e.clientX < r.left) goTo(current - 1, { user: true });
+    else if (e.clientX > r.right) goTo(current + 1, { user: true });
+  });
 
   viewport.addEventListener("mouseenter", handlePause);
   viewport.addEventListener("mouseleave", handleResume);
@@ -1204,7 +1385,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       frame.style.width = "auto";
       frame.style.height = `${targetHeight}px`;
     });
-    updateViewportHeight({ instant: true });
+    updateViewportHeight();
   }
   applyDefaultPhotoHeights();
   window.addEventListener("resize", applyDefaultPhotoHeights);
@@ -1217,18 +1398,17 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const img = figure.querySelector("img");
     img.addEventListener("load", () => {
       applyDefaultPhotoHeights();
-      if (i === current) updateViewportHeight({ instant: true });
+      if (i === current) updateViewportHeight();
     });
   });
 
-  const updateViewportHeightInstant = () => updateViewportHeight({ instant: true });
-  window.addEventListener("resize", updateViewportHeightInstant);
+  window.addEventListener("resize", updateViewportHeight);
 
   // Se la foto attiva viene ridimensionata (anche durante il trascinamento
   // della maniglia, non solo al rilascio), l'altezza del viewport deve
   // seguirla subito: altrimenti "overflow: hidden" taglia il pezzo che
   // eccede l'altezza precedente, rimasta più bassa (foto "tagliate").
-  const frameResizeObserver = new ResizeObserver(updateViewportHeightInstant);
+  const frameResizeObserver = new ResizeObserver(() => updateViewportHeight());
   figures.forEach((figure) => {
     const frame = figure.querySelector(".photo-frame");
     if (frame) frameResizeObserver.observe(frame);
@@ -1236,7 +1416,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   resizeObservers.push(frameResizeObserver);
 
   applyPosition();
-  scheduleNext();
+  scheduleNext(true);
 
   currentTeardown = () => {
     clearTimeout(autoplayTimer);
@@ -1244,7 +1424,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     cancelAnimationFrame(marqueeRafId);
     document.removeEventListener("pointermove", onMarqueeDragMove);
     document.removeEventListener("pointerup", onMarqueeDragEnd);
-    window.removeEventListener("resize", updateViewportHeightInstant);
+    window.removeEventListener("resize", updateViewportHeight);
     window.removeEventListener("resize", applyDefaultPhotoHeights);
     resizeObservers.forEach((o) => o.disconnect());
   };
