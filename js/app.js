@@ -23,7 +23,7 @@
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 5000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 3000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const TRANSITION_MS = 1500;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 
 /* -------------------------------------------------------------------------
@@ -706,15 +706,31 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     ]),
   ]);
 
-  // Il testo scorre in verticale in loop continuo (marquee): il contenuto
-  // è ripetuto due volte in fila dentro ".description-track", che si anima
-  // di metà della propria altezza — la seconda copia (nascosta a chi usa
-  // uno screen reader) prende il posto della prima esattamente quando
-  // questa esce di scena, quindi il giro si ripete senza scatti visibili.
-  const makeParagraphs = () => description.map((paragraph) => el("p", {}, paragraph));
-  const secondCopy = makeParagraphs();
-  secondCopy.forEach((p) => p.setAttribute("aria-hidden", "true"));
-  const descTrack = el("div", { class: "description-track" }, [...makeParagraphs(), ...secondCopy]);
+  // Di norma il testo NON scorre: si vede tutto, per intero, quanto è alto
+  // serve (la pagina scrolla se serve — vedi più sotto). Il marquee (testo
+  // duplicato che scorre in loop, per non perdere contenuto) scatta SOLO
+  // se il blocco ha un'altezza esplicita (impostata a mano trascinando la
+  // maniglia rossa, o scritta in content.js) più bassa del testo per
+  // intero: in quel caso, e solo in quel caso, ha senso far scorrere
+  // qualcosa che altrimenti verrebbe tagliato via.
+  const hasExplicitDescHeight = Boolean(
+    (descriptionBox && descriptionBox.height) || loadSizeOverrides()[`${sizeKeyPrefix}.description`]?.height
+  );
+
+  let descTrack, secondCopy;
+  if (hasExplicitDescHeight) {
+    // Il contenuto è ripetuto due volte in fila: la seconda copia
+    // (nascosta a chi usa uno screen reader) prende il posto della prima
+    // esattamente quando questa esce di scena, quindi il giro si ripete
+    // senza scatti visibili.
+    const makeParagraphs = () => description.map((paragraph) => el("p", {}, paragraph));
+    secondCopy = makeParagraphs();
+    secondCopy.forEach((p) => p.setAttribute("aria-hidden", "true"));
+    descTrack = el("div", { class: "description-track" }, [...makeParagraphs(), ...secondCopy]);
+  } else {
+    secondCopy = null;
+    descTrack = el("div", { class: "description-track" }, description.map((paragraph) => el("p", {}, paragraph)));
+  }
   const descBlock = el("div", { class: "description" }, [descTrack]);
   resizeObservers.push(
     makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
@@ -768,98 +784,89 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   app.appendChild(viewport);
   app.appendChild(footerBar);
 
-  // Marquee del testo: guidato da requestAnimationFrame (non da
-  // un'animazione CSS) proprio per poterlo anche trascinare a mano.
-  // "marqueePos" è quanto si è già scorso (0..marqueeDistance, in px);
-  // trascinando lo si sposta direttamente, e l'avanzamento automatico
-  // riprende da lì al rilascio, senza scattare indietro. La distanza è
-  // quella ESATTA misurata sul DOM (non una percentuale) — vedi il
-  // commento in style.css sul perché "50%" darebbe un salto visibile.
-  const MARQUEE_PX_PER_SEC = 56; // ~0.5s a riga
+  // Marquee del testo (solo quando "secondCopy" esiste, cioè quando il
+  // blocco ha un'altezza esplicita più bassa del testo per intero — vedi
+  // sopra): guidato da requestAnimationFrame (non da un'animazione CSS)
+  // proprio per poterlo anche trascinare a mano. "marqueePos" è quanto si
+  // è già scorso (0..marqueeDistance, in px); trascinando lo si sposta
+  // direttamente, e l'avanzamento automatico riprende da lì al rilascio,
+  // senza scattare indietro. La distanza è quella ESATTA misurata sul DOM
+  // (non una percentuale) — vedi il commento in style.css sul perché
+  // "50%" darebbe un salto visibile.
+  const MARQUEE_PX_PER_SEC = 28;
   let marqueeDistance = 0;
   let marqueePos = 0;
   let marqueeLastTs = null;
   let marqueeDragState = null;
+  let marqueeRafId = null;
+  let onMarqueeDragMove = null;
+  let onMarqueeDragEnd = null;
 
-  // Senza un'altezza esplicita, .description crescerebbe per contenere
-  // ENTRAMBE le copie del testo (quella nascosta per gli screen reader
-  // compresa) invece di inquadrarne una sola e lasciar scorrere il resto:
-  // si vedrebbe il testo ripetuto due volte invece del marquee. Se non
-  // c'è già una misura salvata o esplicita in content.js, l'altezza di
-  // default è esattamente quella di UNA copia, così "overflow: hidden"
-  // nasconde il resto com'è giusto che sia. Controlliamo i dati reali
-  // (non lo style inline già applicato) per sapere se toccarla di nuovo
-  // dopo il ricalcolo a font caricato — altrimenti la prima chiamata
-  // "inquinerebbe" il controllo per la seconda.
-  const hasExplicitDescHeight = Boolean(
-    (descriptionBox && descriptionBox.height) || loadSizeOverrides()[`${sizeKeyPrefix}.description`]?.height
-  );
-  function measureMarqueeDistance() {
-    marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
-    marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
-    if (!hasExplicitDescHeight) {
-      descBlock.style.height = `${marqueeDistance}px`;
-    }
-  }
-  function applyMarqueeTransform() {
-    descTrack.style.transform = `translateY(${marqueePos - marqueeDistance}px)`;
-  }
-  function marqueeTick(ts) {
-    if (marqueeLastTs == null) marqueeLastTs = ts;
-    const dt = (ts - marqueeLastTs) / 1000;
-    marqueeLastTs = ts;
-    if (!marqueeDragState && !isEditMode() && marqueeDistance > 0) {
-      marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
-      applyMarqueeTransform();
-    }
-    marqueeRafId = requestAnimationFrame(marqueeTick);
-  }
-  measureMarqueeDistance();
-  applyMarqueeTransform();
-  let marqueeRafId = requestAnimationFrame(marqueeTick);
-
-  // Il font (Inter) carica con font-display:swap: il testo appare subito
-  // con un font di scorta dalle proporzioni diverse, poi "scatta" su Inter
-  // quando arriva, cambiando l'altezza reale del testo. Rimisuriamo
-  // quando il font vero è pronto.
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(() => {
-      measureMarqueeDistance();
-      applyMarqueeTransform();
-    });
-  }
-
-  // Trascinamento a mano: solo fuori dalla modalità modifica (lì il
-  // testo resta fermo — vedi ensureEditModeUI/isEditMode — e si legge
-  // scrollando normalmente col mouse/dito, come .description in edit
-  // mode già permette).
-  descTrack.classList.add("draggable");
-  descTrack.addEventListener("pointerdown", (e) => {
-    if (isEditMode()) return;
-    e.preventDefault();
-    marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos };
-    descTrack.classList.add("is-dragging");
-    document.addEventListener("pointermove", onMarqueeDragMove);
-    document.addEventListener("pointerup", onMarqueeDragEnd);
-  });
-  function onMarqueeDragMove(e) {
-    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
-    const dy = e.clientY - marqueeDragState.startY;
-    // trascinare verso il basso "torna indietro" nel testo (come si
-    // trascina un foglio per rivelare quello che c'è sopra); verso
-    // l'alto avanza — coerente con lo scorrimento automatico dall'alto
-    // verso il basso.
-    let next = (marqueeDragState.startPos - dy) % marqueeDistance;
-    if (next < 0) next += marqueeDistance;
-    marqueePos = next;
+  if (secondCopy) {
+    const measureMarqueeDistance = () => {
+      marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
+      marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
+    };
+    const applyMarqueeTransform = () => {
+      descTrack.style.transform = `translateY(${marqueePos - marqueeDistance}px)`;
+    };
+    const marqueeTick = (ts) => {
+      if (marqueeLastTs == null) marqueeLastTs = ts;
+      const dt = (ts - marqueeLastTs) / 1000;
+      marqueeLastTs = ts;
+      if (!marqueeDragState && !isEditMode() && marqueeDistance > 0) {
+        marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
+        applyMarqueeTransform();
+      }
+      marqueeRafId = requestAnimationFrame(marqueeTick);
+    };
+    measureMarqueeDistance();
     applyMarqueeTransform();
-  }
-  function onMarqueeDragEnd(e) {
-    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
-    marqueeDragState = null;
-    descTrack.classList.remove("is-dragging");
-    document.removeEventListener("pointermove", onMarqueeDragMove);
-    document.removeEventListener("pointerup", onMarqueeDragEnd);
+    marqueeRafId = requestAnimationFrame(marqueeTick);
+
+    // Il font (Inter) carica con font-display:swap: il testo appare subito
+    // con un font di scorta dalle proporzioni diverse, poi "scatta" su
+    // Inter quando arriva, cambiando l'altezza reale del testo.
+    // Rimisuriamo quando il font vero è pronto.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        measureMarqueeDistance();
+        applyMarqueeTransform();
+      });
+    }
+
+    // Trascinamento a mano: solo fuori dalla modalità modifica (lì il
+    // testo resta fermo — vedi ensureEditModeUI/isEditMode — e si legge
+    // scrollando normalmente col mouse/dito, come .description in edit
+    // mode già permette).
+    descTrack.classList.add("draggable");
+    descTrack.addEventListener("pointerdown", (e) => {
+      if (isEditMode()) return;
+      e.preventDefault();
+      marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos };
+      descTrack.classList.add("is-dragging");
+      document.addEventListener("pointermove", onMarqueeDragMove);
+      document.addEventListener("pointerup", onMarqueeDragEnd);
+    });
+    onMarqueeDragMove = (e) => {
+      if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+      const dy = e.clientY - marqueeDragState.startY;
+      // trascinare verso il basso "torna indietro" nel testo (come si
+      // trascina un foglio per rivelare quello che c'è sopra); verso
+      // l'alto avanza — coerente con lo scorrimento automatico dall'alto
+      // verso il basso.
+      let next = (marqueeDragState.startPos - dy) % marqueeDistance;
+      if (next < 0) next += marqueeDistance;
+      marqueePos = next;
+      applyMarqueeTransform();
+    };
+    onMarqueeDragEnd = (e) => {
+      if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+      marqueeDragState = null;
+      descTrack.classList.remove("is-dragging");
+      document.removeEventListener("pointermove", onMarqueeDragMove);
+      document.removeEventListener("pointerup", onMarqueeDragEnd);
+    };
   }
 
   /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----
@@ -881,16 +888,32 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     viewport.style.height = `${activeFigure.getBoundingClientRect().height}px`;
   }
 
-  function applyPosition() {
-    track.style.transform = `translateX(-${current * 100}%)`;
+  function applyPosition({ instant = false } = {}) {
+    if (instant) {
+      // Scatto senza transizione: usato solo quando si chiude il giro
+      // (dall'ultima foto alla prima, o viceversa) — vedi goTo(). Senza
+      // questo, il carosello "riavvolgerebbe" scorrendo visivamente
+      // attraverso TUTTE le foto di mezzo nello stesso tempo di una
+      // transizione normale (una sola foto), sembrando un riavvolgimento
+      // troppo veloce invece di un normale passo avanti/indietro.
+      track.style.transition = "none";
+      track.style.transform = `translateX(-${current * 100}%)`;
+      track.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
+      track.style.transition = "";
+    } else {
+      track.style.transform = `translateX(-${current * 100}%)`;
+    }
     updateViewportHeight();
     updateCounter();
   }
 
   function goTo(i, { user = false } = {}) {
     if (!figures.length) return;
-    current = (i + figures.length) % figures.length;
-    applyPosition();
+    const n = figures.length;
+    const wrapForward = current === n - 1 && i === current + 1;
+    const wrapBackward = current === 0 && i === current - 1;
+    current = (i + n) % n;
+    applyPosition({ instant: wrapForward || wrapBackward });
     if (user) restartAutoplay();
   }
 
@@ -953,49 +976,49 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
     handleResume();
   });
 
-  // se un'immagine è ancora in caricamento, ricalcola l'altezza quando arriva
-  figures.forEach((figure, i) => {
-    const img = figure.querySelector("img");
-    img.addEventListener("load", () => {
-      if (i === current) updateViewportHeight();
+  // Finché non la tocchi, ogni foto ha la STESSA ALTEZZA: generosa,
+  // proporzionale allo schermo (non allo spazio che resta dopo il testo
+  // — la pagina beige può essere più alta di un monitor, e va bene così:
+  // si scrolla per vederla tutta, non si rimpiccioliscono le foto per
+  // farcele stare per forza). Un tetto in larghezza evita che una foto
+  // molto orizzontale sfori il pannello: usa il rapporto REALE della foto
+  // più orizzontale di QUESTA galleria (non un'ipotesi generica tipo
+  // 16:9 applicata a tutte — col pannello fisso a ~740px larghi, un
+  // limite "per sicurezza" applicato a foto verticali le schiaccerebbe
+  // via inutilmente). Una foto toccata a mano (misura salvata o
+  // width/height espliciti in content.js) non viene toccata qui, e non
+  // influenza nemmeno il calcolo del rapporto.
+  const PHOTO_HEIGHT_VH = 0.8; // 80% dell'altezza della finestra
+  const MIN_PHOTO_HEIGHT = 320;
+  const overridesForRatio = loadSizeOverrides();
+  function isUntouched(i) {
+    const key = `${sizeKeyPrefix}.image.${images[i]._index}`;
+    const saved = overridesForRatio[key];
+    return !((saved && (saved.width || saved.height)) || images[i].width || images[i].height);
+  }
+  function widestUntouchedRatio() {
+    let widest = 0;
+    figures.forEach((figure, i) => {
+      if (!isUntouched(i)) return;
+      const img = figure.querySelector("img");
+      if (img.naturalWidth && img.naturalHeight) {
+        widest = Math.max(widest, img.naturalWidth / img.naturalHeight);
+      }
     });
-  });
-
-  window.addEventListener("resize", updateViewportHeight);
-
-  // Finché non la tocchi, ogni foto ha la STESSA ALTEZZA: lo spazio che
-  // resta nella finestra dopo topbar + testo + barra in fondo — così le
-  // foto si adattano da sole a quanto è alto il testo sopra di loro (o a
-  // quanto spazio c'è sullo schermo). Un tetto basato su un rapporto
-  // largo/alto "ragionevole" (16:9) evita che una foto molto orizzontale
-  // sfori la larghezza del pannello quando lo spazio verticale disponibile
-  // è ampio (schermi alti, testo corto). Una foto toccata a mano (misura
-  // salvata o width/height espliciti in content.js) non viene toccata qui.
-  const MIN_PHOTO_HEIGHT = 240;
-  const MAX_ASSUMED_ASPECT_RATIO = 16 / 9;
+    return widest;
+  }
   function applyDefaultPhotoHeights() {
     if (!figures.length) return;
     const photoStyle = getComputedStyle(figures[0]);
-    const paddingBottom = parseFloat(photoStyle.paddingBottom) || 0;
     const paddingLeft = parseFloat(photoStyle.paddingLeft) || 0;
     const paddingRight = parseFloat(photoStyle.paddingRight) || 0;
     const availableWidth = viewport.getBoundingClientRect().width - paddingLeft - paddingRight;
-    const availableHeight =
-      window.innerHeight -
-      topbar.getBoundingClientRect().height -
-      descBlock.getBoundingClientRect().height -
-      footerBar.getBoundingClientRect().height -
-      paddingBottom;
-    const maxHeightForWidth = availableWidth / MAX_ASSUMED_ASPECT_RATIO;
-    const targetHeight = Math.max(MIN_PHOTO_HEIGHT, Math.min(availableHeight, maxHeightForWidth));
+    const ratio = widestUntouchedRatio();
+    const maxHeightForWidth = ratio > 0 ? availableWidth / ratio : Infinity;
+    const targetHeight = Math.max(MIN_PHOTO_HEIGHT, Math.min(window.innerHeight * PHOTO_HEIGHT_VH, maxHeightForWidth));
 
-    const overrides = loadSizeOverrides();
     figures.forEach((figure, i) => {
-      const key = `${sizeKeyPrefix}.image.${images[i]._index}`;
-      const saved = overrides[key];
-      const hasSavedOverride = saved && (saved.width || saved.height);
-      const hasContentDefault = images[i].width || images[i].height;
-      if (hasSavedOverride || hasContentDefault) return;
+      if (!isUntouched(i)) return;
       const frame = figure.querySelector(".photo-frame");
       frame.style.width = "auto";
       frame.style.height = `${targetHeight}px`;
@@ -1004,11 +1027,20 @@ function renderGallery({ total, title, description, descriptionBox, images, proj
   }
   applyDefaultPhotoHeights();
   window.addEventListener("resize", applyDefaultPhotoHeights);
-  // Il testo può cambiare altezza (progetto diverso, o ridimensionato a
-  // mano in modalità modifica): quando succede, ricalcoliamo.
-  const descHeightObserver = new ResizeObserver(() => applyDefaultPhotoHeights());
-  descHeightObserver.observe(descBlock);
-  resizeObservers.push(descHeightObserver);
+
+  // Le foto lazy non hanno ancora naturalWidth/Height al primo calcolo:
+  // ricalcoliamo (e aggiorniamo anche l'altezza del viewport se è quella
+  // corrente) man mano che arrivano, così il tetto in larghezza si
+  // aggiorna quando si scopre una foto più orizzontale di quanto sapessimo.
+  figures.forEach((figure, i) => {
+    const img = figure.querySelector("img");
+    img.addEventListener("load", () => {
+      applyDefaultPhotoHeights();
+      if (i === current) updateViewportHeight();
+    });
+  });
+
+  window.addEventListener("resize", updateViewportHeight);
 
   applyPosition();
   scheduleNext();
