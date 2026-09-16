@@ -316,24 +316,38 @@ button {
 
 body.edit-mode .photo figcaption:empty {
   display: block;
-  min-height: 1.2em;
+  min-height: 2.4em;
 }
 
 body.edit-mode .photo figcaption {
   cursor: text;
+  min-width: 220px;
+  padding: 24px 12px;
+  background: rgba(138, 135, 124, 0.1);
   outline: 1px dashed var(--muted);
-  outline-offset: 6px;
+  outline-offset: 0;
 }
 
 body.edit-mode .photo figcaption:focus {
+  background: rgba(138, 59, 43, 0.08);
   outline-color: #8a3b2b;
+}
+
+/* Testo segnaposto quando non c'è ancora nessuna didascalia: senza,
+   la casella vuota (anche se ben visibile col contorno tratteggiato e lo
+   sfondo) non lascia capire CHE COSA fare cliccandoci — soprattutto
+   perché il cursore che compare è piccolo e facile da perdere di vista
+   sotto la foto. */
+body.edit-mode .photo figcaption:empty::before {
+  content: "clicca qui e scrivi la didascalia";
+  color: var(--muted);
+  font-style: italic;
 }
 
 @media (max-width: 700px) {
   .topbar { padding: 20px 20px; gap: 20px; }
   .description { padding: 40px 20px 28px; }
   .photo { padding: 32px 20px 48px; }
-  .gallerybar-index { left: 20px; }
 }
 
 .gallerybar {
@@ -343,19 +357,6 @@ body.edit-mode .photo figcaption:focus {
   background: var(--paper);
   padding: 32px 40px 36px;
   position: relative;
-}
-
-/* Allineato con il numero in alto: .topbar e .gallerybar hanno lo stesso
-   padding laterale (40px), quindi "left: 40px" qui riproduce esattamente
-   la stessa colonna di .topbar-index lassù — non è più centrato tra le
-   frecce, che restano dove sono (vedi .gallerybar sopra, ancora
-   space-between: tolto questo dal flusso, si dispongono da sole ai due
-   bordi). */
-.gallerybar-index {
-  position: absolute;
-  left: 40px;
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 .nav-arrow {

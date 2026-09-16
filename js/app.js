@@ -448,9 +448,9 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
 // aria vuole tra un blocco e l'altro (e quindi, di riflesso, di quanto
 // allungare il "foglio" beige): di default alto 0px, cioè invisibile e
 // senza alcun effetto finché non lo trascini tu stesso.
-function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio") {
+function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio", defaultHeight = 0) {
   const saved = loadSizeOverrides()[key];
-  node.style.height = (saved && saved.height) || "0px";
+  node.style.height = (saved && saved.height) || `${defaultHeight}px`;
 
   const handle = el("div", { class: "resize-handle", title });
   node.appendChild(handle);
@@ -1016,23 +1016,26 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
-  // Allineato in orizzontale con il numero in alto (stessa "colonna"),
-  // non centrato tra le frecce: per questo esce dal flusso della riga e
-  // si posiziona da solo (vedi .gallerybar-index in style.css).
-  const bottomIndexEl = el("span", { class: "topbar-index gallerybar-index" }, String(indexNumber));
+  const bottomIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
+  // Un tentativo di allinearlo automaticamente alla stessa colonna del
+  // numero in alto si è rivelato fragile (se il numero in alto è stato a
+  // sua volta trascinato in precedenza, l'allineamento "automatico" non
+  // corrisponde più a quello che vedi davvero): meglio una maniglia verde
+  // come le altre, così lo allinei tu guardando lo schermo.
+  makeMovableFree(bottomIndexEl, `${sizeKeyPrefix}.bottomIndexPos`, "Trascina per spostare/allineare il numero");
   const footerBar = el("div", { class: "gallerybar" }, [prevBtn, bottomIndexEl, nextBtn]);
 
   // Due blocchi "vuoti" trascinabili in altezza (maniglia rossa, come sulle
   // foto — visibile solo in modalità modifica), per lasciare all'utente il
   // controllo diretto di quanta aria vuole: uno prima delle frecce in
-  // basso (tra la foto/didascalia e la gallerybar), uno in fondo del
-  // tutto (per allungare il "foglio" beige oltre quanto basterebbe al
-  // contenuto). Di default entrambi alti 0px: nessun cambiamento finché
-  // non li trascini tu stesso.
+  // basso (tra la foto/didascalia e la gallerybar — di default già alto
+  // qualcosa, così le frecce partono staccate dalla foto anche senza
+  // toccare nulla), uno in fondo del tutto (per allungare il "foglio"
+  // beige oltre quanto basterebbe al contenuto, di default a 0px).
   const spacerBeforeBar = el("div", { class: "gallery-spacer" });
-  makeHeightResizable(spacerBeforeBar, `${sizeKeyPrefix}.spacerBeforeBar`, "Trascina per aggiungere spazio prima delle frecce");
+  makeHeightResizable(spacerBeforeBar, `${sizeKeyPrefix}.spacerBeforeBar`, "Trascina per aggiungere spazio prima delle frecce", 64);
   const spacerBottom = el("div", { class: "gallery-spacer" });
-  makeHeightResizable(spacerBottom, `${sizeKeyPrefix}.spacerBottom`, "Trascina per allungare la pagina");
+  makeHeightResizable(spacerBottom, `${sizeKeyPrefix}.spacerBottom`, "Trascina per allungare la pagina", 0);
 
   app.appendChild(topbar);
   app.appendChild(descBlock);
