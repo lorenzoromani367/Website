@@ -309,60 +309,61 @@ button {
   cursor: zoom-in;
 }
 
-.photo figcaption {
+/* Didascalia: un rettangolo SEMPRE presente nella struttura della pagina
+   (mai nascosto in base al contenuto — niente più trucchi ":empty" per
+   nasconderlo o mostrare un segnaposto: qui basta il placeholder nativo
+   dell'<input>). Fuori dalla modalità modifica è invisibile come box
+   (nessun bordo/sfondo, sembra testo normale); in modalità modifica
+   diventa un vero rettangolo con bordo, per essere inequivocabile. */
+.caption-box {
   position: relative;
-  padding: 24px 0 0;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
-  font-size: 0.8rem;
-  font-weight: 400;
-  color: var(--muted);
-  text-align: center;
+  display: inline-block;
+  margin-top: 24px;
 }
 
-.photo figcaption .move-handle {
+.caption-box .move-handle {
   position: absolute;
   top: 4px;
   right: 4px;
 }
 
-/* Didascalia vuota: invisibile fuori dalla modalità modifica (niente
-   riga bianca sotto le foto senza testo). In modalità modifica torna
-   visibile come "slot" cliccabile dove scriverne una da zero. Il
-   controllo è su ".caption-text" (lo SPAN col testo vero), non su
-   <figcaption> stesso, perché quest'ultimo contiene sempre anche la
-   maniglia verde di spostamento e quindi non risulterebbe mai ":empty". */
-.photo figcaption:has(.caption-text:empty) {
-  display: none;
-}
-
-body.edit-mode .photo figcaption:has(.caption-text:empty) {
+.caption-input {
   display: block;
-  min-height: 2.4em;
+  width: 240px;
+  max-width: 100%;
+  padding: 8px 12px;
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  outline: none;
+  pointer-events: none; /* fuori da edit mode non è cliccabile/selezionabile */
 }
 
-body.edit-mode .photo figcaption {
+.caption-input::placeholder {
+  color: transparent;
+}
+
+body.edit-mode .caption-input {
   cursor: text;
-  min-width: 220px;
-  padding: 24px 12px;
+  color: var(--ink);
   background: rgba(138, 135, 124, 0.1);
-  outline: 1px dashed var(--muted);
-  outline-offset: 0;
+  border-color: var(--muted);
+  pointer-events: auto;
 }
 
-body.edit-mode .photo figcaption:focus-within {
-  background: rgba(138, 59, 43, 0.08);
-  outline-color: #8a3b2b;
-}
-
-/* Testo segnaposto quando non c'è ancora nessuna didascalia: senza,
-   la casella vuota (anche se ben visibile col contorno tratteggiato e lo
-   sfondo) non lascia capire CHE COSA fare cliccandoci — soprattutto
-   perché il cursore che compare è piccolo e facile da perdere di vista
-   sotto la foto. */
-body.edit-mode .photo .caption-text:empty::before {
-  content: "clicca qui e scrivi la didascalia";
+body.edit-mode .caption-input::placeholder {
   color: var(--muted);
   font-style: italic;
+}
+
+body.edit-mode .caption-input:focus {
+  background: rgba(138, 59, 43, 0.08);
+  border-color: #8a3b2b;
 }
 
 @media (max-width: 700px) {
