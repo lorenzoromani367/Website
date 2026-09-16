@@ -240,6 +240,15 @@ function makeMovableFree(node, key, title = "Trascina per spostare") {
 
   const handle = el("div", { class: "move-handle free-move", title });
   node.appendChild(handle);
+  // Se "node" è (o sta dentro) un link — l'hamburger, es. — un clic sulla
+  // maniglia senza spostamento (o al rilascio dopo un trascinamento)
+  // farebbe comunque scattare la navigazione di default del link, dato
+  // che pointerdown.preventDefault() non annulla anche il "click" che
+  // arriva dopo. Va annullato qui, sul click stesso.
+  handle.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
 
   let dragState = null;
 
@@ -268,6 +277,14 @@ function makeMovableFree(node, key, title = "Trascina per spostare") {
     dragState = null;
     savePositionOverride(key, { x: pos.x, y: pos.y });
   }
+
+  return {
+    reset() {
+      pos.x = 0;
+      pos.y = 0;
+      node.style.transform = "";
+    },
+  };
 }
 
 // Rende "item" trascinabile per riordinarlo tra i suoi fratelli dentro
@@ -339,7 +356,7 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
 // rimpiccioliscono nel suo insieme, non ne modificano l'inquadratura). In
 // quel caso si aggiunge anche una seconda maniglia a sinistra, non solo
 // quella di default a destra.
-function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
+function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd } = {}) {
   node.classList.add("resizable");
   if (!node.style.position) node.style.position = "relative";
 
@@ -414,6 +431,7 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo } = {}) {
       document.removeEventListener("pointerup", onPointerUp);
       saveSizeOverride(key, { width: node.style.width, height: node.style.height });
       dragStart = null;
+      if (onResizeEnd) onResizeEnd();
     }
 
     handle.addEventListener("pointerdown", (e) => {
@@ -513,11 +531,14 @@ function describeOrderKey(key) {
 }
 
 function describePositionKey(key) {
-  const captionMatch = key.match(/^project\.(.+)\.caption\.(\d+)$/);
-  if (captionMatch) return `Progetto "${captionMatch[1]}", didascalia foto #${Number(captionMatch[2]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di "images"`;
+  const captionPosMatch = key.match(/^project\.(.+)\.captionPos\.(\d+)$/);
+  if (captionPosMatch) return `Progetto "${captionPosMatch[1]}", didascalia foto #${Number(captionPosMatch[2]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di "images"`;
 
-  const archiveCaptionMatch = key.match(/^archive\.caption\.(\d+)$/);
-  if (archiveCaptionMatch) return `Core archive, didascalia foto #${Number(archiveCaptionMatch[1]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di ARCHIVE.images`;
+  const archiveCaptionPosMatch = key.match(/^archive\.captionPos\.(\d+)$/);
+  if (archiveCaptionPosMatch) return `Core archive, didascalia foto #${Number(archiveCaptionPosMatch[1]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di ARCHIVE.images`;
+
+  const hamburgerMatch = key.match(/^(?:project\.(.+)|(archive)|simple\.(.+))\.hamburgerPos$/);
+  if (hamburgerMatch) return `${hamburgerMatch[1] ? `Progetto "${hamburgerMatch[1]}"` : hamburgerMatch[2] ? "Core archive" : `Pagina "${hamburgerMatch[3]}"`}, hamburger  →  posizione solo visiva, nessun equivalente in content.js`;
 
   const imagePosMatch = key.match(/^project\.(.+)\.imagePos\.(\d+)$/);
   if (imagePosMatch) return `Progetto "${imagePosMatch[1]}", foto #${Number(imagePosMatch[2]) + 1}  →  aggiungi "offset: { x, y }" su quella voce di "images"`;
@@ -554,7 +575,7 @@ function buildExportText() {
   const captionKeys = Object.keys(captionOverrides);
 
   if (!sizeKeys.length && !orderKeys.length && !positionKeys.length && !captionKeys.length) {
-    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
+    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
   }
 
   const lines = [
@@ -656,13 +677,13 @@ function ensureEditModeUI() {
   if (editModeUIReady) return;
   editModeUIReady = true;
 
-  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, clicca su una didascalia per scriverla/correggerla" }, "⇲");
+  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, clicca su una didascalia per scriverla/correggerla" }, "⇲");
   const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta modifiche", title: "Esporta modifiche" }, "⇩");
 
   toggle.addEventListener("click", () => {
     document.body.classList.toggle("edit-mode");
-    document.querySelectorAll(".photo figcaption").forEach((fc) => {
-      fc.contentEditable = isEditMode() ? "true" : "false";
+    document.querySelectorAll(".photo .caption-text").forEach((el) => {
+      el.contentEditable = isEditMode() ? "true" : "false";
     });
   });
   exportBtn.addEventListener("click", () => openExportPanel());
@@ -917,25 +938,28 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const resizeObservers = [];
   const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
 
-  // Le didascalie non si trascinano più (vedi più sotto): eventuali
-  // vecchie posizioni salvate da versioni precedenti del sito non vanno
-  // più applicate da nessuna parte, quindi le puliamo per non lasciarle
-  // in giro nello storage (es. nel pannello "Esporta modifiche").
+  // Pulizia una tantum: le vecchie posizioni delle didascalie salvate da
+  // una versione precedente del sito usavano una chiave diversa
+  // ("...caption.N", non più letta da nessuna parte — quella attuale è
+  // "...captionPos.N", vedi più sotto) e restavano altrimenti in giro
+  // nello storage inutilmente (es. nel pannello "Esporta modifiche").
   Object.keys(loadPositionOverrides()).forEach((key) => {
     if (key.startsWith(`${sizeKeyPrefix}.caption.`)) clearPositionOverride(key);
   });
 
   const topbarIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
   const topbarTitleEl = el("span", { class: "topbar-title" }, title);
+  const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
+    el("span", {}), el("span", {}), el("span", {}),
+  ]);
   makeMovableFree(topbarIndexEl, `${sizeKeyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
   makeMovableFree(topbarTitleEl, `${sizeKeyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
+  makeMovableFree(hamburgerEl, `${sizeKeyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger");
   const topbar = el("div", { class: "topbar" }, [
     el("div", { class: "topbar-row" }, [topbarIndexEl]),
     el("div", { class: "topbar-row" }, [
       topbarTitleEl,
-      el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
-        el("span", {}), el("span", {}), el("span", {}),
-      ]),
+      hamburgerEl,
     ]),
   ]);
 
@@ -969,6 +993,39 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const origIndex = image._index != null ? image._index : i;
     const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
     const frame = el("div", { class: "photo-frame" }, [img]);
+
+    // Didascalia: il testo si scrive/corregge cliccandoci sopra in
+    // modalità modifica (contentEditable), anche per le foto che non ne
+    // hanno ancora una — lo slot resta vuoto (e invisibile fuori dalla
+    // modalità modifica) finché non ci scrivi qualcosa. La posizione
+    // invece si trascina con la maniglia verde, come le foto: se in
+    // seguito ridimensioni la foto, la posizione della didascalia torna
+    // automaticamente a quella naturale sotto la nuova foto (onResizeEnd
+    // qui sotto), altrimenti resterebbe dov'era per la foto di prima.
+    // Il testo vive in uno SPAN interno separato dal contenitore
+    // <figcaption> che si trascina: <figcaption> altrimenti avrebbe
+    // sempre almeno un figlio (la maniglia stessa), e non risulterebbe
+    // mai ":empty" in CSS — né per nasconderla quando non c'è ancora una
+    // didascalia, né per mostrare il testo segnaposto.
+    const captionKey = `${sizeKeyPrefix}.captionText.${origIndex}`;
+    const captionOverride = captionOverrides[captionKey];
+    const captionText = captionOverride != null ? captionOverride : image.caption || "";
+    const captionTextEl = el("span", { class: "caption-text" }, captionText ? captionText : []);
+    captionTextEl.contentEditable = isEditMode() ? "true" : "false";
+    captionTextEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        captionTextEl.blur();
+      }
+    });
+    captionTextEl.addEventListener("blur", () => {
+      const text = captionTextEl.textContent.trim();
+      if (text) saveCaptionOverride(captionKey, text);
+      else clearCaptionOverride(captionKey);
+    });
+    const figcaption = el("figcaption", {}, [captionTextEl]);
+    const captionMove = makeMovableFree(figcaption, `${sizeKeyPrefix}.captionPos.${origIndex}`, "Trascina per spostare la didascalia");
+
     resizeObservers.push(
       makeResizable(
         frame,
@@ -978,35 +1035,17 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         // applyDefaultPhotoHeights() più sotto (stessa altezza per tutte
         // le foto, in base allo spazio lasciato libero dal testo).
         { width: image.width, height: image.height },
-        { lockRatioTo: img }
+        {
+          lockRatioTo: img,
+          onResizeEnd: () => {
+            clearPositionOverride(`${sizeKeyPrefix}.captionPos.${origIndex}`);
+            captionMove.reset();
+          },
+        }
       )
     );
     makeZoomable(frame, img);
     makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto");
-
-    // Didascalia: niente più maniglia per trascinarla (restava troppo
-    // facilmente sopra la foto dopo un ridimensionamento). Resta sempre
-    // nella sua posizione naturale sotto la foto; il testo però si può
-    // scrivere/correggere direttamente cliccandoci sopra in modalità
-    // modifica (contentEditable), anche per le foto che non ne hanno
-    // ancora una — lo "slot" resta semplicemente vuoto (e invisibile
-    // fuori dalla modalità modifica) finché non ci scrivi qualcosa.
-    const captionKey = `${sizeKeyPrefix}.captionText.${origIndex}`;
-    const captionOverride = captionOverrides[captionKey];
-    const captionText = captionOverride != null ? captionOverride : image.caption || "";
-    const figcaption = el("figcaption", {}, captionText ? captionText : []);
-    figcaption.contentEditable = isEditMode() ? "true" : "false";
-    figcaption.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        figcaption.blur();
-      }
-    });
-    figcaption.addEventListener("blur", () => {
-      const text = figcaption.textContent.trim();
-      if (text) saveCaptionOverride(captionKey, text);
-      else clearCaptionOverride(captionKey);
-    });
 
     return el("figure", { class: "photo", "data-index": i }, [frame, figcaption]);
   });
@@ -1491,15 +1530,17 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   const simpleKeyPrefix = `simple.${title.toLowerCase()}`;
   const topbarIndexEl = el("span", { class: "topbar-index" }, "");
   const topbarTitleEl = el("span", { class: "topbar-title" }, title.toLowerCase());
+  const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
+    el("span", {}), el("span", {}), el("span", {}),
+  ]);
   makeMovableFree(topbarIndexEl, `${simpleKeyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
   makeMovableFree(topbarTitleEl, `${simpleKeyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
+  makeMovableFree(hamburgerEl, `${simpleKeyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger");
   const topbar = el("div", { class: "topbar" }, [
     el("div", { class: "topbar-row" }, [topbarIndexEl]),
     el("div", { class: "topbar-row" }, [
       topbarTitleEl,
-      el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
-        el("span", {}), el("span", {}), el("span", {}),
-      ]),
+      hamburgerEl,
     ]),
   ]);
 
