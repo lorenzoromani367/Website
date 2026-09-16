@@ -307,6 +307,28 @@ button {
   text-align: center;
 }
 
+/* Didascalia vuota: invisibile fuori dalla modalità modifica (niente
+   riga bianca sotto le foto senza testo). In modalità modifica torna
+   visibile come "slot" cliccabile dove scriverne una da zero. */
+.photo figcaption:empty {
+  display: none;
+}
+
+body.edit-mode .photo figcaption:empty {
+  display: block;
+  min-height: 1.2em;
+}
+
+body.edit-mode .photo figcaption {
+  cursor: text;
+  outline: 1px dashed var(--muted);
+  outline-offset: 6px;
+}
+
+body.edit-mode .photo figcaption:focus {
+  outline-color: #8a3b2b;
+}
+
 @media (max-width: 700px) {
   .topbar { padding: 20px 20px; gap: 20px; }
   .description { padding: 40px 20px 28px; }
@@ -314,9 +336,6 @@ button {
 }
 
 .gallerybar {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -333,6 +352,25 @@ button {
 .nav-arrow:hover {
   opacity: 0.5;
 }
+
+/* Frecce per passare da una foto all'altra della stessa galleria senza
+   aspettare l'autoplay: la FUNZIONE resta (utile per chi clicca ai lati
+   della foto per abitudine), ma il bottone non deve mai essere visibile
+   — per questo opacity 0 fissa, niente hover che lo riveli. Stanno nel
+   margine laterale di .photo-viewport (fuori da .photo-track, così
+   restano ferme mentre le foto scorrono). */
+.photo-nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  font-size: 1rem;
+  padding: 6px 8px;
+  opacity: 0;
+}
+
+.photo-nav-arrow.prev { left: 2px; }
+.photo-nav-arrow.next { right: 2px; }
 
 @media (max-width: 700px) {
   .gallerybar { padding: 24px 20px 28px; }
@@ -370,8 +408,10 @@ button {
 
 .lightbox img {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
+  /* Ingrandimento dimezzato rispetto a prima (era 100%, quindi quasi a
+     tutto schermo): la foto resta grande ma ben lontana dai bordi. */
+  max-width: 50%;
+  max-height: 50%;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -573,9 +613,11 @@ body.edit-mode .move-handle:hover,
   right: 4px;
 }
 
-/* Maniglia verde: sposta liberamente la didascalia, indipendentemente
-   dalla foto (non riordina, non ha vicini — semplice trascinamento libero
-   in qualunque direzione). */
+/* Maniglia verde: sposta liberamente un blocco (testo, foto, numero/
+   titolo in alto), indipendentemente dai suoi vicini — semplice
+   trascinamento libero in qualunque direzione, niente riordino. Le
+   didascalie non la usano più: si scrivono/correggono direttamente
+   cliccandoci sopra, restano sempre nella loro posizione naturale. */
 .move-handle.free-move {
   background: #2b7a4b;
   cursor: move;
@@ -585,16 +627,6 @@ body.edit-mode .move-handle:hover,
 .move-handle.free-move.is-dragging {
   background: #38995e;
   cursor: move;
-}
-
-.photo figcaption {
-  position: relative;
-}
-
-.photo figcaption .move-handle {
-  position: absolute;
-  top: 0;
-  right: 4px;
 }
 
 /* dentro la lista home: icona inline prima del nome, solo in modalità
@@ -633,6 +665,7 @@ body.edit-mode .resize-handle:hover,
 body.edit-mode .home-list a,
 body.edit-mode .hamburger,
 body.edit-mode .nav-arrow,
+body.edit-mode .photo-nav-arrow,
 body.edit-mode .footer-link,
 body.edit-mode .photo-frame img {
   pointer-events: none;
