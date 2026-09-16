@@ -45,7 +45,7 @@ button {
   --muted: #8a877c;
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
-  --transition-ms: 1500ms;
+  --transition-ms: 3000ms;
 }
 
 .mono {

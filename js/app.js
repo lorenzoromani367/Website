@@ -23,7 +23,7 @@
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 5000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 1500;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const TRANSITION_MS = 3000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 
 /* -------------------------------------------------------------------------
