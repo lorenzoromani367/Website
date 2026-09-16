@@ -144,14 +144,11 @@ button {
 /* Due righe: l'indice sopra, titolo+hamburger sotto (non più tutto in
    una riga sola). */
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 28px;
   background: var(--paper);
-  padding: 28px 40px;
+  padding: 28px 40px 40px;
   border-bottom: 1px solid transparent;
 }
 
@@ -214,7 +211,7 @@ button {
    come "50%", che con dei gap tra paragrafi produrrebbe un piccolo
    scatto visibile a ogni giro). */
 .description {
-  padding: 56px 40px 40px;
+  padding: 64px 40px 56px;
   font-size: 0.95rem;
   line-height: 1.65;
   max-width: 100%;
@@ -269,7 +266,7 @@ button {
   flex: 0 0 100%;
   width: 100%;
   margin: 0; /* <figure> ha un margine di default del browser (~40px ai lati): lo azzeriamo */
-  padding: 48px 40px 72px;
+  padding: 72px 40px 96px;
   text-align: center; /* centra .photo-frame quando è "inline-block" a larghezza automatica */
 }
 
@@ -302,7 +299,7 @@ button {
 }
 
 .photo figcaption {
-  padding: 14px 0 0;
+  padding: 24px 0 0;
   font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
   font-size: 0.8rem;
   font-weight: 400;
@@ -324,7 +321,7 @@ button {
   align-items: center;
   justify-content: space-between;
   background: var(--paper);
-  padding: 20px 40px 28px;
+  padding: 32px 40px 36px;
 }
 
 .nav-arrow {
@@ -337,41 +334,8 @@ button {
   opacity: 0.5;
 }
 
-.nav-counter {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-/* Frecce per passare da una foto all'altra della stessa galleria, senza
-   aspettare l'autoplay. Stanno nel margine laterale di .photo-viewport
-   (fuori da .photo-track, così restano ferme mentre le foto scorrono),
-   MAI sopra la foto: per questo sono vicine al bordo, dentro il padding
-   laterale di .photo, non centrate sull'immagine. */
-.photo-nav-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
-  font-size: 1rem;
-  padding: 6px 8px;
-  opacity: 0.55;
-  transition: opacity 0.2s ease;
-}
-
-.photo-nav-arrow:hover {
-  opacity: 1;
-}
-
-.photo-nav-arrow.prev { left: 2px; }
-.photo-nav-arrow.next { right: 2px; }
-
 @media (max-width: 700px) {
-  .photo-nav-arrow.prev { left: 0; }
-  .photo-nav-arrow.next { right: 0; }
-}
-
-@media (max-width: 700px) {
-  .gallerybar { padding: 16px 20px 24px; }
+  .gallerybar { padding: 24px 20px 28px; }
 }
 
 /* -------------------------------------------------------------------------
@@ -669,7 +633,6 @@ body.edit-mode .resize-handle:hover,
 body.edit-mode .home-list a,
 body.edit-mode .hamburger,
 body.edit-mode .nav-arrow,
-body.edit-mode .photo-nav-arrow,
 body.edit-mode .footer-link,
 body.edit-mode .photo-frame img {
   pointer-events: none;
