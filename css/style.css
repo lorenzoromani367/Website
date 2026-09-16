@@ -45,7 +45,7 @@ button {
   --muted: #8a877c;
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
-  --transition-ms: 3000ms;
+  --transition-ms: 1500ms;
 }
 
 .mono {
@@ -149,7 +149,7 @@ button {
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 28px;
   background: var(--paper);
   padding: 28px 40px;
   border-bottom: 1px solid transparent;
@@ -200,7 +200,7 @@ button {
    come "50%", che con dei gap tra paragrafi produrrebbe un piccolo
    scatto visibile a ogni giro). */
 .description {
-  padding: 8px 40px 40px;
+  padding: 56px 40px 40px;
   font-size: 0.95rem;
   line-height: 1.65;
   max-width: 100%;
@@ -247,7 +247,7 @@ button {
   flex: 0 0 100%;
   width: 100%;
   margin: 0; /* <figure> ha un margine di default del browser (~40px ai lati): lo azzeriamo */
-  padding: 0 40px 72px;
+  padding: 48px 40px 72px;
   text-align: center; /* centra .photo-frame quando è "inline-block" a larghezza automatica */
 }
 
@@ -289,9 +289,9 @@ button {
 }
 
 @media (max-width: 700px) {
-  .topbar { padding: 20px 20px; }
-  .description { padding: 8px 20px 32px; }
-  .photo { padding: 0 20px 48px; }
+  .topbar { padding: 20px 20px; gap: 20px; }
+  .description { padding: 40px 20px 28px; }
+  .photo { padding: 32px 20px 48px; }
 }
 
 .gallerybar {
