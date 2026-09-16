@@ -184,12 +184,23 @@ button {
 
 /* L'hamburger è un link che torna alla home (niente menu a comparsa). */
 .hamburger {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 4px;
   width: 22px;
   padding: 4px;
+}
+
+/* Sotto, non di lato: a sinistra c'è il titolo (flex: 1, quindi la sua
+   "riga" arriva fin quasi al bordo dell'hamburger) e a destra il bordo
+   della pagina — sotto invece c'è sempre spazio libero. */
+.hamburger .move-handle {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
 }
 
 .hamburger span {
@@ -299,6 +310,7 @@ button {
 }
 
 .photo figcaption {
+  position: relative;
   padding: 24px 0 0;
   font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
   font-size: 0.8rem;
@@ -307,14 +319,23 @@ button {
   text-align: center;
 }
 
+.photo figcaption .move-handle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
 /* Didascalia vuota: invisibile fuori dalla modalità modifica (niente
    riga bianca sotto le foto senza testo). In modalità modifica torna
-   visibile come "slot" cliccabile dove scriverne una da zero. */
-.photo figcaption:empty {
+   visibile come "slot" cliccabile dove scriverne una da zero. Il
+   controllo è su ".caption-text" (lo SPAN col testo vero), non su
+   <figcaption> stesso, perché quest'ultimo contiene sempre anche la
+   maniglia verde di spostamento e quindi non risulterebbe mai ":empty". */
+.photo figcaption:has(.caption-text:empty) {
   display: none;
 }
 
-body.edit-mode .photo figcaption:empty {
+body.edit-mode .photo figcaption:has(.caption-text:empty) {
   display: block;
   min-height: 2.4em;
 }
@@ -328,7 +349,7 @@ body.edit-mode .photo figcaption {
   outline-offset: 0;
 }
 
-body.edit-mode .photo figcaption:focus {
+body.edit-mode .photo figcaption:focus-within {
   background: rgba(138, 59, 43, 0.08);
   outline-color: #8a3b2b;
 }
@@ -338,7 +359,7 @@ body.edit-mode .photo figcaption:focus {
    sfondo) non lascia capire CHE COSA fare cliccandoci — soprattutto
    perché il cursore che compare è piccolo e facile da perdere di vista
    sotto la foto. */
-body.edit-mode .photo figcaption:empty::before {
+body.edit-mode .photo .caption-text:empty::before {
   content: "clicca qui e scrivi la didascalia";
   color: var(--muted);
   font-style: italic;
@@ -656,11 +677,9 @@ body.edit-mode .move-handle:hover,
   right: 4px;
 }
 
-/* Maniglia verde: sposta liberamente un blocco (testo, foto, numero/
-   titolo in alto), indipendentemente dai suoi vicini — semplice
-   trascinamento libero in qualunque direzione, niente riordino. Le
-   didascalie non la usano più: si scrivono/correggono direttamente
-   cliccandoci sopra, restano sempre nella loro posizione naturale. */
+/* Maniglia verde: sposta liberamente un blocco (testo, foto, didascalia,
+   numero/titolo in alto, hamburger), indipendentemente dai suoi vicini —
+   semplice trascinamento libero in qualunque direzione, niente riordino. */
 .move-handle.free-move {
   background: #2b7a4b;
   cursor: move;
@@ -719,6 +738,14 @@ body.edit-mode .nav-arrow,
 body.edit-mode .footer-link,
 body.edit-mode .photo-frame img {
   pointer-events: none;
+}
+
+/* La maniglia dell'hamburger deve restare cliccabile anche se il link
+   che la contiene è disattivato sopra (altrimenti "pointer-events: none"
+   si eredita anche su di lei, e in modalità modifica risulterebbe
+   invisibile ai click pur essendo visibile a schermo). */
+body.edit-mode .hamburger .move-handle {
+  pointer-events: auto;
 }
 
 .export-panel {
