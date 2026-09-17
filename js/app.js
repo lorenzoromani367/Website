@@ -1270,6 +1270,17 @@ function renderHome() {
     });
     input.readOnly = !isEditMode();
     input.addEventListener("input", () => saveExtraTextContent("home", id, input.value));
+    // Fuori dalla modalità modifica la parola è un link vero, verso la
+    // stessa pagina di default di un progetto (vedi renderWordPage) — il
+    // mousedown blocca solo il focus/cursore (altrimenti un <input> in
+    // lettura prenderebbe comunque il focus al click), non il click stesso.
+    input.addEventListener("mousedown", (e) => {
+      if (!isEditMode()) e.preventDefault();
+    });
+    input.addEventListener("click", () => {
+      if (isEditMode()) return;
+      location.hash = `#/word/${id}`;
+    });
     const deleteBtn = el(
       "button",
       { type: "button", class: "home-word-delete-btn", title: "Elimina questa parola", "aria-label": "Elimina questa parola" },
@@ -1369,13 +1380,21 @@ function buildTopbar(keyPrefix, indexText, titleText) {
   ]);
 }
 
-function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav }) {
+function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav, galleryKey }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
   ensureEditModeUI();
 
   const resizeObservers = [];
-  const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
+  // "galleryKey" identifica in modo univoco QUESTA galleria per tutte le
+  // chiavi di salvataggio (dimensioni, posizioni, didascalie, foto extra):
+  // deve essere passato esplicitamente da chi chiama renderGallery — MAI
+  // dedotto da "projectNav" con un default implicito "se non è un
+  // progetto allora è core archive", perché non è più vero (vedi
+  // renderWordPage): due gallerie diverse con lo stesso sizeKeyPrefix si
+  // scriverebbero a vicenda le foto/didascalie senza che nessuna delle
+  // due lo sappia.
+  const sizeKeyPrefix = galleryKey;
 
   const topbar = buildTopbar(sizeKeyPrefix, String(indexNumber), title);
 
@@ -2024,6 +2043,7 @@ function renderProject(slug) {
     descriptionBox: project.descriptionBox,
     images,
     projectNav: { slug: project.slug, prevSlug, nextSlug },
+    galleryKey,
   });
 }
 
@@ -2043,6 +2063,33 @@ function renderArchive() {
     title: ARCHIVE.title,
     description: ARCHIVE.description,
     images,
+    galleryKey,
+  });
+}
+
+// Pagina di una "parola" aggiunta in home ("+ aggiungi una parola"): usa
+// la STESSA pagina di default di un progetto (renderGallery — numero,
+// titolo, testo, foto), ma non esiste in PROJECTS: parte con UNA SOLA
+// foto segnaposto (mai due) proprio per evitare il loop automatico tra
+// due placeholder, che con una sola foto non scatta mai (vedi
+// "figures.length < 2" in scheduleNext). Foto aggiunte/eliminate con i
+// soliti "+"/"×" usano lo stesso meccanismo di un progetto vero, solo
+// con una chiave "word.<id>" invece di "project.<slug>".
+function renderWordPage(id) {
+  const word = extraTextFor("home").find((w) => w.id === id);
+  if (!word) {
+    renderNotFound();
+    return;
+  }
+  const galleryKey = `word.${id}`;
+  const baseImages = [{ caption: "", src: null, _index: 0, _src: resolveImageSrc(galleryKey, 0, { caption: "", src: null }) }];
+  const images = applyImageOverrides(galleryKey, galleryKey, baseImages);
+  renderGallery({
+    indexNumber: images.length,
+    title: word.text || "senza titolo",
+    description: [],
+    images,
+    galleryKey,
   });
 }
 
@@ -2115,6 +2162,9 @@ function renderRoute() {
         break;
       case "archive":
         renderArchive();
+        break;
+      case "word":
+        renderWordPage(param);
         break;
       case "contacts":
         renderContacts();
