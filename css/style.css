@@ -157,7 +157,11 @@ body.edit-mode .home-add-word-btn:hover {
 .home-word-input {
   display: inline-block;
   min-width: 140px;
-  padding: 2px 8px;
+  /* Niente padding orizzontale: il testo deve iniziare esattamente al
+     bordo sinistro del rettangolo (niente spazio prima della prima
+     lettera), altrimenti risulta sfalsato rispetto ai nomi dei progetti
+     nella stessa lista quando provi ad allinearli. */
+  padding: 2px 0;
   font-family: inherit;
   font-size: 0.95rem;
   font-weight: 600;
