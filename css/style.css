@@ -274,6 +274,36 @@ body.edit-mode .home-word-delete-btn:hover {
   position: relative;
 }
 
+/* Il numero è un <input>, non più un semplice testo — sempre presente,
+   invisibile come campo (bordo/sfondo solo in modalità modifica) finché
+   non lo tocchi, stesso principio di didascalie e parole in home. */
+.topbar-index-input {
+  width: 3ch;
+  padding: 1px 2px;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  outline: none;
+  pointer-events: none;
+}
+
+body.edit-mode .topbar-index-input {
+  cursor: text;
+  width: 5ch;
+  background: rgba(138, 135, 124, 0.1);
+  border-color: var(--muted);
+  pointer-events: auto;
+}
+
+body.edit-mode .topbar-index-input:focus {
+  background: rgba(138, 59, 43, 0.08);
+  border-color: #8a3b2b;
+}
+
 .topbar-title {
   font-size: 0.95rem;
   flex: 1;
@@ -947,6 +977,28 @@ body.edit-mode .hamburger .move-handle {
   box-sizing: border-box;
   background: #fff;
   border: 1px solid var(--hairline);
+}
+
+.export-uploads {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+.export-uploads-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.export-uploads-list li + li {
+  margin-top: 6px;
+}
+
+.export-uploads-list a {
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .export-panel-actions {
