@@ -678,12 +678,18 @@ body.edit-mode .caption-input:focus {
   overflow-y: auto;
 }
 
+/* Non più testo chiaro "a nudo" sullo sfondo scuro: lo stesso rettangolo
+   beige della pagina normale (stessa larghezza, --panel-width), con un
+   bordo piccolo sopra/sotto e il testo alla sua dimensione normale — come
+   se fosse la pagina del progetto ma senza topbar, foto e gallerybar. */
 .lightbox-text {
-  max-width: 700px;
+  width: min(100%, var(--panel-width));
   margin: 40px auto;
-  font-size: 1.25rem;
-  line-height: 1.7;
-  color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 32px 40px;
+  font-size: 0.95rem;
+  line-height: 1.65;
   transform: scale(0.96);
   transition: transform 220ms ease;
 }
