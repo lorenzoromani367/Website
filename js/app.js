@@ -1424,10 +1424,15 @@ function renderHome() {
       type: "text",
       class: "home-word-input",
       placeholder: "scrivi qui",
-      value: wordTextById.get(id) || "",
+      // .trim() anche qui, non solo al salvataggio: ripulisce da solo uno
+      // spazio iniziale/finale salvato in precedenza (es. da un tocco
+      // accidentale della barra spaziatrice) senza dover riscrivere la
+      // parola — è quello che disallineava leggermente il testo rispetto
+      // ai nomi dei progetti nella stessa lista.
+      value: (wordTextById.get(id) || "").trim(),
     });
     input.readOnly = !isEditMode();
-    input.addEventListener("input", () => saveExtraTextContent("home", id, input.value));
+    input.addEventListener("input", () => saveExtraTextContent("home", id, input.value.trim()));
     // Fuori dalla modalità modifica la parola è un link vero, verso la
     // stessa pagina di default di un progetto (vedi renderWordPage) — il
     // mousedown blocca solo il focus/cursore (altrimenti un <input> in
