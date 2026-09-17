@@ -46,6 +46,11 @@ button {
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
   --transition-ms: 6000ms;
+  /* Curva simmetrica di accelerazione/decelerazione (ease-in-out
+     pronunciata): parte e arriva più morbida della "ease" di default
+     (che parte quasi a velocità piena), a parità di durata — più fluida,
+     non più veloce. */
+  --transition-ease: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 .mono {
@@ -408,14 +413,14 @@ body.edit-mode .topbar-index-input:focus {
   overflow: hidden;
   position: relative;
   width: 100%;
-  transition: height var(--transition-ms) ease;
+  transition: height var(--transition-ms) var(--transition-ease);
 }
 
 .photo-track {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  transition: transform var(--transition-ms) ease;
+  transition: transform var(--transition-ms) var(--transition-ease);
   will-change: transform;
 }
 
@@ -823,6 +828,38 @@ body.edit-mode .photo-delete-btn:hover {
 
 body.edit-mode .photo-add-btn:hover {
   background: #38995e;
+}
+
+/* Elimina il blocco di testo della descrizione: stesso quadratino delle
+   foto, ma da solo (niente "+" accanto: non ha senso "aggiungerne un'altra")
+   quindi centrato per davvero, non spostato di mezzo per lasciare posto a
+   un gemello. */
+.description-delete-btn {
+  display: none;
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid var(--paper);
+  color: var(--paper);
+  background: #8a3b2b;
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 3;
+  padding: 0;
+}
+
+body.edit-mode .description-delete-btn {
+  display: block;
+}
+
+body.edit-mode .description-delete-btn:hover {
+  background: #b04d38;
 }
 
 /* Maniglia di riordino: trascinala per cambiare la posizione di una foto
