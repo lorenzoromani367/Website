@@ -256,7 +256,7 @@ function clearCaptionOverride(key) {
 // sempre al punto di partenza — sembrava "magnetico"/rotto. Qui invece
 // qualunque trascinamento, anche piccolo, sposta la foto esattamente lì
 // e ce la lascia.
-function makeMovableFree(node, key, title = "Trascina per spostare") {
+function makeMovableFree(node, key, title = "Trascina per spostare", { onMove } = {}) {
   if (!node.style.position) node.style.position = "relative";
 
   const pos = Object.assign({ x: 0, y: 0 }, loadPositionOverrides()[key]);
@@ -299,6 +299,7 @@ function makeMovableFree(node, key, title = "Trascina per spostare") {
     pos.x = snapToGrid(dragState.baseX + (e.clientX - dragState.startX));
     pos.y = snapToGrid(dragState.baseY + (e.clientY - dragState.startY));
     node.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+    if (onMove) onMove();
   }
 
   function onPointerUp(e) {
@@ -1049,7 +1050,16 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       else clearCaptionOverride(captionKey);
     });
     const figcaption = el("figcaption", { class: "caption-box" }, [captionInput]);
-    const captionMove = makeMovableFree(figcaption, `${sizeKeyPrefix}.captionPos.${origIndex}`, "Trascina per spostare la didascalia");
+    const captionMove = makeMovableFree(
+      figcaption,
+      `${sizeKeyPrefix}.captionPos.${origIndex}`,
+      "Trascina per spostare la didascalia",
+      // Ricalcola l'altezza del viewport ad ogni istante del trascinamento,
+      // non solo al rilascio: altrimenti, per tutta la durata del drag, il
+      // pezzo di didascalia che via via esce dall'altezza calcolata finora
+      // resterebbe tagliato da "overflow: hidden" finché non la rilasci.
+      { onMove: () => { if (i === current) updateViewportHeight(); } }
+    );
 
     resizeObservers.push(
       makeResizable(
@@ -1070,7 +1080,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       )
     );
     makeZoomable(frame, img);
-    makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto");
+    makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto", {
+      onMove: () => { if (i === current) updateViewportHeight(); },
+    });
 
     return el("figure", { class: "photo", "data-index": i }, [frame, figcaption]);
   });
@@ -1228,7 +1240,22 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function updateViewportHeight() {
     const activeFigure = figures[current];
     if (!activeFigure) return;
-    const newHeightPx = activeFigure.getBoundingClientRect().height;
+    // Il rect della <figure> segue solo il flusso NORMALE: se la foto o la
+    // didascalia sono state trascinate (transform, non layout), il loro
+    // spostamento visivo non allarga affatto il rect del genitore — quindi
+    // basarsi solo su "activeFigure.getBoundingClientRect()" farebbe
+    // tagliare da "overflow: hidden" qualunque didascalia trascinata più in
+    // basso di dove starebbe di default (il rettangolo "sparisce" quando la
+    // sposti giù, esattamente dove dovrebbe stare). Il rect di ciascun
+    // elemento trascinabile, preso singolarmente, riflette invece SEMPRE il
+    // proprio transform: controlliamo anche loro e teniamo il punto più
+    // basso tra tutti.
+    const viewportTop = viewport.getBoundingClientRect().top;
+    let bottom = activeFigure.getBoundingClientRect().bottom;
+    activeFigure.querySelectorAll(".photo-frame, .caption-box").forEach((node) => {
+      bottom = Math.max(bottom, node.getBoundingClientRect().bottom);
+    });
+    const newHeightPx = bottom - viewportTop;
     const currentHeightPx = viewport.getBoundingClientRect().height;
     if (newHeightPx > currentHeightPx) {
       // Se la foto in arrivo è più alta di quella attuale, lo scatto è
