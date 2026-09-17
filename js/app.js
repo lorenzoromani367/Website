@@ -248,6 +248,67 @@ function isExtraImageId(id) {
 }
 
 /* -------------------------------------------------------------------------
+   Parole extra in home page ("+ aggiungi una parola"): blocchi di testo
+   liberi, indipendenti dalla lista progetti, per aggiungere qualunque
+   scritta (una frase, una data, una firma...) senza toccare content.js —
+   si trascinano ovunque (maniglia verde, stesso meccanismo di tutto il
+   resto) e si scrivono in un <input> sempre visibile. A differenza delle
+   foto aggiunte, qui non c'è una "voce di content.js" preesistente da
+   rinominare: il testo stesso è il contenuto, quindi si salva
+   direttamente in questo store invece di riusare CAPTION_STORE_KEY.
+   ------------------------------------------------------------------------- */
+const EXTRA_TEXT_STORE_KEY = "site-extra-text-v1";
+
+function loadExtraTextOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(EXTRA_TEXT_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function extraTextFor(key) {
+  return loadExtraTextOverrides()[key] || [];
+}
+
+function addExtraText(key) {
+  const all = loadExtraTextOverrides();
+  const list = all[key] || [];
+  const id = `word-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  list.push({ id, text: "" });
+  all[key] = list;
+  try {
+    localStorage.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la parola aggiunta resta comunque per questa sessione */
+  }
+  return id;
+}
+
+function saveExtraTextContent(key, id, text) {
+  const all = loadExtraTextOverrides();
+  const item = (all[key] || []).find((w) => w.id === id);
+  if (!item) return;
+  item.text = text;
+  try {
+    localStorage.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: il testo resta comunque applicato per questa sessione */
+  }
+}
+
+function removeExtraText(key, id) {
+  const all = loadExtraTextOverrides();
+  all[key] = (all[key] || []).filter((w) => w.id !== id);
+  try {
+    localStorage.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
+  }
+  clearPositionOverride(`${key}.wordPos.${id}`);
+}
+
+/* -------------------------------------------------------------------------
    Posizione libera a trascinamento (per ora solo le didascalie: si spostano
    indipendentemente dalla loro foto, non seguono l'ordine/resize della
    foto). A differenza di makeReorderable, qui non si scambia posto con un
@@ -363,10 +424,14 @@ function clearCaptionOverride(key) {
 // sempre al punto di partenza — sembrava "magnetico"/rotto. Qui invece
 // qualunque trascinamento, anche piccolo, sposta la foto esattamente lì
 // e ce la lascia.
-function makeMovableFree(node, key, title = "Trascina per spostare", { onMove } = {}) {
+function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, defaultOffset } = {}) {
   if (!node.style.position) node.style.position = "relative";
 
-  const pos = Object.assign({ x: 0, y: 0 }, loadPositionOverrides()[key]);
+  // "defaultOffset" è la posizione di partenza quando non hai ancora
+  // trascinato nulla TU in QUESTO browser (es. LAYOUT.gallery.imageOffset,
+  // o l'"offset"/"captionOffset" di una singola voce di "images" in
+  // content.js) — un trascinamento salvato la sovrascrive sempre.
+  const pos = Object.assign({ x: 0, y: 0 }, defaultOffset, loadPositionOverrides()[key]);
   if (pos.x || pos.y) node.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
 
   const handle = el("div", { class: "move-handle free-move", title });
@@ -420,9 +485,13 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove } 
 
   return {
     reset() {
-      pos.x = 0;
-      pos.y = 0;
-      node.style.transform = "";
+      // Torna alla posizione di DEFAULT (LAYOUT/content.js), non a (0,0):
+      // con un "defaultOffset" impostato, (0,0) non è affatto "nessuno
+      // spostamento", è un punto arbitrario come un altro.
+      const base = Object.assign({ x: 0, y: 0 }, defaultOffset);
+      pos.x = base.x;
+      pos.y = base.y;
+      node.style.transform = pos.x || pos.y ? `translate(${pos.x}px, ${pos.y}px)` : "";
     },
   };
 }
@@ -663,6 +732,18 @@ function describeOverrideKey(key) {
 
   if (key === "lightbox.image") return `Dimensione dell'ingrandimento (lightbox), uguale per tutte le foto  →  solo una preferenza salvata nel browser, non c'è un equivalente in content.js`;
 
+  const spacerBeforeMatch = key.match(/^(?:project\.(.+)|(archive))\.spacerBeforeBar$/);
+  if (spacerBeforeMatch) {
+    const where = spacerBeforeMatch[1] ? `Progetto "${spacerBeforeMatch[1]}"` : "Core archive";
+    return `${where}, spazio prima delle frecce  →  aggiorna LAYOUT.gallery.spacerBeforeBarHeight in content.js (vale per tutte le gallerie; qui conta solo "height")`;
+  }
+
+  const spacerBottomMatch = key.match(/^(?:project\.(.+)|(archive))\.spacerBottom$/);
+  if (spacerBottomMatch) {
+    const where = spacerBottomMatch[1] ? `Progetto "${spacerBottomMatch[1]}"` : "Core archive";
+    return `${where}, spazio in fondo alla pagina  →  aggiorna LAYOUT.gallery.spacerBottomHeight in content.js (vale per tutte le gallerie; qui conta solo "height")`;
+  }
+
   return key;
 }
 
@@ -697,6 +778,27 @@ function describePositionKey(key) {
   if (descPosMatch) return `Progetto "${descPosMatch[1]}", testo  →  aggiungi "descriptionBox: { offset: { x, y } }" su quel progetto`;
 
   if (key === "archive.descriptionPos") return `Core archive, testo  →  aggiungi "descriptionBox: { offset: { x, y } }" su ARCHIVE`;
+
+  const topbarIndexMatch = key.match(/^(?:project\.(.+)|(archive)|simple\.(.+))\.topbarIndexPos$/);
+  if (topbarIndexMatch) {
+    const where = topbarIndexMatch[1] ? `Progetto "${topbarIndexMatch[1]}"` : topbarIndexMatch[2] ? "Core archive" : `Pagina "${topbarIndexMatch[3]}"`;
+    return `${where}, numero in alto  →  aggiorna LAYOUT.gallery.topbarIndexOffset in content.js (vale per tutte le pagine)`;
+  }
+
+  const topbarTitleMatch = key.match(/^(?:project\.(.+)|(archive)|simple\.(.+))\.topbarTitlePos$/);
+  if (topbarTitleMatch) {
+    const where = topbarTitleMatch[1] ? `Progetto "${topbarTitleMatch[1]}"` : topbarTitleMatch[2] ? "Core archive" : `Pagina "${topbarTitleMatch[3]}"`;
+    return `${where}, titolo in alto  →  aggiorna LAYOUT.gallery.topbarTitleOffset in content.js (vale per tutte le pagine)`;
+  }
+
+  const bottomIndexMatch = key.match(/^(?:project\.(.+)|(archive))\.bottomIndexPos$/);
+  if (bottomIndexMatch) {
+    const where = bottomIndexMatch[1] ? `Progetto "${bottomIndexMatch[1]}"` : "Core archive";
+    return `${where}, numero in basso  →  aggiorna LAYOUT.gallery.bottomIndexOffset in content.js (vale per tutte le gallerie)`;
+  }
+
+  const homeWordPosMatch = key.match(/^home\.wordPos\.([\w-]+)$/);
+  if (homeWordPosMatch) return `Home, una parola aggiunta con "+"  →  vedi === PAROLE HOME === più sotto`;
 
   return key;
 }
@@ -740,14 +842,24 @@ function buildExportText() {
   const captionOverrides = loadCaptionOverrides();
   const removedOverrides = loadRemovedOverrides();
   const extraOverrides = loadExtraImagesOverrides();
+  const extraTextOverrides = loadExtraTextOverrides();
   const sizeKeys = Object.keys(sizeOverrides);
   const orderKeys = Object.keys(orderOverrides);
   const positionKeys = Object.keys(positionOverrides);
   const captionKeys = Object.keys(captionOverrides);
   const removedKeys = Object.keys(removedOverrides).filter((k) => removedOverrides[k].length);
   const extraKeys = Object.keys(extraOverrides).filter((k) => extraOverrides[k].length);
+  const extraTextKeys = Object.keys(extraTextOverrides).filter((k) => extraTextOverrides[k].length);
 
-  if (!sizeKeys.length && !orderKeys.length && !positionKeys.length && !captionKeys.length && !removedKeys.length && !extraKeys.length) {
+  if (
+    !sizeKeys.length &&
+    !orderKeys.length &&
+    !positionKeys.length &&
+    !captionKeys.length &&
+    !removedKeys.length &&
+    !extraKeys.length &&
+    !extraTextKeys.length
+  ) {
     return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, × = elimina una foto, + = aggiungine una nuova, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
   }
 
@@ -820,6 +932,18 @@ function buildExportText() {
     });
   }
 
+  if (extraTextKeys.length) {
+    lines.push("=== PAROLE HOME ===", "");
+    lines.push("# Home  →  non hanno ancora un campo dedicato in content.js: mandami questo");
+    lines.push("# testo in chat, aggiungo io il posto giusto dove tenerle (es. una lista in SITE)");
+    extraTextKeys.forEach((key) => {
+      extraTextOverrides[key].forEach((word) => {
+        lines.push(`  "${word.text}"`);
+      });
+    });
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -851,6 +975,7 @@ function openExportPanel() {
     localStorage.removeItem(CAPTION_STORE_KEY);
     localStorage.removeItem(REMOVED_STORE_KEY);
     localStorage.removeItem(EXTRA_IMAGES_STORE_KEY);
+    localStorage.removeItem(EXTRA_TEXT_STORE_KEY);
     location.reload();
   });
 
@@ -881,7 +1006,7 @@ function ensureEditModeUI() {
 
   toggle.addEventListener("click", () => {
     document.body.classList.toggle("edit-mode");
-    document.querySelectorAll(".photo .caption-input").forEach((input) => {
+    document.querySelectorAll(".photo .caption-input, .home-word-input").forEach((input) => {
       input.readOnly = !isEditMode();
     });
   });
@@ -1101,6 +1226,40 @@ function renderHome() {
     });
   });
 
+  // Parole extra: vedi il commento su EXTRA_TEXT_STORE_KEY più in alto.
+  const addWordBtn = el("button", { type: "button", class: "home-add-word-btn" }, "+ aggiungi una parola");
+  addWordBtn.addEventListener("click", () => {
+    if (!isEditMode()) return;
+    addExtraText("home");
+    renderRoute();
+  });
+
+  const wordBoxes = extraTextFor("home").map((word) => {
+    const input = el("input", {
+      type: "text",
+      class: "home-word-input",
+      placeholder: "scrivi qui",
+      value: word.text,
+    });
+    input.readOnly = !isEditMode();
+    input.addEventListener("input", () => saveExtraTextContent("home", word.id, input.value));
+    const deleteBtn = el(
+      "button",
+      { type: "button", class: "home-word-delete-btn", title: "Elimina questa parola", "aria-label": "Elimina questa parola" },
+      "×"
+    );
+    deleteBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isEditMode()) return;
+      removeExtraText("home", word.id);
+      renderRoute();
+    });
+    const box = el("div", { class: "home-word-box" }, [input, deleteBtn]);
+    makeMovableFree(box, `home.wordPos.${word.id}`, "Trascina per spostare questa parola");
+    return box;
+  });
+
   const spacer = el("div", { class: "home-spacer" });
 
   const footer = el(
@@ -1111,6 +1270,8 @@ function renderHome() {
 
   app.appendChild(header);
   app.appendChild(list);
+  app.appendChild(addWordBtn);
+  wordBoxes.forEach((box) => app.appendChild(box));
   app.appendChild(spacer);
   app.appendChild(footer);
 
@@ -1140,9 +1301,15 @@ function buildTopbar(keyPrefix, indexText, titleText) {
   const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
     el("span", {}), el("span", {}), el("span", {}),
   ]);
-  makeMovableFree(topbarIndexEl, `${keyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
-  makeMovableFree(topbarTitleEl, `${keyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
-  makeMovableFree(hamburgerEl, `${keyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger");
+  makeMovableFree(topbarIndexEl, `${keyPrefix}.topbarIndexPos`, "Trascina per spostare il numero", {
+    defaultOffset: LAYOUT.gallery.topbarIndexOffset,
+  });
+  makeMovableFree(topbarTitleEl, `${keyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo", {
+    defaultOffset: LAYOUT.gallery.topbarTitleOffset,
+  });
+  makeMovableFree(hamburgerEl, `${keyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger", {
+    defaultOffset: LAYOUT.gallery.hamburgerOffset,
+  });
   return el("div", { class: "topbar" }, [
     el("div", { class: "topbar-row" }, [topbarIndexEl]),
     el("div", { class: "topbar-row" }, [
@@ -1170,9 +1337,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // a chi usa uno screen reader) prende il posto della prima esattamente
   // quando questa esce di scena, quindi il giro si ripete senza scatti
   // visibili.
-  const hasExplicitDescHeight = Boolean(
-    (descriptionBox && descriptionBox.height) || loadSizeOverrides()[`${sizeKeyPrefix}.description`]?.height
-  );
+  const defaultDescHeight = (descriptionBox && descriptionBox.height) || LAYOUT.gallery.descriptionHeight;
+  const hasExplicitDescHeight = Boolean(defaultDescHeight || loadSizeOverrides()[`${sizeKeyPrefix}.description`]?.height);
   const makeParagraphs = () => description.map((paragraph) => el("p", {}, paragraph));
   const secondCopy = makeParagraphs();
   secondCopy.forEach((p) => p.setAttribute("aria-hidden", "true"));
@@ -1181,10 +1347,12 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   resizeObservers.push(
     makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
       width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
-      height: descriptionBox && descriptionBox.height,
+      height: defaultDescHeight,
     })
   );
-  makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo");
+  makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo", {
+    defaultOffset: (descriptionBox && descriptionBox.offset) || LAYOUT.gallery.descriptionOffset,
+  });
 
   const captionOverrides = loadCaptionOverrides();
 
@@ -1220,11 +1388,14 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       figcaption,
       `${sizeKeyPrefix}.captionPos.${origIndex}`,
       "Trascina per spostare la didascalia",
-      // Ricalcola l'altezza del viewport ad ogni istante del trascinamento,
-      // non solo al rilascio: altrimenti, per tutta la durata del drag, il
-      // pezzo di didascalia che via via esce dall'altezza calcolata finora
-      // resterebbe tagliato da "overflow: hidden" finché non la rilasci.
-      { onMove: () => { if (i === current) updateViewportHeight(); } }
+      {
+        // Ricalcola l'altezza del viewport ad ogni istante del trascinamento,
+        // non solo al rilascio: altrimenti, per tutta la durata del drag, il
+        // pezzo di didascalia che via via esce dall'altezza calcolata finora
+        // resterebbe tagliato da "overflow: hidden" finché non la rilasci.
+        onMove: () => { if (i === current) updateViewportHeight(); },
+        defaultOffset: image.captionOffset || LAYOUT.gallery.captionOffset,
+      }
     );
 
     resizeObservers.push(
@@ -1248,6 +1419,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     makeZoomable(frame, img);
     makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto", {
       onMove: () => { if (i === current) updateViewportHeight(); },
+      defaultOffset: image.offset || LAYOUT.gallery.imageOffset,
     });
 
     // "×" elimina questa foto, "+" ne aggiunge una nuova (segnaposto,
@@ -1297,20 +1469,31 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // sua volta trascinato in precedenza, l'allineamento "automatico" non
   // corrisponde più a quello che vedi davvero): meglio una maniglia verde
   // come le altre, così lo allinei tu guardando lo schermo.
-  makeMovableFree(bottomIndexEl, `${sizeKeyPrefix}.bottomIndexPos`, "Trascina per spostare/allineare il numero");
+  makeMovableFree(bottomIndexEl, `${sizeKeyPrefix}.bottomIndexPos`, "Trascina per spostare/allineare il numero", {
+    defaultOffset: LAYOUT.gallery.bottomIndexOffset,
+  });
   const footerBar = el("div", { class: "gallerybar" }, [prevBtn, bottomIndexEl, nextBtn]);
 
   // Due blocchi "vuoti" trascinabili in altezza (maniglia rossa, come sulle
   // foto — visibile solo in modalità modifica), per lasciare all'utente il
   // controllo diretto di quanta aria vuole: uno prima delle frecce in
-  // basso (tra la foto/didascalia e la gallerybar — di default già alto
-  // qualcosa, così le frecce partono staccate dalla foto anche senza
-  // toccare nulla), uno in fondo del tutto (per allungare il "foglio"
-  // beige oltre quanto basterebbe al contenuto, di default a 0px).
+  // basso (tra la foto/didascalia e la gallerybar), uno in fondo del tutto
+  // (per allungare il "foglio" beige oltre quanto basterebbe al
+  // contenuto) — altezza di default presa da LAYOUT.gallery.
   const spacerBeforeBar = el("div", { class: "gallery-spacer" });
-  makeHeightResizable(spacerBeforeBar, `${sizeKeyPrefix}.spacerBeforeBar`, "Trascina per aggiungere spazio prima delle frecce", 64);
+  makeHeightResizable(
+    spacerBeforeBar,
+    `${sizeKeyPrefix}.spacerBeforeBar`,
+    "Trascina per aggiungere spazio prima delle frecce",
+    parseFloat(LAYOUT.gallery.spacerBeforeBarHeight) || 0
+  );
   const spacerBottom = el("div", { class: "gallery-spacer" });
-  makeHeightResizable(spacerBottom, `${sizeKeyPrefix}.spacerBottom`, "Trascina per allungare la pagina", 0);
+  makeHeightResizable(
+    spacerBottom,
+    `${sizeKeyPrefix}.spacerBottom`,
+    "Trascina per allungare la pagina",
+    parseFloat(LAYOUT.gallery.spacerBottomHeight) || 0
+  );
 
   app.appendChild(topbar);
   app.appendChild(descBlock);
