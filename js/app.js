@@ -93,6 +93,17 @@ function saveSizeOverride(key, size) {
   }
 }
 
+function clearSizeOverride(key) {
+  const all = loadSizeOverrides();
+  if (!(key in all)) return;
+  delete all[key];
+  try {
+    localStorage.setItem(SIZE_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la modifica resta comunque applicata per questa sessione */
+  }
+}
+
 /* -------------------------------------------------------------------------
    Ordine regolabile a trascinamento (riordinare i progetti in home, o le
    foto dentro una galleria) — stessa logica di salvataggio delle dimensioni,
@@ -138,6 +149,102 @@ function currentImageOrder(key, length) {
   const stored = loadOrderOverrides()[key];
   if (stored && stored.length === length) return stored.slice();
   return Array.from({ length }, (_, i) => i);
+}
+
+/* -------------------------------------------------------------------------
+   Eliminare una foto ("×") o aggiungerne una nuova ("+") in modalità
+   modifica: il sito è statico, quindi non c'è modo di toccare per davvero
+   content.js da qui — sono solo due salvataggi nel browser, esportabili
+   come tutto il resto (vedi pannello "Esporta modifiche"). Una foto
+   ORIGINALE di content.js non si può cancellare per davvero: eliminarla
+   segna solo il suo id come "nascosto" (reversibile solo tramite "Reset
+   modifiche", che azzera però anche ogni altra personalizzazione). Una
+   foto AGGIUNTA con "+" invece non è mai esistita in content.js: è solo
+   un segnaposto (stesso placeholder colorato che vedi quando "src" è
+   null) con una didascalia, in attesa che tu carichi il file vero e lo
+   riporti in content.js — eliminarla la toglie del tutto dalla lista.
+   ------------------------------------------------------------------------- */
+const REMOVED_STORE_KEY = "site-removed-images-v1";
+
+function loadRemovedOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(REMOVED_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function removedIdsFor(key) {
+  return loadRemovedOverrides()[key] || [];
+}
+
+function markImageRemoved(key, uid) {
+  const all = loadRemovedOverrides();
+  const list = all[key] || [];
+  if (!list.includes(uid)) list.push(uid);
+  all[key] = list;
+  try {
+    localStorage.setItem(REMOVED_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
+  }
+}
+
+const EXTRA_IMAGES_STORE_KEY = "site-extra-images-v1";
+
+function loadExtraImagesOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(EXTRA_IMAGES_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function extraImagesFor(key) {
+  return loadExtraImagesOverrides()[key] || [];
+}
+
+// Id leggibile e sicuramente diverso da un indice numerico di content.js
+// (che userebbe solo cifre), così le due categorie non si confondono mai
+// nelle chiavi di posizione/dimensione/didascalia che riusano questo id.
+// La didascalia NON si salva qui: riusa CAPTION_STORE_KEY esattamente come
+// le foto originali (stessa chiave "...captionText.<id>"), quindi un solo
+// posto da cui leggerla, non due copie che potrebbero disallinearsi.
+function addExtraImage(key) {
+  const all = loadExtraImagesOverrides();
+  const list = all[key] || [];
+  const id = `new-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  list.push({ id });
+  all[key] = list;
+  try {
+    localStorage.setItem(EXTRA_IMAGES_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la foto aggiunta resta comunque per questa sessione */
+  }
+  return id;
+}
+
+function removeExtraImage(key, id) {
+  const all = loadExtraImagesOverrides();
+  all[key] = (all[key] || []).filter((img) => img.id !== id);
+  try {
+    localStorage.setItem(EXTRA_IMAGES_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
+  }
+  // Una foto aggiunta con "+" non esiste in content.js: una volta
+  // eliminata, il suo id (generato a caso) non si riuserà mai più — ripulisce
+  // quindi anche didascalia/posizione/dimensione salvate per lei, altrimenti
+  // resterebbero per sempre nello storage, orfane, senza nessuna foto reale
+  // ad usarle (e comparirebbero comunque nel pannello "Esporta modifiche").
+  clearCaptionOverride(`${key}.captionText.${id}`);
+  clearPositionOverride(`${key}.captionPos.${id}`);
+  clearPositionOverride(`${key}.imagePos.${id}`);
+  clearSizeOverride(`${key}.image.${id}`);
+}
+
+function isExtraImageId(id) {
+  return typeof id === "string" && id.startsWith("new-");
 }
 
 /* -------------------------------------------------------------------------
@@ -533,19 +640,26 @@ function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio
   });
 }
 
+// Etichetta leggibile per l'id di una foto nell'export: le foto originali
+// di content.js hanno un indice numerico ("foto #3"), quelle aggiunte con
+// "+" invece no (non esistono ancora lì) — il testo lo dice esplicitamente.
+function photoLabel(id) {
+  return isExtraImageId(id) ? `una foto aggiunta con "+" (vedi === FOTO NUOVE === più sotto)` : `foto #${Number(id) + 1}`;
+}
+
 function describeOverrideKey(key) {
   if (key === "home.list") return `LAYOUT.home  →  aggiorna listWidth/listHeight in content.js`;
 
   const descMatch = key.match(/^project\.(.+)\.description$/);
   if (descMatch) return `Progetto "${descMatch[1]}"  →  aggiungi/aggiorna "descriptionBox" su quel progetto in PROJECTS`;
 
-  const imgMatch = key.match(/^project\.(.+)\.image\.(\d+)$/);
-  if (imgMatch) return `Progetto "${imgMatch[1]}", foto #${Number(imgMatch[2]) + 1}  →  aggiorna width/height su quella voce di "images"`;
+  const imgMatch = key.match(/^project\.(.+)\.image\.([\w-]+)$/);
+  if (imgMatch) return `Progetto "${imgMatch[1]}", ${photoLabel(imgMatch[2])}  →  aggiorna width/height su quella voce di "images"`;
 
   if (key === "archive.description") return `Core archive  →  aggiorna "descriptionBox" sull'oggetto ARCHIVE`;
 
-  const archiveImgMatch = key.match(/^archive\.image\.(\d+)$/);
-  if (archiveImgMatch) return `Core archive, foto #${Number(archiveImgMatch[1]) + 1}  →  aggiorna width/height su quella voce di ARCHIVE.images`;
+  const archiveImgMatch = key.match(/^archive\.image\.([\w-]+)$/);
+  if (archiveImgMatch) return `Core archive, ${photoLabel(archiveImgMatch[1])}  →  aggiorna width/height su quella voce di ARCHIVE.images`;
 
   if (key === "lightbox.image") return `Dimensione dell'ingrandimento (lightbox), uguale per tutte le foto  →  solo una preferenza salvata nel browser, non c'è un equivalente in content.js`;
 
@@ -564,20 +678,20 @@ function describeOrderKey(key) {
 }
 
 function describePositionKey(key) {
-  const captionPosMatch = key.match(/^project\.(.+)\.captionPos\.(\d+)$/);
-  if (captionPosMatch) return `Progetto "${captionPosMatch[1]}", didascalia foto #${Number(captionPosMatch[2]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di "images"`;
+  const captionPosMatch = key.match(/^project\.(.+)\.captionPos\.([\w-]+)$/);
+  if (captionPosMatch) return `Progetto "${captionPosMatch[1]}", didascalia ${photoLabel(captionPosMatch[2])}  →  aggiungi "captionOffset: { x, y }" su quella voce di "images"`;
 
-  const archiveCaptionPosMatch = key.match(/^archive\.captionPos\.(\d+)$/);
-  if (archiveCaptionPosMatch) return `Core archive, didascalia foto #${Number(archiveCaptionPosMatch[1]) + 1}  →  aggiungi "captionOffset: { x, y }" su quella voce di ARCHIVE.images`;
+  const archiveCaptionPosMatch = key.match(/^archive\.captionPos\.([\w-]+)$/);
+  if (archiveCaptionPosMatch) return `Core archive, didascalia ${photoLabel(archiveCaptionPosMatch[1])}  →  aggiungi "captionOffset: { x, y }" su quella voce di ARCHIVE.images`;
 
   const hamburgerMatch = key.match(/^(?:project\.(.+)|(archive)|simple\.(.+))\.hamburgerPos$/);
   if (hamburgerMatch) return `${hamburgerMatch[1] ? `Progetto "${hamburgerMatch[1]}"` : hamburgerMatch[2] ? "Core archive" : `Pagina "${hamburgerMatch[3]}"`}, hamburger  →  posizione solo visiva, nessun equivalente in content.js`;
 
-  const imagePosMatch = key.match(/^project\.(.+)\.imagePos\.(\d+)$/);
-  if (imagePosMatch) return `Progetto "${imagePosMatch[1]}", foto #${Number(imagePosMatch[2]) + 1}  →  aggiungi "offset: { x, y }" su quella voce di "images"`;
+  const imagePosMatch = key.match(/^project\.(.+)\.imagePos\.([\w-]+)$/);
+  if (imagePosMatch) return `Progetto "${imagePosMatch[1]}", ${photoLabel(imagePosMatch[2])}  →  aggiungi "offset: { x, y }" su quella voce di "images"`;
 
-  const archiveImagePosMatch = key.match(/^archive\.imagePos\.(\d+)$/);
-  if (archiveImagePosMatch) return `Core archive, foto #${Number(archiveImagePosMatch[1]) + 1}  →  aggiungi "offset: { x, y }" su quella voce di ARCHIVE.images`;
+  const archiveImagePosMatch = key.match(/^archive\.imagePos\.([\w-]+)$/);
+  if (archiveImagePosMatch) return `Core archive, ${photoLabel(archiveImagePosMatch[1])}  →  aggiungi "offset: { x, y }" su quella voce di ARCHIVE.images`;
 
   const descPosMatch = key.match(/^project\.(.+)\.descriptionPos$/);
   if (descPosMatch) return `Progetto "${descPosMatch[1]}", testo  →  aggiungi "descriptionBox: { offset: { x, y } }" su quel progetto`;
@@ -588,12 +702,34 @@ function describePositionKey(key) {
 }
 
 function describeCaptionKey(key) {
-  const captionMatch = key.match(/^project\.(.+)\.captionText\.(\d+)$/);
-  if (captionMatch) return `Progetto "${captionMatch[1]}", foto #${Number(captionMatch[2]) + 1}  →  aggiorna "caption" su quella voce di "images"`;
+  const captionMatch = key.match(/^project\.(.+)\.captionText\.([\w-]+)$/);
+  if (captionMatch) {
+    return isExtraImageId(captionMatch[2])
+      ? `Progetto "${captionMatch[1]}", ${photoLabel(captionMatch[2])}  →  usa questo testo come "caption" della nuova voce`
+      : `Progetto "${captionMatch[1]}", ${photoLabel(captionMatch[2])}  →  aggiorna "caption" su quella voce di "images"`;
+  }
 
-  const archiveCaptionMatch = key.match(/^archive\.captionText\.(\d+)$/);
-  if (archiveCaptionMatch) return `Core archive, foto #${Number(archiveCaptionMatch[1]) + 1}  →  aggiorna "caption" su quella voce di ARCHIVE.images`;
+  const archiveCaptionMatch = key.match(/^archive\.captionText\.([\w-]+)$/);
+  if (archiveCaptionMatch) {
+    return isExtraImageId(archiveCaptionMatch[1])
+      ? `Core archive, ${photoLabel(archiveCaptionMatch[1])}  →  usa questo testo come "caption" della nuova voce`
+      : `Core archive, ${photoLabel(archiveCaptionMatch[1])}  →  aggiorna "caption" su quella voce di ARCHIVE.images`;
+  }
 
+  return key;
+}
+
+function describeRemovedKey(key) {
+  const projMatch = key.match(/^project\.(.+)$/);
+  if (projMatch) return `Progetto "${projMatch[1]}"  →  elimina (o commenta) queste voci dall'array "images"`;
+  if (key === "archive") return `Core archive  →  elimina (o commenta) queste voci da ARCHIVE.images`;
+  return key;
+}
+
+function describeExtraKey(key) {
+  const projMatch = key.match(/^project\.(.+)$/);
+  if (projMatch) return `Progetto "${projMatch[1]}"  →  aggiungi queste voci in fondo all'array "images", con "src" al posto di null quando carichi il file vero`;
+  if (key === "archive") return `Core archive  →  aggiungi queste voci in fondo a ARCHIVE.images, con "src" al posto di null quando carichi il file vero`;
   return key;
 }
 
@@ -602,13 +738,17 @@ function buildExportText() {
   const orderOverrides = loadOrderOverrides();
   const positionOverrides = loadPositionOverrides();
   const captionOverrides = loadCaptionOverrides();
+  const removedOverrides = loadRemovedOverrides();
+  const extraOverrides = loadExtraImagesOverrides();
   const sizeKeys = Object.keys(sizeOverrides);
   const orderKeys = Object.keys(orderOverrides);
   const positionKeys = Object.keys(positionOverrides);
   const captionKeys = Object.keys(captionOverrides);
+  const removedKeys = Object.keys(removedOverrides).filter((k) => removedOverrides[k].length);
+  const extraKeys = Object.keys(extraOverrides).filter((k) => extraOverrides[k].length);
 
-  if (!sizeKeys.length && !orderKeys.length && !positionKeys.length && !captionKeys.length) {
-    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
+  if (!sizeKeys.length && !orderKeys.length && !positionKeys.length && !captionKeys.length && !removedKeys.length && !extraKeys.length) {
+    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, × = elimina una foto, + = aggiungine una nuova, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
   }
 
   const lines = [
@@ -656,6 +796,30 @@ function buildExportText() {
     });
   }
 
+  if (removedKeys.length) {
+    lines.push("=== FOTO ELIMINATE (×) ===", "");
+    removedKeys.forEach((key) => {
+      lines.push(`# ${describeRemovedKey(key)}`);
+      removedOverrides[key].forEach((uid) => {
+        const idMatch = uid.match(/^orig:(.+)$/);
+        if (idMatch) lines.push(`  ${photoLabel(idMatch[1])}`);
+      });
+      lines.push("");
+    });
+  }
+
+  if (extraKeys.length) {
+    lines.push("=== FOTO NUOVE (+) ===", "");
+    extraKeys.forEach((key) => {
+      lines.push(`# ${describeExtraKey(key)}`);
+      extraOverrides[key].forEach((extra) => {
+        const caption = captionOverrides[`${key}.captionText.${extra.id}`] || "";
+        lines.push(`  { caption: "${caption}", src: null },  // sostituisci "src" col percorso del file quando lo carichi`);
+      });
+      lines.push("");
+    });
+  }
+
   return lines.join("\n");
 }
 
@@ -685,6 +849,8 @@ function openExportPanel() {
     localStorage.removeItem(ORDER_STORE_KEY);
     localStorage.removeItem(POSITION_STORE_KEY);
     localStorage.removeItem(CAPTION_STORE_KEY);
+    localStorage.removeItem(REMOVED_STORE_KEY);
+    localStorage.removeItem(EXTRA_IMAGES_STORE_KEY);
     location.reload();
   });
 
@@ -710,7 +876,7 @@ function ensureEditModeUI() {
   if (editModeUIReady) return;
   editModeUIReady = true;
 
-  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, clicca su una didascalia per scriverla/correggerla" }, "⇲");
+  const toggle = el("button", { class: "edit-toggle", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, × = elimina una foto, + = aggiungine una nuova, clicca su una didascalia per scriverla/correggerla" }, "⇲");
   const exportBtn = el("button", { class: "export-toggle", "aria-label": "Esporta modifiche", title: "Esporta modifiche" }, "⇩");
 
   toggle.addEventListener("click", () => {
@@ -1083,6 +1249,39 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto", {
       onMove: () => { if (i === current) updateViewportHeight(); },
     });
+
+    // "×" elimina questa foto, "+" ne aggiunge una nuova (segnaposto,
+    // stesso meccanismo di "src: null" già usato per le foto non ancora
+    // caricate) subito dopo — solo in modalità modifica, vedi il
+    // commento su REMOVED_STORE_KEY/EXTRA_IMAGES_STORE_KEY più in alto.
+    const deleteBtn = el(
+      "button",
+      { type: "button", class: "photo-delete-btn", title: "Elimina questa foto", "aria-label": "Elimina questa foto" },
+      "×"
+    );
+    deleteBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isEditMode()) return;
+      if (!confirm("Eliminare questa foto dalla galleria?")) return;
+      if (image._extra) removeExtraImage(sizeKeyPrefix, origIndex);
+      else markImageRemoved(sizeKeyPrefix, `orig:${origIndex}`);
+      renderRoute();
+    });
+    const addBtn = el(
+      "button",
+      { type: "button", class: "photo-add-btn", title: "Aggiungi una nuova foto qui accanto", "aria-label": "Aggiungi una nuova foto" },
+      "+"
+    );
+    addBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isEditMode()) return;
+      addExtraImage(sizeKeyPrefix);
+      renderRoute();
+    });
+    frame.appendChild(deleteBtn);
+    frame.appendChild(addBtn);
 
     return el("figure", { class: "photo", "data-index": i }, [frame, figcaption]);
   });
@@ -1545,18 +1744,38 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   };
 }
 
+// Applica le eliminazioni ("×") e le aggiunte ("+") fatte in modalità
+// modifica a un array di foto già costruito da content.js — stessa logica
+// sia per un progetto sia per core archive, quindi factorizzata qui.
+function applyImageOverrides(galleryKey, seed, images) {
+  const removed = removedIdsFor(galleryKey);
+  const kept = images.filter((img) => !removed.includes(`orig:${img._index}`));
+  extraImagesFor(galleryKey).forEach((extra) => {
+    kept.push({
+      caption: "",
+      src: null,
+      _index: extra.id,
+      _extra: true,
+      _src: placeholderImg(`${seed}-${extra.id}`, "nuova foto"),
+    });
+  });
+  return kept;
+}
+
 function renderProject(slug) {
   const project = findProject(slug);
   if (!project) {
     renderNotFound();
     return;
   }
-  const orderKey = `project.${project.slug}.imageOrder`;
+  const galleryKey = `project.${project.slug}`;
+  const orderKey = `${galleryKey}.imageOrder`;
   const order = currentImageOrder(orderKey, project.images.length);
-  const images = order.map((origIndex) => {
+  const baseImages = order.map((origIndex) => {
     const img = project.images[origIndex];
     return { ...img, _index: origIndex, _src: resolveImageSrc(project.slug, origIndex, img) };
   });
+  const images = applyImageOverrides(galleryKey, project.slug, baseImages);
 
   const orderedProjects = getOrderedProjects();
   const idx = orderedProjects.findIndex((p) => p.slug === project.slug);
@@ -1576,12 +1795,14 @@ function renderProject(slug) {
 }
 
 function renderArchive() {
+  const galleryKey = "archive";
   const orderKey = "archive.imageOrder";
   const order = currentImageOrder(orderKey, ARCHIVE.images.length);
-  const images = order.map((origIndex) => {
+  const baseImages = order.map((origIndex) => {
     const img = ARCHIVE.images[origIndex];
     return { ...img, _index: origIndex, _src: resolveImageSrc("archive", origIndex, img) };
   });
+  const images = applyImageOverrides(galleryKey, "archive", baseImages);
   renderGallery({
     // Core archive non fa parte della lista progetti: qui il numero resta
     // il conteggio delle foto (non c'è una "posizione" a cui riferirsi).

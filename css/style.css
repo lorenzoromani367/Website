@@ -334,7 +334,7 @@ button {
   padding: 8px 12px;
   font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
   font-size: 0.8rem;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--muted);
   text-align: center;
   background: transparent;
@@ -631,6 +631,52 @@ body.edit-mode .resizable-label {
   right: auto;
   left: 4px;
   cursor: nesw-resize;
+}
+
+/* Elimina questa foto ("×") / aggiungine una nuova qui accanto ("+"):
+   stesso quadratino delle altre maniglie, centrate in alto — gli angoli
+   sono già occupati dall'etichetta delle misure (sinistra) e dalla
+   maniglia verde di spostamento della foto (destra). */
+.photo-delete-btn,
+.photo-add-btn {
+  display: none;
+  position: absolute;
+  top: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid var(--paper);
+  color: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 3;
+  touch-action: none;
+  padding: 0;
+}
+
+.photo-delete-btn {
+  left: calc(50% - 24px);
+  background: #8a3b2b;
+}
+
+.photo-add-btn {
+  left: calc(50% + 2px);
+  background: #2b7a4b;
+}
+
+body.edit-mode .photo-delete-btn,
+body.edit-mode .photo-add-btn {
+  display: block;
+}
+
+body.edit-mode .photo-delete-btn:hover {
+  background: #b04d38;
+}
+
+body.edit-mode .photo-add-btn:hover {
+  background: #38995e;
 }
 
 /* Maniglia di riordino: trascinala per cambiare la posizione di una foto
