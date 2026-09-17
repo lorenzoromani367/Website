@@ -156,11 +156,17 @@ body.edit-mode .home-add-word-btn:hover {
    (Inter, non il monospace delle didascalie: qui non è una didascalia). */
 .home-word-input {
   display: inline-block;
-  min-width: 140px;
-  /* Niente padding orizzontale: il testo deve iniziare esattamente al
+  /* Larghezza calcolata in JS (vedi syncWordInputWidth in app.js) in base
+     al testo scritto: un <input>, a differenza di un link <a>, non si
+     allarga mai da solo al contenuto — lasciarlo con una larghezza fissa
+     o "min-width" tagliava le parole più lunghe di quel valore (es.
+     "Compression" mostrava solo "Comp"). 24px di partenza finché JS non
+     interviene, giusto per non essere invisibile per un istante.
+     Niente padding orizzontale: il testo deve iniziare esattamente al
      bordo sinistro del rettangolo (niente spazio prima della prima
      lettera), altrimenti risulta sfalsato rispetto ai nomi dei progetti
      nella stessa lista quando provi ad allinearli. */
+  width: 24px;
   padding: 2px 0;
   font-family: inherit;
   font-size: 0.95rem;

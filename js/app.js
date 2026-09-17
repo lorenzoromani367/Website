@@ -387,6 +387,34 @@ function promptImageUpload(onDone) {
   sharedUploadInput.click();
 }
 
+// Uno <span> condiviso, invisibile, mai rimosso dal DOM: misura la
+// larghezza ESATTA (in pixel, con lo stesso font) di un testo, per dare a
+// un <input> — che a differenza di un <a> non si allarga mai da solo al
+// contenuto — la larghezza giusta per non tagliare mai il testo scritto.
+let sharedMeasureSpan = null;
+function measureTextWidth(text, font) {
+  if (!sharedMeasureSpan) {
+    sharedMeasureSpan = document.createElement("span");
+    sharedMeasureSpan.style.cssText = "position:absolute; visibility:hidden; white-space:pre; top:-9999px; left:-9999px;";
+    document.body.appendChild(sharedMeasureSpan);
+  }
+  sharedMeasureSpan.style.font = font;
+  sharedMeasureSpan.textContent = text;
+  return sharedMeasureSpan.offsetWidth;
+}
+
+// Applica a "input" la larghezza esatta del testo che contiene (o del
+// placeholder, se è vuoto) — chiamata sia alla creazione sia ad ogni
+// tasto premuto.
+function syncWordInputWidth(input) {
+  const cs = getComputedStyle(input);
+  const text = input.value || input.getAttribute("placeholder") || "";
+  const textWidth = measureTextWidth(text, cs.font);
+  const extra =
+    parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth) + 4;
+  input.style.width = `${Math.max(textWidth + extra, 24)}px`;
+}
+
 /* -------------------------------------------------------------------------
    Parole extra in home page ("+ aggiungi una parola"): blocchi di testo
    liberi, indipendenti dalla lista progetti, per aggiungere qualunque
@@ -447,6 +475,27 @@ function removeExtraText(key, id) {
   }
   clearPositionOverride(`${key}.wordPos.${id}`);
 }
+
+// Migrazione una tantum: "bar", "fluoxetine", "licking", "moon",
+// "plastic", "tower" e "compression", scritte a mano come parole in home,
+// sono ora vere pagine progetto (foto caricate nel repository, vedi
+// PROJECTS in content.js) — la vecchia "parola" con lo stesso nome
+// (confronto senza maiuscole/spazi) diventerebbe un doppione che punta
+// alla pagina-parola vuota invece che al progetto vero. La toglie una
+// sola volta, per nome, senza toccare nessun'altra parola scritta.
+(function removeWordsPromotedToProjectsOnce() {
+  const FLAG_KEY = "site-words-promoted-v1";
+  try {
+    if (localStorage.getItem(FLAG_KEY)) return;
+    const promotedNames = new Set(["bar", "fluoxetine", "licking", "moon", "plastic", "tower", "compression"]);
+    extraTextFor("home").forEach((word) => {
+      if (promotedNames.has(word.text.trim().toLowerCase())) removeExtraText("home", word.id);
+    });
+    localStorage.setItem(FLAG_KEY, "1");
+  } catch (e) {
+    /* storage non disponibile: non c'è nulla da migrare */
+  }
+})();
 
 /* -------------------------------------------------------------------------
    Posizione libera a trascinamento (per ora solo le didascalie: si spostano
@@ -1432,7 +1481,10 @@ function renderHome() {
       value: (wordTextById.get(id) || "").trim(),
     });
     input.readOnly = !isEditMode();
-    input.addEventListener("input", () => saveExtraTextContent("home", id, input.value.trim()));
+    input.addEventListener("input", () => {
+      saveExtraTextContent("home", id, input.value.trim());
+      syncWordInputWidth(input);
+    });
     // Fuori dalla modalità modifica la parola è un link vero, verso la
     // stessa pagina di default di un progetto (vedi renderWordPage) — il
     // mousedown blocca solo il focus/cursore (altrimenti un <input> in
@@ -1498,6 +1550,12 @@ function renderHome() {
   app.appendChild(addWordBtn);
   app.appendChild(spacer);
   app.appendChild(footer);
+
+  // La larghezza va misurata ORA che gli <input> sono davvero nel
+  // documento (con il font vero, ereditato) — prima di essere agganciati
+  // al DOM, "getComputedStyle" non avrebbe ancora il font giusto da
+  // misurare.
+  list.querySelectorAll(".home-word-input").forEach((input) => syncWordInputWidth(input));
 
   const resizeObserver = makeResizable(list, "home.list", LAYOUT.home);
 

@@ -134,7 +134,55 @@ const PROJECTS = [
       { caption: "", src: "images/stills/stills-16.jpg" },
     ],
   },
-  { slug: "tower", name: "Tower", description: ["Descrizione da definire per il progetto “Tower”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
+  {
+    slug: "tower",
+    name: "Tower",
+    description: ["Descrizione da definire per il progetto “Tower”."],
+    images: [
+      { caption: "", src: "images/tower/tower-1.jpg" },
+      { caption: "", src: "images/tower/tower-2.jpg" },
+    ],
+  },
+  {
+    slug: "bar",
+    name: "Bar",
+    description: ["Descrizione da definire per il progetto “Bar”."],
+    images: [
+      { caption: "", src: "images/bar/bar-1.jpg" },
+      { caption: "", src: "images/bar/bar-2.jpg" },
+    ],
+  },
+  {
+    slug: "fluoxetine",
+    name: "Fluoxetine",
+    description: ["Descrizione da definire per il progetto “Fluoxetine”."],
+    images: [{ caption: "", src: "images/fluoxetine/fluoxetine-1.jpg" }],
+  },
+  {
+    slug: "licking",
+    name: "Licking",
+    description: ["Descrizione da definire per il progetto “Licking”."],
+    images: [{ caption: "", src: "images/licking/licking-1.jpg" }],
+  },
+  {
+    slug: "moon",
+    name: "Moon",
+    description: ["Descrizione da definire per il progetto “Moon”."],
+    images: [{ caption: "", src: "images/moon/moon-1.jpg" }],
+  },
+  {
+    slug: "compression",
+    name: "Compression",
+    description: ["Descrizione da definire per il progetto “Compression”."],
+    images: [
+      { caption: "", src: "images/compression/compression-1.jpg" },
+      { caption: "", src: "images/compression/compression-2.jpg" },
+      { caption: "", src: "images/compression/compression-3.jpg" },
+      { caption: "", src: "images/compression/compression-4.jpg" },
+      { caption: "", src: "images/compression/compression-5.jpg" },
+      { caption: "", src: "images/compression/compression-6.jpg" },
+    ],
+  },
   {
     slug: "recognition",
     name: "Recognition",
@@ -223,7 +271,12 @@ const PROJECTS = [
       { caption: "", src: "images/estrangement/estrangement-6.jpg" },
     ],
   },
-  { slug: "plastic", name: "Plastic", description: ["Descrizione da definire per il progetto “Plastic”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
+  {
+    slug: "plastic",
+    name: "Plastic",
+    description: ["Descrizione da definire per il progetto “Plastic”."],
+    images: [{ caption: "", src: "images/plastic/plastic-1.jpg" }],
+  },
   { slug: "tech", name: "Tech", description: ["Descrizione da definire per il progetto “Tech”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   { slug: "pink", name: "Pink", description: ["Descrizione da definire per il progetto “Pink”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   {
