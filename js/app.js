@@ -280,10 +280,111 @@ function removeExtraImage(key, id) {
   clearPositionOverride(`${key}.captionPos.${id}`);
   clearPositionOverride(`${key}.imagePos.${id}`);
   clearSizeOverride(`${key}.image.${id}`);
+  clearUploadedImage(key, id);
 }
 
 function isExtraImageId(id) {
   return typeof id === "string" && id.startsWith("new-");
+}
+
+/* -------------------------------------------------------------------------
+   Foto caricate dal computer (click su "+" su un placeholder, o su una
+   voce senza foto vera): il sito è statico, non c'è un server a cui
+   mandarle, quindi la foto scelta viene ridotta (vedi
+   downscaleImageFile) e tenuta come data-URL solo nel browser di chi
+   l'ha caricata — una VERA anteprima, non solo un segnaposto colorato,
+   ma visibile solo a te finché non prendi il file vero (vedi il pulsante
+   "Scarica" nel pannello "Esporta modifiche") e lo carichi tu nel
+   repository al posto del placeholder.
+   ------------------------------------------------------------------------- */
+const UPLOADED_IMAGE_STORE_KEY = "site-uploaded-images-v1";
+
+function loadUploadedImages() {
+  try {
+    return JSON.parse(localStorage.getItem(UPLOADED_IMAGE_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function uploadedImagesFor(key) {
+  return loadUploadedImages()[key] || {};
+}
+
+function saveUploadedImage(key, photoId, dataUrl) {
+  const all = loadUploadedImages();
+  all[key] = all[key] || {};
+  all[key][photoId] = dataUrl;
+  try {
+    localStorage.setItem(UPLOADED_IMAGE_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    alert("La foto è troppo grande (o lo spazio del browser è pieno): riprova con un file più leggero.");
+  }
+}
+
+function clearUploadedImage(key, photoId) {
+  const all = loadUploadedImages();
+  if (!all[key] || !(photoId in all[key])) return;
+  delete all[key][photoId];
+  try {
+    localStorage.setItem(UPLOADED_IMAGE_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
+  }
+}
+
+// Ridimensiona/comprime l'immagine scelta prima di salvarla come data-URL:
+// una foto originale (anche 10+ MB) supererebbe rapidamente lo spazio che
+// il browser concede a localStorage (in genere 5-10 MB in tutto, condiviso
+// con OGNI altra modifica salvata su questo sito) e romperebbe l'intero
+// meccanismo di salvataggio, non solo la foto stessa.
+function downscaleImageFile(file, maxDim = 1400, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error("Lettura del file fallita"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("File non è un'immagine valida"));
+      img.onload = () => {
+        let { naturalWidth: width, naturalHeight: height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Un solo <input type="file"> nascosto, riusato per ogni "+": evita di
+// crearne uno diverso per ogni foto della galleria.
+let sharedUploadInput = null;
+function promptImageUpload(onDone) {
+  if (!sharedUploadInput) {
+    sharedUploadInput = el("input", { type: "file", accept: "image/*" });
+    sharedUploadInput.style.display = "none";
+    document.body.appendChild(sharedUploadInput);
+  }
+  sharedUploadInput.value = ""; // permette di riselezionare subito lo stesso file
+  sharedUploadInput.onchange = async () => {
+    const file = sharedUploadInput.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await downscaleImageFile(file);
+      onDone(dataUrl);
+    } catch (e) {
+      alert("Non sono riuscito a leggere questa immagine. Prova con un altro file.");
+    }
+  };
+  sharedUploadInput.click();
 }
 
 /* -------------------------------------------------------------------------
@@ -861,6 +962,18 @@ function describeCaptionKey(key) {
       : `Core archive, ${photoLabel(archiveCaptionMatch[1])}  →  aggiorna "caption" su quella voce di ARCHIVE.images`;
   }
 
+  const indexTextMatch = key.match(/^(?:project\.(.+)|(archive)|word\.(.+)|simple\.(.+))\.indexNumberText$/);
+  if (indexTextMatch) {
+    const where = indexTextMatch[1]
+      ? `Progetto "${indexTextMatch[1]}"`
+      : indexTextMatch[2]
+      ? "Core archive"
+      : indexTextMatch[3]
+      ? `Pagina-parola "${indexTextMatch[3]}"`
+      : `Pagina "${indexTextMatch[4]}"`;
+    return `${where}, numero mostrato in alto/in basso  →  solo un'etichetta visiva, nessun equivalente in content.js`;
+  }
+
   return key;
 }
 
@@ -886,6 +999,7 @@ function buildExportText() {
   const removedOverrides = loadRemovedOverrides();
   const extraOverrides = loadExtraImagesOverrides();
   const extraTextOverrides = loadExtraTextOverrides();
+  const uploadedOverrides = loadUploadedImages();
   const sizeKeys = Object.keys(sizeOverrides);
   const orderKeys = Object.keys(orderOverrides);
   const positionKeys = Object.keys(positionOverrides);
@@ -893,6 +1007,7 @@ function buildExportText() {
   const removedKeys = Object.keys(removedOverrides).filter((k) => removedOverrides[k].length);
   const extraKeys = Object.keys(extraOverrides).filter((k) => extraOverrides[k].length);
   const extraTextKeys = Object.keys(extraTextOverrides).filter((k) => extraTextOverrides[k].length);
+  const hasUploads = Object.keys(uploadedOverrides).some((k) => Object.keys(uploadedOverrides[k] || {}).length);
 
   if (
     !sizeKeys.length &&
@@ -901,7 +1016,8 @@ function buildExportText() {
     !captionKeys.length &&
     !removedKeys.length &&
     !extraKeys.length &&
-    !extraTextKeys.length
+    !extraTextKeys.length &&
+    !hasUploads
   ) {
     return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, × = elimina una foto, + = aggiungine una nuova, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
   }
@@ -990,10 +1106,46 @@ function buildExportText() {
   return lines.join("\n");
 }
 
+// Le foto caricate con "+" (vedi UPLOADED_IMAGE_STORE_KEY) restano solo
+// nel browser di chi le ha caricate: qui un link di download per ciascuna,
+// così puoi salvarle sul tuo computer e caricarle tu nel repository al
+// posto del placeholder — il testo dell'export non può contenerle (sono
+// dati binari, non testo).
+function buildUploadedPhotosSection() {
+  const all = loadUploadedImages();
+  const entries = [];
+  Object.keys(all).forEach((galleryKey) => {
+    Object.keys(all[galleryKey] || {}).forEach((photoId) => {
+      entries.push({ galleryKey, photoId, dataUrl: all[galleryKey][photoId] });
+    });
+  });
+  if (!entries.length) return null;
+
+  const list = el(
+    "ul",
+    { class: "export-uploads-list" },
+    entries.map((entry, i) => {
+      const filename = `${entry.galleryKey.replace(/[^\w-]+/g, "-")}-${entry.photoId}.jpg`;
+      const label = isExtraImageId(entry.photoId) ? "foto nuova" : photoLabel(entry.photoId);
+      const link = el("a", { href: entry.dataUrl, download: filename }, `Scarica — ${entry.galleryKey}, ${label}`);
+      return el("li", {}, [link]);
+    })
+  );
+  return el("div", { class: "export-uploads" }, [
+    el(
+      "p",
+      {},
+      `Hai ${entries.length} foto caricate ("+" su un placeholder), visibili solo in questo browser: scaricale e caricale tu nel repository al posto del placeholder per renderle permanenti.`
+    ),
+    list,
+  ]);
+}
+
 function openExportPanel() {
   const overlay = el("div", { class: "export-panel" });
   const textarea = el("textarea", { readonly: "readonly" });
   textarea.value = buildExportText();
+  const uploadsSection = buildUploadedPhotosSection();
 
   const copyBtn = el("button", {}, "Copia");
   const resetBtn = el("button", {}, "Reset modifiche");
@@ -1019,6 +1171,7 @@ function openExportPanel() {
     localStorage.removeItem(REMOVED_STORE_KEY);
     localStorage.removeItem(EXTRA_IMAGES_STORE_KEY);
     localStorage.removeItem(EXTRA_TEXT_STORE_KEY);
+    localStorage.removeItem(UPLOADED_IMAGE_STORE_KEY);
     location.reload();
   });
 
@@ -1027,12 +1180,17 @@ function openExportPanel() {
     if (e.target === overlay) overlay.remove();
   });
 
-  const inner = el("div", { class: "export-panel-inner" }, [
-    el("h2", {}, "Esporta modifiche"),
-    el("p", {}, "Queste sono le dimensioni e l'ordine che hai regolato trascinando. Copiali (o mandami questo testo in chat) per renderli permanenti sul sito pubblicato."),
-    textarea,
-    el("div", { class: "export-panel-actions" }, [copyBtn, resetBtn, closeBtn]),
-  ]);
+  const inner = el(
+    "div",
+    { class: "export-panel-inner" },
+    [
+      el("h2", {}, "Esporta modifiche"),
+      el("p", {}, "Queste sono le dimensioni e l'ordine che hai regolato trascinando. Copiali (o mandami questo testo in chat) per renderli permanenti sul sito pubblicato."),
+      textarea,
+      uploadsSection,
+      el("div", { class: "export-panel-actions" }, [copyBtn, resetBtn, closeBtn]),
+    ].filter(Boolean)
+  );
   overlay.appendChild(inner);
   document.body.appendChild(overlay);
 }
@@ -1049,7 +1207,7 @@ function ensureEditModeUI() {
 
   toggle.addEventListener("click", () => {
     document.body.classList.toggle("edit-mode");
-    document.querySelectorAll(".photo .caption-input, .home-word-input").forEach((input) => {
+    document.querySelectorAll(".photo .caption-input, .home-word-input, .topbar-index-input").forEach((input) => {
       input.readOnly = !isEditMode();
     });
   });
@@ -1356,8 +1514,27 @@ function renderHome() {
 // found) a parte i testi e il prefisso delle chiavi di posizione salvate:
 // costruita qui una sola volta invece che duplicata in renderGallery e
 // renderSimplePage.
-function buildTopbar(keyPrefix, indexText, titleText) {
-  const topbarIndexEl = el("span", { class: "topbar-index" }, indexText);
+function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange } = {}) {
+  // Il numero mostrato in alto era un testo fisso (sempre "1" su una
+  // pagina-parola, dato che parte sempre con una sola foto) — ora è un
+  // <input> scrivibile in modalità modifica, stesso meccanismo di
+  // didascalie/parole (si salva ad ogni tasto premuto, riusa lo stesso
+  // store). Sta DENTRO ".topbar-index" (che resta il contenitore su cui
+  // agganciare la maniglia verde) invece di essere lui stesso l'elemento
+  // spostabile: un <input> non può avere figli, quindi non potrebbe mai
+  // contenere la maniglia.
+  const indexKey = `${keyPrefix}.indexNumberText`;
+  const savedIndexText = loadCaptionOverrides()[indexKey];
+  const resolvedIndexText = savedIndexText != null ? savedIndexText : indexText;
+  const indexInput = el("input", { type: "text", class: "topbar-index-input", value: resolvedIndexText });
+  indexInput.readOnly = !isEditMode();
+  indexInput.addEventListener("input", () => {
+    const text = indexInput.value.trim();
+    if (text) saveCaptionOverride(indexKey, text);
+    else clearCaptionOverride(indexKey);
+    if (onIndexChange) onIndexChange(indexInput.value);
+  });
+  const topbarIndexEl = el("span", { class: "topbar-index" }, [indexInput]);
   const topbarTitleEl = el("span", { class: "topbar-title" }, titleText);
   const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
     el("span", {}), el("span", {}), el("span", {}),
@@ -1371,13 +1548,14 @@ function buildTopbar(keyPrefix, indexText, titleText) {
   makeMovableFree(hamburgerEl, `${keyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger", {
     defaultOffset: LAYOUT.gallery.hamburgerOffset,
   });
-  return el("div", { class: "topbar" }, [
+  const topbar = el("div", { class: "topbar" }, [
     el("div", { class: "topbar-row" }, [topbarIndexEl]),
     el("div", { class: "topbar-row" }, [
       topbarTitleEl,
       hamburgerEl,
     ]),
   ]);
+  return { topbar, resolvedIndexText };
 }
 
 function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav, galleryKey }) {
@@ -1396,7 +1574,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // due lo sappia.
   const sizeKeyPrefix = galleryKey;
 
-  const topbar = buildTopbar(sizeKeyPrefix, String(indexNumber), title);
+  let bottomIndexEl; // assegnato più sotto, ma la callback lo usa solo su un futuro "input" dell'utente
+  const { topbar, resolvedIndexText } = buildTopbar(sizeKeyPrefix, String(indexNumber), title, {
+    onIndexChange: (text) => { if (bottomIndexEl) bottomIndexEl.textContent = text; },
+  });
 
   // Il testo scorre SEMPRE, lentissimo — un movimento ambientale continuo,
   // non solo un modo per non perdere contenuto: anche quando il blocco è
@@ -1511,15 +1692,32 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     });
     const addBtn = el(
       "button",
-      { type: "button", class: "photo-add-btn", title: "Aggiungi una nuova foto qui accanto", "aria-label": "Aggiungi una nuova foto" },
+      {
+        type: "button",
+        class: "photo-add-btn",
+        title: image._isPlaceholder ? "Carica una foto per questo segnaposto" : "Carica una nuova foto qui accanto",
+        "aria-label": "Carica una foto",
+      },
       "+"
     );
     addBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       if (!isEditMode()) return;
-      addExtraImage(sizeKeyPrefix);
-      renderRoute();
+      // Se la foto attuale è un segnaposto (nessun "src" reale, né già
+      // caricato), il "+" carica un file per RIEMPIRE proprio questo
+      // segnaposto; altrimenti si comporta come prima e ne aggiunge uno
+      // nuovo subito dopo, già con la foto scelta dentro (non più un
+      // segnaposto vuoto da riempire con un secondo clic).
+      promptImageUpload((dataUrl) => {
+        if (image._isPlaceholder) {
+          saveUploadedImage(sizeKeyPrefix, origIndex, dataUrl);
+        } else {
+          const newId = addExtraImage(sizeKeyPrefix);
+          saveUploadedImage(sizeKeyPrefix, newId, dataUrl);
+        }
+        renderRoute();
+      });
     });
     frame.appendChild(deleteBtn);
     frame.appendChild(addBtn);
@@ -1532,7 +1730,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
-  const bottomIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
+  bottomIndexEl = el("span", { class: "topbar-index" }, resolvedIndexText);
   // Un tentativo di allinearlo automaticamente alla stessa colonna del
   // numero in alto si è rivelato fragile (se il numero in alto è stato a
   // sua volta trascinato in precedenza, l'allineamento "automatico" non
@@ -2001,14 +2199,22 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 // sia per un progetto sia per core archive, quindi factorizzata qui.
 function applyImageOverrides(galleryKey, seed, images) {
   const removed = removedIdsFor(galleryKey);
-  const kept = images.filter((img) => !removed.includes(`orig:${img._index}`));
+  const uploaded = uploadedImagesFor(galleryKey);
+  const kept = images
+    .filter((img) => !removed.includes(`orig:${img._index}`))
+    .map((img) => {
+      const uploadedSrc = uploaded[img._index];
+      return uploadedSrc ? { ...img, _src: uploadedSrc, _isPlaceholder: false } : { ...img, _isPlaceholder: !img.src };
+    });
   extraImagesFor(galleryKey).forEach((extra) => {
+    const uploadedSrc = uploaded[extra.id];
     kept.push({
       caption: "",
       src: null,
       _index: extra.id,
       _extra: true,
-      _src: placeholderImg(`${seed}-${extra.id}`, "nuova foto"),
+      _isPlaceholder: !uploadedSrc,
+      _src: uploadedSrc || placeholderImg(`${seed}-${extra.id}`, "nuova foto"),
     });
   });
   return kept;
@@ -2102,7 +2308,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   ensureEditModeUI();
 
   const simpleKeyPrefix = `simple.${title.toLowerCase()}`;
-  const topbar = buildTopbar(simpleKeyPrefix, "", title.toLowerCase());
+  const { topbar } = buildTopbar(simpleKeyPrefix, "", title.toLowerCase());
 
   const body = el("div", { class: "description simple-page" }, [
     ...paragraphs.map((p) => el("p", {}, p)),
