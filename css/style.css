@@ -144,28 +144,23 @@ body.edit-mode .home-add-word-btn:hover {
   background: #38995e;
 }
 
-/* Una "parola" aggiunta in home: stesso principio della didascalia di una
-   foto — un <input> sempre presente e trascinabile, invisibile come
-   contenitore (bordo/sfondo solo in modalità modifica) finché non ci
-   scrivi dentro. */
-.home-word-box {
-  position: relative;
-  display: inline-block;
-  margin: 12px 0;
-}
-
-.home-word-box .move-handle {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-}
-
+/* Una "parola" aggiunta in home: è una riga della STESSA lista dei
+   progetti (<li class="home-word-row">, dentro .home-list) — non più un
+   blocco a posizione libera. Così si riordina con l'identica maniglia blu
+   ⠿ usata per i nomi dei progetti (vedi "body.edit-mode .home-list li"
+   più sotto per il layout flex condiviso), e trascinarla sposta
+   davvero le righe vicine invece di limitarsi a sovrapporlesi: è
+   esattamente il "creare spazio tra le parole" che serviva. L'<input>
+   stesso è invisibile come contenitore (bordo/sfondo solo in modalità
+   modifica) finché non ci scrivi dentro, e usa lo STESSO font della lista
+   (Inter, non il monospace delle didascalie: qui non è una didascalia). */
 .home-word-input {
-  display: block;
+  display: inline-block;
   min-width: 140px;
-  padding: 6px 10px;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  padding: 2px 8px;
+  font-family: inherit;
   font-size: 0.95rem;
+  font-weight: 600;
   color: var(--ink);
   background: transparent;
   border: 1px solid transparent;
@@ -188,6 +183,7 @@ body.edit-mode .home-word-input {
 body.edit-mode .home-word-input::placeholder {
   color: var(--muted);
   font-style: italic;
+  font-weight: 400;
 }
 
 body.edit-mode .home-word-input:focus {
@@ -197,20 +193,17 @@ body.edit-mode .home-word-input:focus {
 
 .home-word-delete-btn {
   display: none;
-  position: absolute;
-  top: 4px;
-  right: 30px;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   border: 2px solid var(--paper);
   color: var(--paper);
   background: #8a3b2b;
   font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
-  z-index: 3;
+  flex: 0 0 auto;
   padding: 0;
 }
 
