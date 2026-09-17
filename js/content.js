@@ -41,15 +41,42 @@ const LAYOUT = {
     listHeight: "auto",
   },
   gallery: {
-    // Larghezza di default del blocco di descrizione sopra le foto.
-    descriptionWidth: "620px",
-    // Le foto NON hanno più una larghezza/altezza di default qui: finché
-    // non le tocchi hanno tutte la STESSA ALTEZZA, calcolata automatica-
-    // mente da app.js in base allo spazio che resta libero sotto il testo
-    // (si aggiorna da sola se il testo cambia altezza o la finestra viene
+    // Larghezza/altezza di default del blocco di descrizione sopra le
+    // foto, e di quanto lo sposti dalla sua posizione naturale — presi
+    // dall'impaginazione scelta per "lines" e resi lo standard per ogni
+    // galleria (progetto o core archive). Un progetto può sovrascriverli
+    // con "descriptionBox: { width, height, offset: { x, y } }".
+    descriptionWidth: "700px",
+    descriptionHeight: "380px",
+    descriptionOffset: { x: 0, y: 140 },
+    // Le foto NON hanno una larghezza/altezza di default qui: finché non
+    // le tocchi hanno tutte la STESSA ALTEZZA, calcolata automaticamente
+    // da app.js in base allo spazio che resta libero sotto il testo (si
+    // aggiorna da sola se il testo cambia altezza o la finestra viene
     // ridimensionata). Vuoi una foto diversa dalle altre? Aggiungi
     // "width"/"height" su quella singola voce di "images" (vedi esempio
     // in "lines" qui sotto), o trascina le sue maniglie rosse.
+    //
+    // "imageOffset"/"captionOffset" invece SONO uno spostamento di
+    // default (stesso "lines"): ogni foto/didascalia parte già spostata
+    // così, a meno che quella singola voce di "images" non abbia il suo
+    // proprio "offset"/"captionOffset" (vedi esempio in "lines").
+    imageOffset: { x: 0, y: 300 },
+    captionOffset: { x: 80, y: 360 },
+    // Posizione di default della "cornice" della pagina (numero e titolo
+    // in alto, hamburger, numero in basso vicino alle frecce) — uguale
+    // per ogni galleria, così tutte le pagine hanno la stessa impagina-
+    // zione di "lines" senza doverla ritrascinare una per una.
+    topbarIndexOffset: { x: 120, y: 20 },
+    topbarTitleOffset: { x: 120, y: 80 },
+    bottomIndexOffset: { x: -180, y: 0 },
+    hamburgerOffset: { x: 0, y: -20 },
+    // Altezza di default dei due spazi vuoti trascinabili (prima delle
+    // frecce, e in fondo alla pagina) — 0 = invisibili finché non li
+    // trascini tu; qui invece partono già con un po' d'aria, come in
+    // "lines".
+    spacerBeforeBarHeight: "100px",
+    spacerBottomHeight: "40px",
   },
 };
 
@@ -62,23 +89,23 @@ const PROJECTS = [
       "I shoot on film, which slows the process down and changes what I notice. Light and grain do work that description can't.",
       "Each image is a single encounter with a specific place and a specific quality of light. As for my stills, they form a growing archive, i will endlessly keep returning to.",
     ],
-    // descriptionBox: { width: "620px" },  // <- decommenta per sovrascrivere LAYOUT.gallery.descriptionWidth per questo solo progetto
+    // Nessuna "descriptionBox" qui: la dimensione/posizione di questo
+    // blocco è ormai quella di default in LAYOUT.gallery (presa proprio
+    // da qui) — se un giorno la vuoi diversa SOLO per "lines", aggiungi
+    // "descriptionBox: { width, height, offset: { x, y } }".
     images: [
-      { caption: "house, norway", src: "images/lines/lines-1.jpg" },
-      { caption: "winery, sicily", src: "images/lines/lines-2.jpg" },
-      { caption: "church", src: "images/lines/lines-3.jpg" },
-      { caption: "cement", src: "images/lines/lines-4.jpg" },
-      { caption: "mountain pasture", src: "images/lines/lines-5.jpg" },
-      { caption: "armenia", src: "images/lines/lines-6.jpg" },
-      { caption: "unfinished", src: "images/lines/lines-7.jpg" },
-      { caption: "fields", src: "images/lines/lines-8.jpg" },
-      { caption: "athens", src: "images/lines/lines-9.jpg" },
-      { caption: "pillar", src: "images/lines/lines-10.jpg" },
-      { caption: "door and window", src: "images/lines/lines-11.jpg" },
-      { caption: "landscape", src: "images/lines/lines-12.jpg" },
-      { caption: "cypress", src: "images/lines/lines-13.jpg" },
-      // Esempio di dimensioni personalizzate per una singola foto:
-      // { caption: "cypress", src: "images/lines/lines-13.jpg", width: "480px", height: "600px" },
+      { caption: "house, norway", src: "images/lines/lines-1.jpg", width: "480px", height: "673px", captionOffset: { x: 100, y: 360 } },
+      { caption: "sky", src: "images/lines/lines-2.jpg", width: "440px", height: "630px" },
+      { caption: "winery, sicily", src: "images/lines/lines-4.jpg", captionOffset: { x: 80, y: 380 } },
+      { caption: "church", src: "images/lines/lines-5.jpg", width: "440px", height: "622px" },
+      { caption: "olympus", src: "images/lines/lines-6.jpg", width: "520px", height: "599px", captionOffset: { x: 100, y: 360 } },
+      { caption: "syros", src: "images/lines/lines-7.jpg", width: "520px", height: "590px" },
+      { caption: "unfinished", src: "images/lines/lines-8.jpg" },
+      { caption: "mountain pasture", src: "images/lines/lines-9.jpg", width: "480px", height: "568px" },
+      { caption: "cable", src: "images/lines/lines-10.jpg", width: "420px", height: "663px", offset: { x: 120, y: 300 }, captionOffset: { x: -120, y: 400 } },
+      { caption: "field", src: "images/lines/lines-11.jpg", width: "460px", height: "575px", captionOffset: { x: 100, y: 360 } },
+      { caption: "unknown", src: "images/lines/lines-12.jpg" },
+      { caption: "emst", src: "images/lines/lines-13.jpg", width: "480px", height: "640px" },
     ],
   },
   {
