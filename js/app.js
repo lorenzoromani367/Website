@@ -1121,6 +1121,10 @@ function buildExportText() {
     removedKeys.forEach((key) => {
       lines.push(`# ${describeRemovedKey(key)}`);
       removedOverrides[key].forEach((uid) => {
+        if (uid === "description") {
+          lines.push(`  blocco di testo (descrizione)  →  togli "description" da quel progetto in PROJECTS`);
+          return;
+        }
         const idMatch = uid.match(/^orig:(.+)$/);
         if (idMatch) lines.push(`  ${photoLabel(idMatch[1])}`);
       });
@@ -1636,6 +1640,12 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // scriverebbero a vicenda le foto/didascalie senza che nessuna delle
   // due lo sappia.
   const sizeKeyPrefix = galleryKey;
+  // Riusa lo stesso meccanismo delle foto eliminate (REMOVED_STORE_KEY):
+  // "description" è un id speciale, non un indice di foto, per la stessa
+  // galleria — un blocco di testo tolto così non torna più finché non fai
+  // "Reset modifiche" (nessun altro modo di recuperarlo, stessa scelta già
+  // fatta per le foto).
+  const descriptionRemoved = removedIdsFor(sizeKeyPrefix).includes("description");
 
   let bottomIndexEl; // assegnato più sotto, ma la callback lo usa solo su un futuro "input" dell'utente
   const { topbar, resolvedIndexText } = buildTopbar(sizeKeyPrefix, String(indexNumber), title, {
@@ -1666,6 +1676,20 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo", {
     defaultOffset: (descriptionBox && descriptionBox.offset) || LAYOUT.gallery.descriptionOffset,
   });
+  const descDeleteBtn = el(
+    "button",
+    { type: "button", class: "description-delete-btn", title: "Elimina il blocco di testo", "aria-label": "Elimina il blocco di testo" },
+    "×"
+  );
+  descDeleteBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isEditMode()) return;
+    if (!confirm("Eliminare il blocco di testo della descrizione?")) return;
+    markImageRemoved(sizeKeyPrefix, "description");
+    renderRoute();
+  });
+  descBlock.appendChild(descDeleteBtn);
 
   const captionOverrides = loadCaptionOverrides();
 
@@ -1826,7 +1850,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   );
 
   app.appendChild(topbar);
-  app.appendChild(descBlock);
+  if (!descriptionRemoved) app.appendChild(descBlock);
   app.appendChild(viewport);
   app.appendChild(spacerBeforeBar);
   app.appendChild(footerBar);
