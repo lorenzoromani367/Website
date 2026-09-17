@@ -613,7 +613,7 @@ function clearCaptionOverride(key) {
 // sempre al punto di partenza — sembrava "magnetico"/rotto. Qui invece
 // qualunque trascinamento, anche piccolo, sposta la foto esattamente lì
 // e ce la lascia.
-function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, defaultOffset } = {}) {
+function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, defaultOffset, dualHandles } = {}) {
   if (!node.style.position) node.style.position = "relative";
 
   // "defaultOffset" è la posizione di partenza quando non hai ancora
@@ -623,37 +623,46 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
   const pos = Object.assign({ x: 0, y: 0 }, defaultOffset, loadPositionOverrides()[key]);
   if (pos.x || pos.y) node.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
 
-  const handle = el("div", { class: "move-handle free-move", title });
-  node.appendChild(handle);
-  // Se "node" è (o sta dentro) un link — l'hamburger, es. — un clic sulla
-  // maniglia senza spostamento (o al rilascio dopo un trascinamento)
-  // farebbe comunque scattare la navigazione di default del link, dato
-  // che pointerdown.preventDefault() non annulla anche il "click" che
-  // arriva dopo. Va annullato qui, sul click stesso.
-  handle.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  });
-
   let dragState = null;
+  let activeHandle = null;
 
-  handle.addEventListener("pointerdown", (e) => {
-    if (!isEditMode()) return;
-    // Se dentro "node" c'è un testo in modifica (es. la didascalia) con
-    // ancora il cursore attivo, va salvato ORA: il preventDefault() qui
-    // sotto impedisce anche lo sfocamento naturale che cliccando altrove
-    // lo salverebbe da solo, quindi iniziare subito a trascinare senza
-    // prima aver cliccato via avrebbe perso quello che hai appena scritto.
-    if (document.activeElement && document.activeElement !== handle && node.contains(document.activeElement)) {
-      document.activeElement.blur();
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    dragState = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y };
-    handle.classList.add("is-dragging");
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
-  });
+  // "dualHandles" aggiunge una seconda maniglia speculare (a sinistra,
+  // classe "move-handle-left" per il posizionamento CSS) — utile per le
+  // didascalie, dove a seconda di dove le trascini quella di destra può
+  // finire scomoda da raggiungere. Le due maniglie condividono lo stesso
+  // trascinamento: quale delle due parte non fa differenza.
+  function createHandle(extraClass) {
+    const h = el("div", { class: `move-handle free-move${extraClass ? ` ${extraClass}` : ""}`, title });
+    node.appendChild(h);
+    // Se "node" è (o sta dentro) un link — l'hamburger, es. — un clic sulla
+    // maniglia senza spostamento (o al rilascio dopo un trascinamento)
+    // farebbe comunque scattare la navigazione di default del link, dato
+    // che pointerdown.preventDefault() non annulla anche il "click" che
+    // arriva dopo. Va annullato qui, sul click stesso.
+    h.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    h.addEventListener("pointerdown", (e) => {
+      if (!isEditMode()) return;
+      // Se dentro "node" c'è un testo in modifica (es. la didascalia) con
+      // ancora il cursore attivo, va salvato ORA: il preventDefault() qui
+      // sotto impedisce anche lo sfocamento naturale che cliccando altrove
+      // lo salverebbe da solo, quindi iniziare subito a trascinare senza
+      // prima aver cliccato via avrebbe perso quello che hai appena scritto.
+      if (document.activeElement && document.activeElement !== h && node.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      activeHandle = h;
+      dragState = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y };
+      h.classList.add("is-dragging");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+    return h;
+  }
 
   function onPointerMove(e) {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
@@ -665,12 +674,16 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
 
   function onPointerUp(e) {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
-    handle.classList.remove("is-dragging");
+    if (activeHandle) activeHandle.classList.remove("is-dragging");
+    activeHandle = null;
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
     dragState = null;
     savePositionOverride(key, { x: pos.x, y: pos.y });
   }
+
+  createHandle();
+  if (dualHandles) createHandle("move-handle-left");
 
   return {
     reset() {
@@ -1334,6 +1347,27 @@ function makeLightboxResizable(frame, img, { onResizeEnd } = {}) {
   });
 }
 
+// Apertura/chiusura di un lightbox (foto o testo) con una breve dissolvenza
+// + leggero ingrandimento invece di comparire/sparire di scatto — vedi
+// ".lightbox.is-open" in style.css. Il doppio requestAnimationFrame serve
+// perché il browser deve prima dipingere lo stato INIZIALE (opacità 0)
+// prima che aggiungere la classe scateni davvero la transizione: farlo
+// nello stesso frame in cui l'elemento viene creato la salterebbe del
+// tutto (nessuna dissolvenza visibile).
+const LIGHTBOX_FADE_MS = 220;
+
+function animateLightboxOpen(overlay) {
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add("is-open")));
+}
+
+function closeLightboxOverlay(overlay, cleanup) {
+  if (overlay.classList.contains("is-closing")) return;
+  overlay.classList.add("is-closing");
+  overlay.classList.remove("is-open");
+  if (cleanup) cleanup();
+  setTimeout(() => overlay.remove(), LIGHTBOX_FADE_MS);
+}
+
 function openLightbox(src, alt) {
   const img = el("img", { src, alt: alt || "" });
   const frame = el("div", { class: "lightbox-frame" }, [img]);
@@ -1379,9 +1413,10 @@ function openLightbox(src, alt) {
   makeLightboxResizable(frame, img, { onResizeEnd: () => { justResized = true; } });
 
   function close() {
-    overlay.remove();
-    window.removeEventListener("resize", onWindowResize);
-    document.removeEventListener("keydown", onKeydown);
+    closeLightboxOverlay(overlay, () => {
+      window.removeEventListener("resize", onWindowResize);
+      document.removeEventListener("keydown", onKeydown);
+    });
   }
   function onKeydown(e) {
     if (e.key === "Escape") close();
@@ -1399,6 +1434,39 @@ function openLightbox(src, alt) {
 
   overlay.appendChild(closeBtn);
   document.body.appendChild(overlay);
+  animateLightboxOpen(overlay);
+}
+
+// Stesso "zoom" delle foto, applicato al blocco di testo che scorre in
+// verticale: click fuori dalla modalità modifica apre il testo per
+// intero, ingrandito, in un overlay identico (stessa dissolvenza, stesso
+// "click ovunque per chiudere", stesso tasto Esc) — solo il contenuto
+// cambia (testo invece di un'immagine).
+function openTextLightbox(paragraphs) {
+  const textBox = el(
+    "div",
+    { class: "lightbox-text" },
+    paragraphs.map((p) => el("p", {}, p))
+  );
+  const overlay = el("div", { class: "lightbox lightbox-text-overlay" }, [textBox]);
+  const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
+
+  function close() {
+    closeLightboxOverlay(overlay, () => {
+      document.removeEventListener("keydown", onKeydown);
+    });
+  }
+  function onKeydown(e) {
+    if (e.key === "Escape") close();
+  }
+
+  overlay.addEventListener("click", () => close());
+  closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
+  document.addEventListener("keydown", onKeydown);
+
+  overlay.appendChild(closeBtn);
+  document.body.appendChild(overlay);
+  animateLightboxOpen(overlay);
 }
 
 function makeZoomable(frame, img) {
@@ -1732,6 +1800,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         // resterebbe tagliato da "overflow: hidden" finché non la rilasci.
         onMove: () => { if (i === current) updateViewportHeight(); },
         defaultOffset: image.captionOffset || LAYOUT.gallery.captionOffset,
+        dualHandles: true,
       }
     );
 
@@ -1872,6 +1941,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let marqueeDragState = null;
   let marqueeRafId = null;
   let marqueeHoverPaused = false;
+  let marqueeJustDragged = false;
 
   const measureMarqueeDistance = () => {
     marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
@@ -1932,7 +2002,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   descTrack.addEventListener("pointerdown", (e) => {
     if (isEditMode()) return;
     e.preventDefault();
-    marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos };
+    marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos, moved: false };
     descTrack.classList.add("is-dragging");
     document.addEventListener("pointermove", onMarqueeDragMove);
     document.addEventListener("pointerup", onMarqueeDragEnd);
@@ -1940,6 +2010,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function onMarqueeDragMove(e) {
     if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
     const dy = e.clientY - marqueeDragState.startY;
+    // Oltre pochi pixel è un vero trascinamento (scorri il testo a mano),
+    // non un semplice clic — serve per non aprire anche lo zoom subito
+    // dopo aver rilasciato, vedi il listener "click" su descBlock più sotto.
+    if (Math.abs(dy) > 5) marqueeDragState.moved = true;
     // trascinare verso il basso "torna indietro" nel testo (come si
     // trascina un foglio per rivelare quello che c'è sopra); verso
     // l'alto avanza — coerente con lo scorrimento automatico dall'alto
@@ -1951,10 +2025,24 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
   function onMarqueeDragEnd(e) {
     if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+    if (marqueeDragState.moved) marqueeJustDragged = true;
     marqueeDragState = null;
     descTrack.classList.remove("is-dragging");
     document.removeEventListener("pointermove", onMarqueeDragMove);
     document.removeEventListener("pointerup", onMarqueeDragEnd);
+  }
+
+  // Stesso zoom delle foto (vedi makeZoomable), sul blocco di testo: un
+  // clic vero e proprio (non il rilascio di un trascinamento — vedi
+  // "marqueeJustDragged" sopra, stesso principio di "justResized" nel
+  // lightbox delle foto) lo apre ingrandito. Niente zoom se il progetto
+  // non ha proprio testo (pagine-parola, per ora).
+  if (description && description.length) {
+    descBlock.addEventListener("click", () => {
+      if (isEditMode()) return;
+      if (marqueeJustDragged) { marqueeJustDragged = false; return; }
+      openTextLightbox(description);
+    });
   }
 
   /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----

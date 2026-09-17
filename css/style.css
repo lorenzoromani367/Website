@@ -1,11 +1,11 @@
 /* ==========================================================================
-   TYPE — Inter (SIL OFL, uso libero anche commerciale/web)
+   TYPE — Strichpunkt Sans (SIL OFL, uso libero anche commerciale/web)
    ========================================================================== */
 @font-face {
-  font-family: "Inter";
+  font-family: "Strichpunkt Sans";
   src:
-    url("../fonts/Inter-Regular.woff2") format("woff2"),
-    url("../fonts/Inter-Regular.ttf") format("truetype");
+    url("../fonts/StrichpunktSans-Regular.woff2") format("woff2"),
+    url("../fonts/StrichpunktSans-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -20,7 +20,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Inter", Helvetica, Arial, sans-serif;
+  font-family: "Strichpunkt Sans", Helvetica, Arial, sans-serif;
   font-weight: 600;
   -webkit-font-smoothing: antialiased;
 }
@@ -46,11 +46,14 @@ button {
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
   --transition-ms: 6000ms;
-  /* Curva simmetrica di accelerazione/decelerazione (ease-in-out
-     pronunciata): parte e arriva più morbida della "ease" di default
-     (che parte quasi a velocità piena), a parità di durata — più fluida,
-     non più veloce. */
-  --transition-ease: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Un ease-in-out marcato (provato prima) si sente come due fasi
+     diverse — parte lenta, poi "accelera" verso metà corsa: è la sua
+     stessa natura (rallenta-accelera-rallenta), non un difetto, ma non è
+     il movimento "unico e fluido" richiesto. Velocità costante dall'inizio
+     alla fine invece non cambia mai ritmo: a 6 secondi di durata si sente
+     comunque morbido (non brusco come uno scatto), semplicemente senza
+     nessuna fase percepibile. */
+  --transition-ease: linear;
 }
 
 .mono {
@@ -478,6 +481,14 @@ body.edit-mode .topbar-index-input:focus {
   right: 4px;
 }
 
+/* Maniglia gemella a sinistra: la didascalia si trascina anche da lì,
+   utile quando quella di destra finisce fuori mano dopo uno spostamento. */
+.caption-box .move-handle-left {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+}
+
 .caption-input {
   display: block;
   width: 240px;
@@ -574,6 +585,24 @@ body.edit-mode .caption-input:focus {
   justify-content: center;
   padding: 48px;
   cursor: zoom-out;
+  /* Dissolvenza + leggero ingrandimento all'apertura/chiusura invece di
+     comparire/sparire di scatto (vedi animateLightboxOpen/
+     closeLightboxOverlay in app.js) — durata breve apposta: deve
+     restare uno zoom "meno improvviso", non un'attesa. */
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.lightbox.is-open {
+  opacity: 1;
+}
+
+/* Mentre sfuma in chiusura non deve più intercettare i click: resta a
+   schermo intero nel DOM per 220ms (vedi closeLightboxOverlay in app.js)
+   solo per far vedere la dissolvenza, non per bloccare un click successivo
+   sulla foto sotto. */
+.lightbox.is-closing {
+  pointer-events: none;
 }
 
 /* La dimensione la decide chi guarda il sito trascinando la maniglia
@@ -586,6 +615,12 @@ body.edit-mode .caption-input:focus {
    non possono avere figli visibili al loro interno. */
 .lightbox-frame {
   position: relative;
+  transform: scale(0.96);
+  transition: transform 220ms ease;
+}
+
+.lightbox.is-open .lightbox-frame {
+  transform: scale(1);
 }
 
 .lightbox-frame img {
@@ -631,6 +666,34 @@ body.edit-mode .caption-input:focus {
 
 .lightbox-close:hover {
   opacity: 1;
+}
+
+/* Zoom sul testo (stesso overlay scuro delle foto, vedi openTextLightbox
+   in app.js): allineato in alto invece che centrato in verticale, e con
+   scroll proprio, per un testo più lungo dell'altezza dello schermo — al
+   contrario di una foto, che ha sempre una sola "misura naturale" nota in
+   anticipo, qui non possiamo sapere quanto sarà lungo. */
+.lightbox-text-overlay {
+  align-items: flex-start;
+  overflow-y: auto;
+}
+
+.lightbox-text {
+  max-width: 700px;
+  margin: 40px auto;
+  font-size: 1.25rem;
+  line-height: 1.7;
+  color: var(--paper);
+  transform: scale(0.96);
+  transition: transform 220ms ease;
+}
+
+.lightbox.is-open .lightbox-text {
+  transform: scale(1);
+}
+
+.lightbox-text p + p {
+  margin-top: 1.1em;
 }
 
 @media (max-width: 700px) {
