@@ -132,15 +132,54 @@ function saveOrderOverride(key, order) {
 // L'ordine dei progetti in home (e quindi anche dei "progetto precedente/
 // successivo" nelle frecce), se è stato cambiato trascinando; altrimenti
 // l'ordine originale di content.js.
-function getOrderedProjects() {
-  const order = loadOrderOverrides()["home.order"];
-  if (!order) return PROJECTS.slice();
-  const bySlug = new Map(PROJECTS.map((p) => [p.slug, p]));
-  const ordered = order.map((slug) => bySlug.get(slug)).filter(Boolean);
-  PROJECTS.forEach((p) => {
-    if (!ordered.includes(p)) ordered.push(p); // progetti nuovi non ancora nell'ordine salvato
+// Sequenza COMBINATA della lista in home: nomi di progetto E parole
+// aggiunte con "+", intrecciati nell'ordine in cui li vedi — una riga per
+// voce, ognuna taggata "p:slug" (progetto) o "w:id" (parola). Prima c'erano
+// due meccanismi separati: un ordine "solo progetti" (riordino a
+// trascinamento) e un posizionamento libero a pixel per le parole — così
+// una parola non poteva mai inserirsi TRA due nomi (poteva solo
+// sovrapporsi, mai spostare gli altri per fare spazio). Un'unica lista,
+// un solo meccanismo di riordino (la stessa maniglia blu ⠿ di sempre),
+// risolve il problema alla radice: trascinare una riga qualunque, parola
+// compresa, sposta davvero le altre.
+const HOME_ROWS_KEY = "home.rows";
+
+function getHomeRows() {
+  const orderOverrides = loadOrderOverrides();
+  const projectSlugs = PROJECTS.map((p) => p.slug);
+  const projectSlugSet = new Set(projectSlugs);
+  const wordIds = extraTextFor("home").map((w) => w.id);
+  const wordIdSet = new Set(wordIds);
+
+  const saved = orderOverrides[HOME_ROWS_KEY];
+  let rows;
+  if (saved) {
+    rows = saved.filter((tag) => {
+      const id = tag.slice(2);
+      return tag.startsWith("p:") ? projectSlugSet.has(id) : wordIdSet.has(id);
+    });
+  } else {
+    // Migrazione una tantum dal vecchio ordine "solo progetti".
+    const legacyOrder = orderOverrides["home.order"];
+    rows = (legacyOrder && legacyOrder.length ? legacyOrder : projectSlugs)
+      .filter((slug) => projectSlugSet.has(slug))
+      .map((slug) => `p:${slug}`);
+  }
+  projectSlugs.forEach((slug) => {
+    if (!rows.includes(`p:${slug}`)) rows.push(`p:${slug}`); // progetti nuovi in content.js, non ancora in "rows"
   });
-  return ordered;
+  wordIds.forEach((id) => {
+    if (!rows.includes(`w:${id}`)) rows.push(`w:${id}`); // parole appena aggiunte con "+"
+  });
+  return rows;
+}
+
+function getOrderedProjects() {
+  const bySlug = new Map(PROJECTS.map((p) => [p.slug, p]));
+  return getHomeRows()
+    .filter((tag) => tag.startsWith("p:"))
+    .map((tag) => bySlug.get(tag.slice(2)))
+    .filter(Boolean);
 }
 
 // L'ordine delle foto di una galleria (progetto o archivio), come array di
@@ -750,6 +789,10 @@ function describeOverrideKey(key) {
 function describeOrderKey(key) {
   if (key === "home.order") return `Home  →  riordina l'array PROJECTS in content.js mettendo i progetti in quest'ordine`;
 
+  if (key === "home.rows") {
+    return `Home  →  sequenza combinata di progetti ("p:slug") e parole aggiunte ("w:id"): riordina PROJECTS in content.js seguendo solo le voci "p:", ignorando quelle "w:" (le parole non hanno un campo in content.js, vedi === PAROLE HOME === più sotto per il loro testo)`;
+  }
+
   const imgOrderMatch = key.match(/^project\.(.+)\.imageOrder$/);
   if (imgOrderMatch) return `Progetto "${imgOrderMatch[1]}"  →  riordina l'array "images" mettendo le foto in quest'ordine (0 = prima foto originale, 1 = seconda, ...)`;
 
@@ -1206,43 +1249,27 @@ function renderHome() {
     el("span", { class: "author" }, SITE.author),
   ]);
 
-  const orderedProjects = getOrderedProjects();
-  const listItems = orderedProjects.map((p) =>
-    el("li", {}, [el("a", { href: `#/project/${p.slug}` }, p.name)])
-  );
-  const list = el("ul", { class: "home-list" }, listItems);
+  // Una riga per ogni progetto O parola aggiunta con "+", nell'ordine
+  // combinato di getHomeRows() — vedi il commento lì sopra sul perché non
+  // sono più due meccanismi separati.
+  const projectBySlug = new Map(PROJECTS.map((p) => [p.slug, p]));
+  const wordTextById = new Map(extraTextFor("home").map((w) => [w.id, w.text]));
+  const rows = getHomeRows();
 
-  listItems.forEach((li) => {
-    makeReorderable(li, {
-      container: list,
-      axis: "y",
-      onReorder: (from, to) => {
-        const order = orderedProjects.map((p) => p.slug);
-        const [moved] = order.splice(from, 1);
-        order.splice(to, 0, moved);
-        saveOrderOverride("home.order", order);
-        renderRoute();
-      },
-    });
-  });
-
-  // Parole extra: vedi il commento su EXTRA_TEXT_STORE_KEY più in alto.
-  const addWordBtn = el("button", { type: "button", class: "home-add-word-btn" }, "+ aggiungi una parola");
-  addWordBtn.addEventListener("click", () => {
-    if (!isEditMode()) return;
-    addExtraText("home");
-    renderRoute();
-  });
-
-  const wordBoxes = extraTextFor("home").map((word) => {
+  const listItems = rows.map((tag) => {
+    const id = tag.slice(2);
+    if (tag.startsWith("p:")) {
+      const project = projectBySlug.get(id);
+      return el("li", {}, [el("a", { href: `#/project/${project.slug}` }, project.name)]);
+    }
     const input = el("input", {
       type: "text",
       class: "home-word-input",
       placeholder: "scrivi qui",
-      value: word.text,
+      value: wordTextById.get(id) || "",
     });
     input.readOnly = !isEditMode();
-    input.addEventListener("input", () => saveExtraTextContent("home", word.id, input.value));
+    input.addEventListener("input", () => saveExtraTextContent("home", id, input.value));
     const deleteBtn = el(
       "button",
       { type: "button", class: "home-word-delete-btn", title: "Elimina questa parola", "aria-label": "Elimina questa parola" },
@@ -1252,12 +1279,36 @@ function renderHome() {
       e.preventDefault();
       e.stopPropagation();
       if (!isEditMode()) return;
-      removeExtraText("home", word.id);
+      removeExtraText("home", id);
       renderRoute();
     });
-    const box = el("div", { class: "home-word-box" }, [input, deleteBtn]);
-    makeMovableFree(box, `home.wordPos.${word.id}`, "Trascina per spostare questa parola");
-    return box;
+    return el("li", { class: "home-word-row" }, [input, deleteBtn]);
+  });
+  const list = el("ul", { class: "home-list" }, listItems);
+
+  listItems.forEach((li) => {
+    makeReorderable(li, {
+      container: list,
+      axis: "y",
+      onReorder: (from, to) => {
+        const newRows = rows.slice();
+        const [moved] = newRows.splice(from, 1);
+        newRows.splice(to, 0, moved);
+        saveOrderOverride(HOME_ROWS_KEY, newRows);
+        renderRoute();
+      },
+    });
+  });
+
+  // "+ aggiungi una parola": la nuova riga entra in fondo alla lista,
+  // pronta da trascinare con la stessa maniglia blu di riordino — non più
+  // in un punto qualunque della pagina, ma esattamente dove la sposti tra
+  // le altre.
+  const addWordBtn = el("button", { type: "button", class: "home-add-word-btn" }, "+ aggiungi una parola");
+  addWordBtn.addEventListener("click", () => {
+    if (!isEditMode()) return;
+    addExtraText("home");
+    renderRoute();
   });
 
   const spacer = el("div", { class: "home-spacer" });
@@ -1271,7 +1322,6 @@ function renderHome() {
   app.appendChild(header);
   app.appendChild(list);
   app.appendChild(addWordBtn);
-  wordBoxes.forEach((box) => app.appendChild(box));
   app.appendChild(spacer);
   app.appendChild(footer);
 
