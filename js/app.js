@@ -962,6 +962,29 @@ function renderHome() {
    successivo (passa "projectNav"); per core archive, invece, scorrono le
    foto della selezione (projectNav assente).
    ------------------------------------------------------------------------- */
+// Barra in alto (numero + titolo + hamburger "torna alla home"), identica
+// tra una pagina di galleria e una pagina semplice (contacts/about/not
+// found) a parte i testi e il prefisso delle chiavi di posizione salvate:
+// costruita qui una sola volta invece che duplicata in renderGallery e
+// renderSimplePage.
+function buildTopbar(keyPrefix, indexText, titleText) {
+  const topbarIndexEl = el("span", { class: "topbar-index" }, indexText);
+  const topbarTitleEl = el("span", { class: "topbar-title" }, titleText);
+  const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
+    el("span", {}), el("span", {}), el("span", {}),
+  ]);
+  makeMovableFree(topbarIndexEl, `${keyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
+  makeMovableFree(topbarTitleEl, `${keyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
+  makeMovableFree(hamburgerEl, `${keyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger");
+  return el("div", { class: "topbar" }, [
+    el("div", { class: "topbar-row" }, [topbarIndexEl]),
+    el("div", { class: "topbar-row" }, [
+      topbarTitleEl,
+      hamburgerEl,
+    ]),
+  ]);
+}
+
 function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
@@ -970,21 +993,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const resizeObservers = [];
   const sizeKeyPrefix = projectNav ? `project.${projectNav.slug}` : "archive";
 
-  const topbarIndexEl = el("span", { class: "topbar-index" }, String(indexNumber));
-  const topbarTitleEl = el("span", { class: "topbar-title" }, title);
-  const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
-    el("span", {}), el("span", {}), el("span", {}),
-  ]);
-  makeMovableFree(topbarIndexEl, `${sizeKeyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
-  makeMovableFree(topbarTitleEl, `${sizeKeyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
-  makeMovableFree(hamburgerEl, `${sizeKeyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger");
-  const topbar = el("div", { class: "topbar" }, [
-    el("div", { class: "topbar-row" }, [topbarIndexEl]),
-    el("div", { class: "topbar-row" }, [
-      topbarTitleEl,
-      hamburgerEl,
-    ]),
-  ]);
+  const topbar = buildTopbar(sizeKeyPrefix, String(indexNumber), title);
 
   // Il testo scorre SEMPRE, lentissimo — un movimento ambientale continuo,
   // non solo un modo per non perdere contenuto: anche quando il blocco è
@@ -1208,6 +1217,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let current = 0;
   let autoplayTimer = null;
   let paused = false;
+  // Istante (performance.now()) dell'ultima transizione avviata da goTo():
+  // usato da scheduleNext() per calcolare quanto tempo di transizione resta
+  // ancora da scontare, invece di un flag "isAtRest" indovinato dal
+  // chiamante — vedi il commento in scheduleNext() sul bug che questo
+  // risolve (swipe touch / hover+click che riprendono l'autoplay troppo
+  // presto dopo una transizione avviata mentre l'autoplay era in pausa).
+  let lastTransitionStart = -Infinity;
 
   function updateViewportHeight() {
     const activeFigure = figures[current];
@@ -1272,6 +1288,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   function goTo(i, { user = false } = {}) {
     if (!figures.length) return;
+    lastTransitionStart = performance.now();
     if (pendingWrapCleanup) {
       clearTimeout(pendingWrapCleanup.timer);
       pendingWrapCleanup.cleanup();
@@ -1279,8 +1296,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     }
 
     const n = figures.length;
-    const wrapForward = current === n - 1 && i === current + 1;
-    const wrapBackward = current === 0 && i === current - 1;
+    // "n > 1" evita che con una sola foto (n===1, current===0) entrambe le
+    // condizioni sotto risultino vere per lo stesso "i" (current-1 === 0-1
+    // === -1 e current+1 === 0+1 === 1 coincidono modulo 1 con l'unica
+    // foto), il che clonerebbe inutilmente l'unica foto e animerebbe un
+    // giro completo su se stessa invece di restare ferma.
+    const wrapForward = n > 1 && current === n - 1 && i === current + 1;
+    const wrapBackward = n > 1 && current === 0 && i === current - 1;
     current = (i + n) % n;
 
     if (wrapForward) {
@@ -1320,21 +1342,29 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     if (user) restartAutoplay();
   }
 
-  function scheduleNext(isAtRest = false) {
+  function scheduleNext() {
     clearTimeout(autoplayTimer);
     if (paused || figures.length < 2) return;
-    // Se una transizione è appena partita (autoplay o click dell'utente),
-    // la prossima non deve scattare dopo AUTOPLAY_DELAY dall'INIZIO di
-    // questa, ma dopo che questa è FINITA di arrivare (TRANSITION_MS) più
-    // il tempo di sosta vero e proprio: altrimenti, con transizione e
-    // sosta impostate entrambe a 6s, la prossima partiva esattamente nel
-    // momento in cui l'attuale finiva di arrivare — la foto restava ferma
-    // a schermo per 0 secondi (bene solo la primissima, mostrata subito
-    // senza transizione in arrivo). "isAtRest" è vero solo quando non c'è
-    // nessuna transizione in corso (mostra iniziale, o ripresa dopo pausa:
-    // la transizione, se c'era, è comunque già finita mentre eravamo in
-    // pausa, dato che la pausa ferma solo il timer, non la transizione CSS).
-    const wait = isAtRest ? AUTOPLAY_DELAY : AUTOPLAY_DELAY + TRANSITION_MS;
+    // Se una transizione è appena partita (autoplay, click dell'utente, o
+    // swipe touch), la prossima non deve scattare dopo AUTOPLAY_DELAY
+    // dall'INIZIO di questa, ma dopo che questa è FINITA di arrivare
+    // (TRANSITION_MS) più il tempo di sosta vero e proprio: altrimenti, con
+    // transizione e sosta impostate entrambe a 6s, la prossima partiva
+    // esattamente nel momento in cui l'attuale finiva di arrivare — la foto
+    // restava ferma a schermo per 0 secondi. Invece di un flag "isAtRest"
+    // indovinato da ogni chiamante (bacato: goTo() chiamato mentre
+    // l'autoplay è in pausa — es. hover del mouse o swipe touch — non
+    // riusciva a schedulare nulla dato il controllo "paused" qui sopra, e
+    // chi poi riprendeva l'autoplay (handleResume) assumeva sempre "nessuna
+    // transizione in corso", tagliando la sosta della foto appena mostrata),
+    // calcoliamo quanto tempo di transizione resta DAVVERO da scontare in
+    // base a quando l'ultima transizione è stata avviata (lastTransitionStart,
+    // aggiornato in goTo()): funziona per ogni caso (mostra iniziale,
+    // ripresa dopo pausa, transizione ancora in corso) senza doverli
+    // distinguere esplicitamente.
+    const elapsedSinceTransition = performance.now() - lastTransitionStart;
+    const remainingTransition = Math.max(0, TRANSITION_MS - elapsedSinceTransition);
+    const wait = AUTOPLAY_DELAY + remainingTransition;
     autoplayTimer = setTimeout(() => {
       goTo(current + 1);
       scheduleNext();
@@ -1351,7 +1381,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
   function handleResume() {
     paused = false;
-    scheduleNext(true);
+    scheduleNext();
   }
 
   // Le frecce, su un progetto, portano al progetto precedente/successivo
@@ -1474,7 +1504,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   resizeObservers.push(frameResizeObserver);
 
   applyPosition();
-  scheduleNext(true);
+  scheduleNext();
 
   currentTeardown = () => {
     clearTimeout(autoplayTimer);
@@ -1544,21 +1574,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   ensureEditModeUI();
 
   const simpleKeyPrefix = `simple.${title.toLowerCase()}`;
-  const topbarIndexEl = el("span", { class: "topbar-index" }, "");
-  const topbarTitleEl = el("span", { class: "topbar-title" }, title.toLowerCase());
-  const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
-    el("span", {}), el("span", {}), el("span", {}),
-  ]);
-  makeMovableFree(topbarIndexEl, `${simpleKeyPrefix}.topbarIndexPos`, "Trascina per spostare il numero");
-  makeMovableFree(topbarTitleEl, `${simpleKeyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo");
-  makeMovableFree(hamburgerEl, `${simpleKeyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger");
-  const topbar = el("div", { class: "topbar" }, [
-    el("div", { class: "topbar-row" }, [topbarIndexEl]),
-    el("div", { class: "topbar-row" }, [
-      topbarTitleEl,
-      hamburgerEl,
-    ]),
-  ]);
+  const topbar = buildTopbar(simpleKeyPrefix, "", title.toLowerCase());
 
   const body = el("div", { class: "description simple-page" }, [
     ...paragraphs.map((p) => el("p", {}, p)),
