@@ -223,7 +223,6 @@ const PROJECTS = [
       { caption: "", src: "images/estrangement/estrangement-6.jpg" },
     ],
   },
-  { slug: "suspension", name: "Suspension", description: ["Descrizione da definire per il progetto “Suspension”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   { slug: "plastic", name: "Plastic", description: ["Descrizione da definire per il progetto “Plastic”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   { slug: "tech", name: "Tech", description: ["Descrizione da definire per il progetto “Tech”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   { slug: "pink", name: "Pink", description: ["Descrizione da definire per il progetto “Pink”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
