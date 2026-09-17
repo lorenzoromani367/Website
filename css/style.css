@@ -474,7 +474,7 @@ body.edit-mode .topbar-index-input:focus {
   padding: 8px 12px;
   font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 550;
   color: var(--muted);
   text-align: center;
   background: transparent;
