@@ -170,7 +170,15 @@ body.edit-mode .home-add-word-btn:hover {
   border: 1px solid transparent;
   border-radius: 3px;
   outline: none;
-  pointer-events: none;
+  /* Sempre cliccabile, anche fuori dalla modalità modifica: è un link
+     vero verso la pagina della parola (vedi renderWordPage in app.js),
+     stesso comportamento al passaggio del mouse di un nome progetto. */
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.home-word-input:hover {
+  opacity: 0.55;
 }
 
 .home-word-input::placeholder {
@@ -181,7 +189,11 @@ body.edit-mode .home-word-input {
   cursor: text;
   background: rgba(138, 135, 124, 0.1);
   border-color: var(--muted);
-  pointer-events: auto;
+  opacity: 1;
+}
+
+body.edit-mode .home-word-input:hover {
+  opacity: 1;
 }
 
 body.edit-mode .home-word-input::placeholder {
