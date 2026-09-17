@@ -46,14 +46,15 @@ button {
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
   --transition-ms: 6000ms;
-  /* Un ease-in-out marcato (provato prima) si sente come due fasi
-     diverse — parte lenta, poi "accelera" verso metà corsa: è la sua
-     stessa natura (rallenta-accelera-rallenta), non un difetto, ma non è
-     il movimento "unico e fluido" richiesto. Velocità costante dall'inizio
-     alla fine invece non cambia mai ritmo: a 6 secondi di durata si sente
-     comunque morbido (non brusco come uno scatto), semplicemente senza
-     nessuna fase percepibile. */
-  --transition-ease: linear;
+  /* Due estremi già provati e scartati: un ease-in-out marcato
+     (cubic-bezier(0.65,0,0.35,1)) si sente come due fasi diverse — parte
+     lenta, "accelera" verso metà corsa, poi rallenta di nuovo; lineare
+     (velocità costante) invece non cambia mai ritmo, il che a 6 secondi si
+     sente piatto/meccanico, non "fluido". Questa è la via di mezzo: la
+     stessa curva "ease" di default del browser, molto più tenue della
+     prima — un accenno di morbidezza in apertura/chiusura del movimento,
+     quasi impercettibile, senza leggersi come due fasi distinte. */
+  --transition-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .mono {
@@ -676,22 +677,34 @@ body.edit-mode .caption-input:focus {
 .lightbox-text-overlay {
   align-items: flex-start;
   overflow-y: auto;
+  padding: 0;
 }
 
-/* Non più testo chiaro "a nudo" sullo sfondo scuro: lo stesso rettangolo
-   beige della pagina normale (stessa larghezza, --panel-width), con un
-   bordo piccolo sopra/sotto e il testo alla sua dimensione normale — come
-   se fosse la pagina del progetto ma senza topbar, foto e gallerybar. */
+/* Non più testo chiaro "a nudo" sullo sfondo scuro: lo stesso identico
+   rettangolo beige di ".page" (stessa larghezza, stessa altezza minima
+   quasi a schermo intero, stesso margine) — non un box che si stringe
+   attorno al testo, ma il "foglio" pieno come in ogni altra pagina del
+   sito, solo senza topbar/foto/gallerybar dentro. */
 .lightbox-text {
   width: min(100%, var(--panel-width));
-  margin: 40px auto;
+  min-height: calc(100vh - 40px);
+  margin: 20px auto;
   background: var(--paper);
   color: var(--ink);
-  padding: 32px 40px;
+  padding: 32px 40px 56px;
   font-size: 0.95rem;
   line-height: 1.65;
   transform: scale(0.96);
   transition: transform 220ms ease;
+}
+
+@media (max-width: 700px) {
+  .lightbox-text {
+    width: 100%;
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+  }
 }
 
 .lightbox.is-open .lightbox-text {
