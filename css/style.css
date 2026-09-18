@@ -109,6 +109,7 @@ button {
   padding: 0;
   flex: 0 0 auto;
   position: relative;
+  max-width: 100%;
 }
 
 .home-list li {
@@ -453,6 +454,7 @@ body.edit-mode .topbar-index-input:focus {
   display: inline-block;
   overflow: hidden;
   position: relative;
+  max-width: 100%;
 }
 
 .photo-frame img {
@@ -761,7 +763,8 @@ body.edit-mode .caption-input:focus {
    ingrandire per sbaglio mentre trascini.
    ------------------------------------------------------------------------- */
 .edit-toggle,
-.export-toggle {
+.export-toggle,
+.mobile-preview-toggle {
   position: fixed;
   right: 16px;
   z-index: 100;
@@ -781,6 +784,100 @@ body.edit-mode .caption-input:focus {
 
 .edit-toggle { bottom: 16px; }
 .export-toggle { bottom: 68px; display: none; }
+
+/* A sinistra, non impilato con gli altri due: è utile anche FUORI dalla
+   modalità modifica (per guardare il sito com'è normalmente su telefono),
+   quindi resta sempre visibile, non solo "body.edit-mode". */
+.mobile-preview-toggle {
+  left: 16px;
+  right: auto;
+  bottom: 16px;
+}
+
+.phone-icon {
+  display: block;
+  width: 12px;
+  height: 19px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  position: relative;
+}
+
+.phone-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+/* Anteprima mobile — vedi openMobilePreview in app.js: un vero <iframe>
+   (non solo una colonna ristretta) caricato sullo stesso sito, largo
+   quanto un telefono. Essendo un contesto di visualizzazione a parte, i
+   @media (max-width: 700px) qui dentro scattano esattamente come su un
+   telefono vero, editing compreso — non serve duplicare o simulare nulla. */
+.mobile-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(10, 10, 10, 0.94);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.mobile-preview-overlay.is-open {
+  display: flex;
+}
+
+.mobile-preview-device {
+  width: 390px;
+  max-width: 100%;
+  height: 844px;
+  max-height: calc(100vh - 120px);
+  background: #000;
+  border-radius: 36px;
+  padding: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-preview-device iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 26px;
+  background: var(--paper);
+}
+
+.mobile-preview-close {
+  color: var(--paper);
+  background: none;
+  border: 1px solid rgba(237, 235, 224, 0.5);
+  border-radius: 20px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.mobile-preview-close:hover {
+  opacity: 1;
+}
+
+@media (max-width: 480px) {
+  /* Sullo schermo di un telefono vero l'anteprima non serve: sei già lì. */
+  .mobile-preview-toggle {
+    display: none;
+  }
+}
 
 .edit-toggle:hover,
 .export-toggle:hover {
@@ -1140,13 +1237,10 @@ body.edit-mode .guide-ruler {
   cursor: ew-resize;
 }
 
-@media (max-width: 700px) {
-  /* L'allineamento di precisione è uno strumento da desktop: sul telefono
-     i righelli ai bordi ruberebbero solo spazio prezioso allo schermo. */
-  .guide-ruler {
-    display: none !important;
-  }
-}
+/* Non più nascosti sotto i 700px: da quando esiste l'anteprima mobile
+   (vedi setupMobilePreviewToggle in app.js) modificare da lì è un caso
+   d'uso vero, non solo un telefono reale con poco spazio — e lì servono
+   TUTTI gli strumenti di editing, guide comprese. */
 
 /* Vive dentro ".page" (position: relative), non nel viewport: così le
    guide scorrono col resto della pagina invece di restare incollate allo

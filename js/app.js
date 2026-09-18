@@ -25,6 +25,7 @@
 const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
 const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
+const MOBILE_BREAKPOINT = 700; // px: stessa soglia del media query in style.css — sopra/sotto cambia lo "scope" di posizioni/dimensioni salvate
 // Le foto vere (src in content.js) restano in cache nel browser di chi
 // visita il sito anche a lungo, a differenza di css/js che hanno già il
 // loro "?v=" in index.html: senza questo, sostituire o ripristinare un
@@ -62,6 +63,35 @@ function isEditMode() {
   return document.body.classList.contains("edit-mode");
 }
 
+// Vero anche dentro il riquadro di anteprima mobile (vedi openMobilePreview
+// più sotto): lì l'iframe ha davvero quella larghezza, non è solo un
+// restringimento visivo, quindi "window.innerWidth" lì dentro riflette la
+// realtà — la stessa identica soglia del @media in style.css, apposta,
+// così le posizioni/dimensioni salvate (vedi mobileScope più sotto) e
+// l'aspetto visivo cambiano insieme, mai uno senza l'altro.
+function isMobileViewport() {
+  return window.innerWidth <= MOBILE_BREAKPOINT;
+}
+
+// Suffisso di scope per le chiavi di storage "di layout" (posizioni,
+// dimensioni, guide) — MAI per il contenuto (testi, didascalie, quali foto
+// esistono): quello resta identico su ogni schermo, cambia solo come è
+// disposto. Permette di risistemare la disposizione mobile con le stesse
+// maniglie del desktop senza mai sovrascrivere l'una con l'altra.
+function layoutScopeSuffix() {
+  return isMobileViewport() ? ":m" : ":d";
+}
+
+// Le posizioni/dimensioni di default in content.js e LAYOUT (offset in px,
+// larghezze come "700px") sono tarate sul pannello desktop (740px): su
+// mobile spingerebbero foto/didascalie/numeri fuori posto o fuori
+// larghezza, quindi qui restano SOLO per il desktop — su mobile parte
+// tutto da zero/auto (vedi CSS), e resta così finché non trascini TU
+// qualcosa mentre sei nell'anteprima mobile (salvato a parte, mai qui).
+function desktopOnly(value) {
+  return isMobileViewport() ? undefined : value;
+}
+
 // Arrotonda un valore in px al multiplo di GRID_SIZE più vicino — usato da
 // resize, riordino e spostamento libero così che, agganciandosi tutti alla
 // stessa griglia, foto e blocchi diversi finiscono per allinearsi tra loro
@@ -85,7 +115,7 @@ const SIZE_STORE_KEY = "site-size-overrides-v1";
 
 function loadSizeOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(SIZE_STORE_KEY)) || {};
+    return JSON.parse(localStorage.getItem(SIZE_STORE_KEY + layoutScopeSuffix())) || {};
   } catch (e) {
     return {};
   }
@@ -95,7 +125,7 @@ function saveSizeOverride(key, size) {
   const all = loadSizeOverrides();
   all[key] = size;
   try {
-    localStorage.setItem(SIZE_STORE_KEY, JSON.stringify(all));
+    localStorage.setItem(SIZE_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la dimensione resta comunque applicata per questa sessione */
   }
@@ -106,7 +136,7 @@ function clearSizeOverride(key) {
   if (!(key in all)) return;
   delete all[key];
   try {
-    localStorage.setItem(SIZE_STORE_KEY, JSON.stringify(all));
+    localStorage.setItem(SIZE_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la modifica resta comunque applicata per questa sessione */
   }
@@ -560,7 +590,7 @@ const POSITION_STORE_KEY = "site-position-overrides-v1";
 
 function loadPositionOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(POSITION_STORE_KEY)) || {};
+    return JSON.parse(localStorage.getItem(POSITION_STORE_KEY + layoutScopeSuffix())) || {};
   } catch (e) {
     return {};
   }
@@ -570,7 +600,7 @@ function savePositionOverride(key, pos) {
   const all = loadPositionOverrides();
   all[key] = pos;
   try {
-    localStorage.setItem(POSITION_STORE_KEY, JSON.stringify(all));
+    localStorage.setItem(POSITION_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la posizione resta comunque applicata per questa sessione */
   }
@@ -581,7 +611,7 @@ function clearPositionOverride(key) {
   if (!(key in all)) return;
   delete all[key];
   try {
-    localStorage.setItem(POSITION_STORE_KEY, JSON.stringify(all));
+    localStorage.setItem(POSITION_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile */
   }
@@ -635,7 +665,12 @@ function clearCaptionOverride(key) {
   const FLAG_KEY = "site-caption-rebuild-v1";
   try {
     if (localStorage.getItem(FLAG_KEY)) return;
-    const all = loadPositionOverrides();
+    // Diretto sulla chiave desktop (":d"), non su loadPositionOverrides():
+    // questa migrazione precede lo "scope" mobile/desktop di
+    // layoutScopeSuffix() — tutti i dati vecchi da ripulire sono per
+    // forza desktop (il mobile è uno store nuovo, nato già vuoto).
+    const rawKey = POSITION_STORE_KEY + ":d";
+    const all = JSON.parse(localStorage.getItem(rawKey)) || {};
     let changed = false;
     Object.keys(all).forEach((key) => {
       if (/\.captionPos\.\d+$/.test(key) || /\.caption\.\d+$/.test(key)) {
@@ -643,7 +678,7 @@ function clearCaptionOverride(key) {
         changed = true;
       }
     });
-    if (changed) localStorage.setItem(POSITION_STORE_KEY, JSON.stringify(all));
+    if (changed) localStorage.setItem(rawKey, JSON.stringify(all));
     localStorage.setItem(FLAG_KEY, "1");
   } catch (e) {
     /* storage non disponibile: non c'è nulla da migrare */
@@ -825,7 +860,7 @@ const GUIDE_RULER_SIZE = 14; // px, spessore dei righelli — deve combaciare co
 
 function loadGuides() {
   try {
-    return JSON.parse(localStorage.getItem(GUIDES_STORE_KEY)) || {};
+    return JSON.parse(localStorage.getItem(GUIDES_STORE_KEY + layoutScopeSuffix())) || {};
   } catch (e) {
     return {};
   }
@@ -840,11 +875,35 @@ function saveGuidesFor(galleryKey, guides) {
   if (guides.length) all[galleryKey] = guides;
   else delete all[galleryKey];
   try {
-    localStorage.setItem(GUIDES_STORE_KEY, JSON.stringify(all));
+    localStorage.setItem(GUIDES_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: le guide restano comunque applicate per questa sessione */
   }
 }
+
+// Migrazione una tantum: prima di oggi posizioni/dimensioni/guide non
+// distinguevano mobile da desktop (un solo store per ciascuna). Chi ha già
+// sistemato foto/didascalie/guide si ritroverebbe tutto "sparito" appena
+// il codice comincia a leggere le chiavi con suffisso ":d"/":m" invece di
+// quelle vecchie senza suffisso — si copia tutto quel che c'era su ":d"
+// (era comunque tutto fatto da desktop, il mobile non esisteva ancora
+// come concetto separato), lasciando il vecchio store intatto (nessuna
+// perdita se qualcosa andasse storto).
+(function migrateLayoutStoresToDesktopScopeOnce() {
+  const FLAG_KEY = "site-layout-scope-migration-v1";
+  try {
+    if (localStorage.getItem(FLAG_KEY)) return;
+    [POSITION_STORE_KEY, SIZE_STORE_KEY, GUIDES_STORE_KEY].forEach((baseKey) => {
+      const legacy = localStorage.getItem(baseKey);
+      if (legacy != null && localStorage.getItem(baseKey + ":d") == null) {
+        localStorage.setItem(baseKey + ":d", legacy);
+      }
+    });
+    localStorage.setItem(FLAG_KEY, "1");
+  } catch (e) {
+    /* storage non disponibile: non c'è nulla da migrare */
+  }
+})();
 
 // "pageEl" è ".page" (var. globale "app"): le guide vivono nel suo sistema
 // di coordinate (position: relative), così scorrono col resto della
@@ -1417,15 +1476,21 @@ function openExportPanel() {
   });
 
   resetBtn.addEventListener("click", () => {
-    localStorage.removeItem(SIZE_STORE_KEY);
+    // Posizioni/dimensioni/guide hanno DUE store ciascuna (":d" desktop,
+    // ":m" mobile, vedi layoutScopeSuffix) — Reset toglie entrambi, non
+    // solo quello dello schermo su cui ti trovi ora: altrimenti sembrerebbe
+    // che il reset "non ha fatto niente" guardandolo dall'altro scope.
+    [SIZE_STORE_KEY, POSITION_STORE_KEY, GUIDES_STORE_KEY].forEach((k) => {
+      localStorage.removeItem(k);
+      localStorage.removeItem(`${k}:d`);
+      localStorage.removeItem(`${k}:m`);
+    });
     localStorage.removeItem(ORDER_STORE_KEY);
-    localStorage.removeItem(POSITION_STORE_KEY);
     localStorage.removeItem(CAPTION_STORE_KEY);
     localStorage.removeItem(REMOVED_STORE_KEY);
     localStorage.removeItem(EXTRA_IMAGES_STORE_KEY);
     localStorage.removeItem(EXTRA_TEXT_STORE_KEY);
     localStorage.removeItem(UPLOADED_IMAGE_STORE_KEY);
-    localStorage.removeItem(GUIDES_STORE_KEY);
     localStorage.removeItem(HOME_HIDDEN_STORE_KEY);
     location.reload();
   });
@@ -1470,6 +1535,45 @@ function ensureEditModeUI() {
 
   document.body.appendChild(toggle);
   document.body.appendChild(exportBtn);
+
+  // Anteprima mobile: MAI dentro se stessa (un iframe dentro l'iframe,
+  // all'infinito) — se questo script gira già dentro il riquadro di
+  // anteprima (window.top diverso da window), il bottone non serve e non
+  // c'è nemmeno da crearlo.
+  if (window.top === window) setupMobilePreviewToggle();
+}
+
+function setupMobilePreviewToggle() {
+  const mobileBtn = el("button", {
+    class: "mobile-preview-toggle",
+    "aria-label": "Anteprima mobile",
+    title: "Guarda il sito come su telefono — stesse modifiche disponibili, salvate a parte da quelle desktop",
+  }, [el("span", { class: "phone-icon" })]);
+
+  const closeBtn = el("button", { type: "button", class: "mobile-preview-close" }, "Chiudi anteprima");
+  const iframe = el("iframe", { title: "Anteprima mobile del sito" });
+  const device = el("div", { class: "mobile-preview-device" }, [iframe]);
+  const overlay = el("div", { class: "mobile-preview-overlay" }, [device, closeBtn]);
+
+  function open() {
+    // Riparte sempre dalla pagina che stai guardando ORA, non dalla home:
+    // così puoi controllare subito la galleria su cui stavi lavorando.
+    iframe.src = location.href;
+    overlay.classList.add("is-open");
+  }
+  function close() {
+    overlay.classList.remove("is-open");
+    iframe.src = "about:blank"; // ferma marquee/autoplay/audio invece di lasciarli girare invisibili
+  }
+  mobileBtn.addEventListener("click", open);
+  closeBtn.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("is-open")) close();
+  });
+
+  document.body.appendChild(mobileBtn);
+  document.body.appendChild(overlay);
 }
 
 /* -------------------------------------------------------------------------
@@ -1877,7 +1981,10 @@ function renderHome() {
   // misurare.
   list.querySelectorAll(".home-word-input").forEach((input) => syncWordInputWidth(input));
 
-  const resizeObserver = makeResizable(list, "home.list", LAYOUT.home);
+  const resizeObserver = makeResizable(list, "home.list", {
+    width: desktopOnly(LAYOUT.home.listWidth),
+    height: LAYOUT.home.listHeight,
+  });
 
   currentTeardown = () => resizeObserver.disconnect();
 }
@@ -1923,13 +2030,13 @@ function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange } = {}) {
     el("span", {}), el("span", {}), el("span", {}),
   ]);
   makeMovableFree(topbarIndexEl, `${keyPrefix}.topbarIndexPos`, "Trascina per spostare il numero", {
-    defaultOffset: LAYOUT.gallery.topbarIndexOffset,
+    defaultOffset: desktopOnly(LAYOUT.gallery.topbarIndexOffset),
   });
   makeMovableFree(topbarTitleEl, `${keyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo", {
-    defaultOffset: LAYOUT.gallery.topbarTitleOffset,
+    defaultOffset: desktopOnly(LAYOUT.gallery.topbarTitleOffset),
   });
   makeMovableFree(hamburgerEl, `${keyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger", {
-    defaultOffset: LAYOUT.gallery.hamburgerOffset,
+    defaultOffset: desktopOnly(LAYOUT.gallery.hamburgerOffset),
   });
   const topbar = el("div", { class: "topbar" }, [
     el("div", { class: "topbar-row" }, [topbarIndexEl]),
@@ -1985,12 +2092,18 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const descBlock = el("div", { class: "description" }, [descTrack]);
   resizeObservers.push(
     makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
+      // Larghezza e altezza restano quelle di sempre anche su mobile (non
+      // "desktopOnly"): la larghezza è comunque limitata da "max-width:
+      // 100%" già in CSS, e l'altezza qui non è un vezzo estetico ma
+      // serve al marquee per ritagliare la copia duplicata del testo
+      // (vedi il commento su ".description-track" più sopra) — toglierla
+      // farebbe vedere il testo due volte di seguito invece di scorrere.
       width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
       height: defaultDescHeight,
     })
   );
   makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo", {
-    defaultOffset: (descriptionBox && descriptionBox.offset) || LAYOUT.gallery.descriptionOffset,
+    defaultOffset: desktopOnly((descriptionBox && descriptionBox.offset) || LAYOUT.gallery.descriptionOffset),
   });
   const descDeleteBtn = el(
     "button",
@@ -2047,7 +2160,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         // pezzo di didascalia che via via esce dall'altezza calcolata finora
         // resterebbe tagliato da "overflow: hidden" finché non la rilasci.
         onMove: () => { if (i === current) updateViewportHeight(); },
-        defaultOffset: image.captionOffset || LAYOUT.gallery.captionOffset,
+        defaultOffset: desktopOnly(image.captionOffset || LAYOUT.gallery.captionOffset),
         dualHandles: true,
       }
     );
@@ -2059,8 +2172,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         // Niente default qui: se non c'è né un salvataggio né una misura
         // esplicita in content.js, l'altezza la calcola/applica
         // applyDefaultPhotoHeights() più sotto (stessa altezza per tutte
-        // le foto, in base allo spazio lasciato libero dal testo).
-        { width: image.width, height: image.height },
+        // le foto, in base allo spazio lasciato libero dal testo). Su
+        // mobile "desktopOnly" toglie anche una misura esplicita di
+        // content.js (pensata per il pannello da 740px): senza, la foto
+        // passa allo stesso calcolo automatico invece di restare fissa
+        // a una larghezza pensata per tutt'altro schermo (vedi anche
+        // isUntouched() più sotto, che deve ignorarla allo stesso modo).
+        { width: desktopOnly(image.width), height: desktopOnly(image.height) },
         {
           lockRatioTo: img,
           onResizeEnd: () => {
@@ -2073,7 +2191,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     makeZoomable(frame, img);
     makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto", {
       onMove: () => { if (i === current) updateViewportHeight(); },
-      defaultOffset: image.offset || LAYOUT.gallery.imageOffset,
+      defaultOffset: desktopOnly(image.offset || LAYOUT.gallery.imageOffset),
     });
 
     // "×" elimina questa foto, "+" ne aggiunge una nuova (segnaposto,
@@ -2141,7 +2259,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // corrisponde più a quello che vedi davvero): meglio una maniglia verde
   // come le altre, così lo allinei tu guardando lo schermo.
   makeMovableFree(bottomIndexEl, `${sizeKeyPrefix}.bottomIndexPos`, "Trascina per spostare/allineare il numero", {
-    defaultOffset: LAYOUT.gallery.bottomIndexOffset,
+    defaultOffset: desktopOnly(LAYOUT.gallery.bottomIndexOffset),
   });
   const footerBar = el("div", { class: "gallerybar" }, [prevBtn, bottomIndexEl, nextBtn]);
 
@@ -2547,7 +2665,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function isUntouched(i) {
     const key = `${sizeKeyPrefix}.image.${images[i]._index}`;
     const saved = overridesForRatio[key];
-    return !((saved && (saved.width || saved.height)) || images[i].width || images[i].height);
+    const contentDefault = desktopOnly(images[i].width) || desktopOnly(images[i].height);
+    return !((saved && (saved.width || saved.height)) || contentDefault);
   }
   function widestUntouchedRatio() {
     let widest = 0;
