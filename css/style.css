@@ -594,8 +594,8 @@ body.edit-mode .caption-input:focus {
   cursor: zoom-out;
   /* Dissolvenza + leggero ingrandimento all'apertura/chiusura invece di
      comparire/sparire di scatto (vedi animateLightboxOpen/
-     closeLightboxOverlay in app.js) — durata breve apposta: deve
-     restare uno zoom "meno improvviso", non un'attesa. */
+     closeLightboxOverlay in app.js) — durata breve apposta in apertura:
+     deve restare uno zoom "meno improvviso", non un'attesa. */
   opacity: 0;
   transition: opacity 220ms ease;
 }
@@ -604,11 +604,16 @@ body.edit-mode .caption-input:focus {
   opacity: 1;
 }
 
-/* Mentre sfuma in chiusura non deve più intercettare i click: resta a
-   schermo intero nel DOM per 220ms (vedi closeLightboxOverlay in app.js)
-   solo per far vedere la dissolvenza, non per bloccare un click successivo
-   sulla foto sotto. */
+/* In chiusura, invece, la stessa curva "ease" ma più lenta: a 220ms si
+   sentiva di scatto proprio nel momento in cui il contenuto sparisce (in
+   apertura l'occhio segue quello che COMPARE, in chiusura resta fisso su
+   dove c'era prima, quindi la stessa durata si percepisce più brusca). Non
+   più intercetta i click: resta a schermo intero nel DOM per tutta la
+   durata (vedi LIGHTBOX_FADE_MS/closeLightboxOverlay in app.js, che deve
+   restare allineato a questa stessa cifra) solo per far vedere la
+   dissolvenza, non per bloccare un click successivo sulla foto sotto. */
 .lightbox.is-closing {
+  transition: opacity 380ms ease;
   pointer-events: none;
 }
 
@@ -628,6 +633,10 @@ body.edit-mode .caption-input:focus {
 
 .lightbox.is-open .lightbox-frame {
   transform: scale(1);
+}
+
+.lightbox.is-closing .lightbox-frame {
+  transition: transform 380ms ease;
 }
 
 .lightbox-frame img {
@@ -702,6 +711,10 @@ body.edit-mode .caption-input:focus {
   line-height: 1.65;
   transform: scale(0.96);
   transition: transform 220ms ease;
+}
+
+.lightbox.is-closing .lightbox-text {
+  transition: transform 380ms ease;
 }
 
 @media (max-width: 700px) {
@@ -870,6 +883,15 @@ body.edit-mode .resizable-label {
   right: auto;
   left: 4px;
   cursor: nesw-resize;
+}
+
+/* Solo nel lightbox (vedi makeLightboxResizable): copia in alto a destra
+   della maniglia di resize, così una delle due resta sempre raggiungibile
+   anche se il riquadro ingrandito supera l'altezza dello schermo. */
+.resize-handle.resize-handle-top {
+  bottom: auto;
+  top: 4px;
+  cursor: nwse-resize;
 }
 
 /* Elimina questa foto ("×") / aggiungine una nuova qui accanto ("+"):

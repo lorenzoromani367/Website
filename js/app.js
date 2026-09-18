@@ -144,6 +144,33 @@ function saveOrderOverride(key, order) {
 // compresa, sposta davvero le altre.
 const HOME_ROWS_KEY = "home.rows";
 
+// Nascondere un NOME DI PROGETTO dalla home (a differenza di una parola,
+// che si toglie del tutto con removeExtraText): il progetto resta nel
+// codice (content.js) e la sua pagina resta raggiungibile, si toglie solo
+// la riga dalla lista — reversibile con "Reset modifiche", stesso
+// principio di ogni altra eliminazione del sito. Le parole invece restano
+// una vera cancellazione: non hanno un "codice sorgente" a parte da cui
+// potrebbero ricomparire da sole.
+const HOME_HIDDEN_STORE_KEY = "site-home-hidden-v1";
+
+function loadHiddenHomeRows() {
+  try {
+    return JSON.parse(localStorage.getItem(HOME_HIDDEN_STORE_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function hideHomeRow(tag) {
+  const hidden = loadHiddenHomeRows();
+  if (!hidden.includes(tag)) hidden.push(tag);
+  try {
+    localStorage.setItem(HOME_HIDDEN_STORE_KEY, JSON.stringify(hidden));
+  } catch (e) {
+    /* storage non disponibile: la riga resta comunque nascosta per questa sessione */
+  }
+}
+
 function getHomeRows() {
   const orderOverrides = loadOrderOverrides();
   const projectSlugs = PROJECTS.map((p) => p.slug);
@@ -171,7 +198,8 @@ function getHomeRows() {
   wordIds.forEach((id) => {
     if (!rows.includes(`w:${id}`)) rows.push(`w:${id}`); // parole appena aggiunte con "+"
   });
-  return rows;
+  const hidden = new Set(loadHiddenHomeRows());
+  return rows.filter((tag) => !hidden.has(tag));
 }
 
 function getOrderedProjects() {
@@ -1373,6 +1401,7 @@ function openExportPanel() {
     localStorage.removeItem(EXTRA_TEXT_STORE_KEY);
     localStorage.removeItem(UPLOADED_IMAGE_STORE_KEY);
     localStorage.removeItem(GUIDES_STORE_KEY);
+    localStorage.removeItem(HOME_HIDDEN_STORE_KEY);
     location.reload();
   });
 
@@ -1435,23 +1464,58 @@ const LIGHTBOX_SIZE_KEY = "lightbox.image";
 // raggiungibile solo aprendo una foto, quindi la maniglia per decidere
 // quanto deve essere grande lo zoom è sempre lì, pronta all'uso.
 function makeLightboxResizable(frame, img, { onResizeEnd } = {}) {
-  const handle = el("div", { class: "resize-handle always-visible" });
-  frame.appendChild(handle);
-  handle.addEventListener("click", (e) => e.stopPropagation()); // non deve mai chiudere il lightbox
-
   let dragStart = null;
+  let activeHandle = null;
+
+  // Due maniglie, in alto e in basso (entrambe a destra): ingrandendo
+  // molto una foto molto verticale, il riquadro cresce centrato e può
+  // finire più alto dello schermo — quella di sotto sparirebbe oltre il
+  // bordo, senza più modo di riprenderla per rimpicciolirla. Con una
+  // copia anche in alto, una delle due resta sempre raggiungibile.
+  // "signX" non serve qui (niente maniglia a sinistra, a differenza delle
+  // foto in pagina): la larghezza si controlla sempre trascinando verso
+  // destra/sinistra, da qualunque angolo.
+  function createHandle(extraClass) {
+    const h = el("div", { class: `resize-handle always-visible${extraClass ? ` ${extraClass}` : ""}` });
+    frame.appendChild(h);
+    h.addEventListener("click", (e) => e.stopPropagation()); // non deve mai chiudere il lightbox
+    h.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = frame.getBoundingClientRect();
+      activeHandle = h;
+      dragStart = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startWidth: rect.width,
+        aspectRatio: img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : rect.width / rect.height,
+      };
+      h.classList.add("is-dragging");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+    return h;
+  }
 
   function onPointerMove(e) {
     if (!dragStart || e.pointerId !== dragStart.pointerId) return;
     const dx = e.clientX - dragStart.startX;
-    const newWidth = Math.max(120, dragStart.startWidth + dx);
+    let newWidth = Math.max(120, dragStart.startWidth + dx);
+    // Mai più grande di quanto ci stia nello schermo (stesso margine di
+    // "applyDefaultSize"): è il limite che tiene entrambe le maniglie
+    // sempre visibili, non solo un ripiego se quella giusta manca.
+    const maxWidth = window.innerWidth - 96;
+    const maxHeight = window.innerHeight - 96;
+    if (newWidth / dragStart.aspectRatio > maxHeight) newWidth = maxHeight * dragStart.aspectRatio;
+    if (newWidth > maxWidth) newWidth = maxWidth;
     const newHeight = Math.round(newWidth / dragStart.aspectRatio);
     frame.style.width = `${Math.round(newWidth)}px`;
     frame.style.height = `${newHeight}px`;
   }
   function onPointerUp(e) {
     if (!dragStart || e.pointerId !== dragStart.pointerId) return;
-    handle.classList.remove("is-dragging");
+    if (activeHandle) activeHandle.classList.remove("is-dragging");
+    activeHandle = null;
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
     saveSizeOverride(LIGHTBOX_SIZE_KEY, { width: frame.style.width, height: frame.style.height });
@@ -1466,20 +1530,9 @@ function makeLightboxResizable(frame, img, { onResizeEnd } = {}) {
     // il lightbox appena finito di ridimensionare).
     if (onResizeEnd) onResizeEnd();
   }
-  handle.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = frame.getBoundingClientRect();
-    dragStart = {
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startWidth: rect.width,
-      aspectRatio: img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : rect.width / rect.height,
-    };
-    handle.classList.add("is-dragging");
-    document.addEventListener("pointermove", onPointerMove);
-    document.addEventListener("pointerup", onPointerUp);
-  });
+
+  createHandle();
+  createHandle("resize-handle-top");
 }
 
 // Apertura/chiusura di un lightbox (foto o testo) con una breve dissolvenza
@@ -1488,8 +1541,13 @@ function makeLightboxResizable(frame, img, { onResizeEnd } = {}) {
 // perché il browser deve prima dipingere lo stato INIZIALE (opacità 0)
 // prima che aggiungere la classe scateni davvero la transizione: farlo
 // nello stesso frame in cui l'elemento viene creato la salterebbe del
-// tutto (nessuna dissolvenza visibile).
-const LIGHTBOX_FADE_MS = 220;
+// tutto (nessuna dissolvenza visibile). La chiusura è più lenta
+// dell'apertura (220ms apertura, 380ms chiusura, stessa curva "ease" — a
+// 220ms la chiusura si sentiva di scatto) — questa costante deve restare
+// allineata alla durata di ".lightbox.is-closing" in style.css: è quanto
+// si aspetta prima di rimuovere davvero l'elemento dal DOM, altrimenti
+// sparirebbe a metà dissolvenza invece che alla fine.
+const LIGHTBOX_FADE_MS = 380;
 
 function animateLightboxOpen(overlay) {
   requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add("is-open")));
@@ -1685,7 +1743,25 @@ function renderHome() {
     const id = tag.slice(2);
     if (tag.startsWith("p:")) {
       const project = projectBySlug.get(id);
-      return el("li", {}, [el("a", { href: `#/project/${project.slug}` }, project.name)]);
+      const link = el("a", { href: `#/project/${project.slug}` }, project.name);
+      // A differenza di una parola (removeExtraText la cancella per
+      // davvero), qui il progetto resta in content.js: la × toglie solo la
+      // riga dalla home (hideHomeRow), recuperabile con "Reset modifiche"
+      // — la sua pagina resta raggiungibile anche mentre è nascosta.
+      const deleteBtn = el(
+        "button",
+        { type: "button", class: "home-word-delete-btn", title: "Togli dalla home", "aria-label": "Togli dalla home" },
+        "×"
+      );
+      deleteBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isEditMode()) return;
+        if (!confirm(`Togliere "${project.name}" dalla home? La pagina resterà comunque raggiungibile, solo non più elencata.`)) return;
+        hideHomeRow(tag);
+        renderRoute();
+      });
+      return el("li", {}, [link, deleteBtn]);
     }
     const input = el("input", {
       type: "text",
