@@ -758,6 +758,139 @@ function makeReorderable(item, { container, axis, onReorder, handleParent }) {
   }
 }
 
+// Guide di allineamento in stile Photoshop: due "righelli" (in alto e a
+// sinistra della pagina, solo in modalità modifica) da cui trascini fuori
+// una linea — a differenza delle maniglie verdi/rosse (che spostano UN solo
+// elemento), una guida è un riferimento condiviso da TUTTA la galleria:
+// resta esattamente dove l'hai messa (stessa posizione per ogni foto, non
+// una nuova per ciascuna) finché non la trascini altrove o la ributti sul
+// righello di origine per toglierla — esattamente come in Photoshop.
+// Serve solo da riferimento visivo per allineare a occhio; niente aggancio
+// automatico.
+const GUIDES_STORE_KEY = "site-guides-v1";
+const GUIDE_RULER_SIZE = 14; // px, spessore dei righelli — deve combaciare con lo stesso valore in style.css
+
+function loadGuides() {
+  try {
+    return JSON.parse(localStorage.getItem(GUIDES_STORE_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function guidesFor(galleryKey) {
+  return loadGuides()[galleryKey] || [];
+}
+
+function saveGuidesFor(galleryKey, guides) {
+  const all = loadGuides();
+  if (guides.length) all[galleryKey] = guides;
+  else delete all[galleryKey];
+  try {
+    localStorage.setItem(GUIDES_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: le guide restano comunque applicate per questa sessione */
+  }
+}
+
+// "pageEl" è ".page" (var. globale "app"): le guide vivono nel suo sistema
+// di coordinate (position: relative), così scorrono col resto della
+// pagina invece di restare incollate al viewport.
+function setupAlignmentGuides(pageEl, galleryKey) {
+  let guides = guidesFor(galleryKey).map((g) => ({ ...g }));
+  let nextId = guides.reduce((max, g) => Math.max(max, g.id), 0) + 1;
+
+  const layer = el("div", { class: "guides-layer" });
+  const rulerH = el("div", { class: "guide-ruler guide-ruler-h", title: "Trascina verso il basso: crea una guida orizzontale, condivisa da tutte le foto della galleria" });
+  const rulerV = el("div", { class: "guide-ruler guide-ruler-v", title: "Trascina verso destra: crea una guida verticale, condivisa da tutte le foto della galleria" });
+
+  function persist() {
+    saveGuidesFor(galleryKey, guides.map(({ id, axis, pos }) => ({ id, axis, pos })));
+  }
+
+  function renderGuide(guide) {
+    const isH = guide.axis === "h";
+    const line = el("div", { class: `guide-line guide-line-${isH ? "h" : "v"}` });
+    layer.appendChild(line);
+
+    function place() {
+      if (isH) line.style.top = `${guide.pos}px`;
+      else line.style.left = `${guide.pos}px`;
+    }
+    place();
+
+    let dragState = null;
+    function onPointerMove(e) {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+      const delta = (isH ? e.clientY : e.clientX) - dragState.startClient;
+      guide.pos = Math.max(0, dragState.startPos + delta);
+      place();
+      // Sopra al righello di origine: il rilascio la elimina (tinta rossa
+      // di anteprima, stesso principio del cestino di Photoshop).
+      const overRuler = isH ? e.clientY < GUIDE_RULER_SIZE : e.clientX < GUIDE_RULER_SIZE;
+      line.classList.toggle("guide-will-delete", overRuler);
+    }
+    function onPointerUp(e) {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      line.classList.remove("is-dragging");
+      const overRuler = isH ? e.clientY < GUIDE_RULER_SIZE : e.clientX < GUIDE_RULER_SIZE;
+      dragState = null;
+      line.classList.remove("guide-will-delete");
+      if (overRuler) {
+        guides = guides.filter((g) => g.id !== guide.id);
+        line.remove();
+      }
+      persist();
+    }
+    line.addEventListener("pointerdown", (e) => {
+      if (!isEditMode()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragState = { pointerId: e.pointerId, startClient: isH ? e.clientY : e.clientX, startPos: guide.pos };
+      line.classList.add("is-dragging");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+  }
+
+  guides.forEach(renderGuide);
+
+  function startNewGuide(axis, e) {
+    if (!isEditMode()) return;
+    e.preventDefault();
+    const rect = pageEl.getBoundingClientRect();
+    const guide = {
+      id: nextId++,
+      axis,
+      pos: Math.max(0, axis === "h" ? e.clientY - rect.top : e.clientX - rect.left),
+    };
+    guides.push(guide);
+    renderGuide(guide);
+    // Continua subito lo stesso trascinamento sulla riga appena creata,
+    // così la posizioni nel medesimo gesto con cui l'hai tirata fuori dal
+    // righello invece di doverla ripescare in un secondo momento.
+    layer.lastChild.dispatchEvent(
+      new PointerEvent("pointerdown", { pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY, bubbles: true })
+    );
+  }
+  rulerH.addEventListener("pointerdown", (e) => startNewGuide("h", e));
+  rulerV.addEventListener("pointerdown", (e) => startNewGuide("v", e));
+
+  document.body.appendChild(rulerH);
+  document.body.appendChild(rulerV);
+  pageEl.appendChild(layer);
+
+  return {
+    teardown() {
+      rulerH.remove();
+      rulerV.remove();
+      layer.remove();
+    },
+  };
+}
+
 // Rende "node" ridimensionabile a trascinamento in modalità modifica.
 // "key" identifica il blocco (es. "project.lines.image.0") per salvare e
 // riproporre la dimensione scelta. "defaults" sono width/height di partenza
@@ -1239,6 +1372,7 @@ function openExportPanel() {
     localStorage.removeItem(EXTRA_IMAGES_STORE_KEY);
     localStorage.removeItem(EXTRA_TEXT_STORE_KEY);
     localStorage.removeItem(UPLOADED_IMAGE_STORE_KEY);
+    localStorage.removeItem(GUIDES_STORE_KEY);
     location.reload();
   });
 
@@ -2369,7 +2503,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   applyPosition();
   scheduleNext();
 
+  const alignmentGuides = setupAlignmentGuides(app, sizeKeyPrefix);
+
   currentTeardown = () => {
+    alignmentGuides.teardown();
     clearTimeout(autoplayTimer);
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
     cancelAnimationFrame(marqueeRafId);
