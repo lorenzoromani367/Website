@@ -25,6 +25,14 @@
 const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
 const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
+// Le foto vere (src in content.js) restano in cache nel browser di chi
+// visita il sito anche a lungo, a differenza di css/js che hanno già il
+// loro "?v=" in index.html: senza questo, sostituire o ripristinare un
+// file con lo STESSO NOME (es. dopo che una foto era sparita dal
+// repository) può continuare a mostrare la versione vecchia — o un 404
+// già in cache — a chi l'ha già vista prima. Bump ad ogni foto
+// aggiunta/sostituita/ripristinata in content.js (vedi resolveImageSrc).
+const IMAGE_VERSION = "1";
 
 /* -------------------------------------------------------------------------
    2. Helpers generici
@@ -1733,7 +1741,8 @@ function placeholderImg(seed, label) {
 }
 
 function resolveImageSrc(seed, index, image) {
-  return image.src || placeholderImg(`${seed}-${index}`, image.caption || `${seed} ${index + 1}`);
+  if (image.src) return `${image.src}?v=${IMAGE_VERSION}`;
+  return placeholderImg(`${seed}-${index}`, image.caption || `${seed} ${index + 1}`);
 }
 
 /* -------------------------------------------------------------------------
