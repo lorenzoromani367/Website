@@ -539,6 +539,12 @@ body.edit-mode .caption-input:focus {
 
 @media (max-width: 700px) {
   .topbar { padding: 20px 20px; gap: 20px; }
+  /* Solo su mobile, il testo "principale" (titolo, numeri, descrizione) è
+     2pt più piccolo che su desktop — le didascalie (.caption-input, sua
+     dimensione a parte) restano invariate. */
+  .topbar-index,
+  .topbar-title,
+  .description { font-size: calc(0.95rem - 2pt); }
   .description { padding: 40px 20px 28px; }
   .photo { padding: 32px 20px 48px; }
 }
@@ -619,13 +625,14 @@ body.edit-mode .caption-input:focus {
   pointer-events: none;
 }
 
-/* Dimensione fissa, calcolata in JS (vedi applyDefaultSize in
-   openLightbox): la foto il più grande possibile senza mai essere
-   tagliata ("contain"). Nessun resize manuale — lo zoom è solo
-   l'animazione di apertura/chiusura, stesse curve di ".lightbox" qui
-   sopra. Il riquadro è .lightbox-frame (non l'img direttamente) perché le
-   <img> sono elementi "replaced", non possono avere pseudo-elementi/figli
-   visibili al loro interno. */
+/* La dimensione la decide chi guarda il sito trascinando la maniglia
+   (vedi makeLightboxResizable in app.js): di default è quella "contain"
+   classica (la foto il più grande possibile senza mai essere tagliata),
+   calcolata al volo in JS anziché in CSS proprio perché deve poter
+   diventare una misura esplicita in px una volta trascinata. Il
+   riquadro è .lightbox-frame (non l'img direttamente) per poterci
+   appoggiare la maniglia di resize: le <img> sono elementi "replaced",
+   non possono avere figli visibili al loro interno. */
 .lightbox-frame {
   position: relative;
   transform: scale(0.9);
@@ -648,6 +655,26 @@ body.edit-mode .caption-input:focus {
      misura salvata non rispetta più le proporzioni naturali della foto */
   object-fit: contain;
   cursor: default;
+}
+
+/* Linee guida (come la griglia della modalità modifica): compaiono solo
+   mentre trascini la maniglia di resize, per mostrare che l'immagine
+   resta sempre esattamente centrata sullo sfondo scuro qualunque misura
+   tu scelga (è .lightbox stesso, con align/justify-content:center, a
+   garantirlo — le linee sono solo un riscontro visivo). */
+.lightbox-guide {
+  position: absolute;
+  background: rgba(237, 235, 224, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.lightbox-guide-v { top: 0; bottom: 0; left: 50%; width: 1px; }
+.lightbox-guide-h { left: 0; right: 0; top: 50%; height: 1px; }
+
+.lightbox:has(.resize-handle.is-dragging) .lightbox-guide {
+  opacity: 1;
 }
 
 .lightbox-close {
@@ -704,6 +731,9 @@ body.edit-mode .caption-input:focus {
     min-height: 100dvh;
     margin: 0 auto;
     padding: 24px 20px 40px;
+    /* Stessi -2pt del resto del testo "principale" su mobile, vedi il
+       commento sul primo @media (max-width: 700px) più sopra. */
+    font-size: calc(0.95rem - 2pt);
   }
 }
 
@@ -961,6 +991,15 @@ body.edit-mode .resizable-label {
   cursor: nesw-resize;
 }
 
+/* Solo nel lightbox (vedi makeLightboxResizable): copia in alto a destra
+   della maniglia di resize, così una delle due resta sempre raggiungibile
+   anche se il riquadro ingrandito supera l'altezza dello schermo. */
+.resize-handle.resize-handle-top {
+  bottom: auto;
+  top: 4px;
+  cursor: nwse-resize;
+}
+
 /* Elimina questa foto ("×") / aggiungine una nuova qui accanto ("+"):
    stesso quadratino delle altre maniglie, centrate in alto — gli angoli
    sono già occupati dall'etichetta delle misure (sinistra) e dalla
@@ -1068,9 +1107,10 @@ body.edit-mode .move-handle {
   display: inline-flex;
 }
 
-/* Eccezione: nel testo ingrandito dello zoom la maniglia per riposizionarlo
-   è sempre visibile, non solo in modalità modifica — è l'unico modo per
-   aggiustarne la posizione mentre lo guardi davvero ingrandito. */
+/* Eccezione, come per .resize-handle.always-visible: nel testo ingrandito
+   dello zoom la maniglia per riposizionarlo è sempre visibile, non solo in
+   modalità modifica — è l'unico modo per aggiustarne la posizione mentre
+   lo guardi davvero ingrandito. */
 .move-handle.always-visible {
   display: inline-flex;
 }
@@ -1135,7 +1175,15 @@ body.edit-mode .resize-handle {
   display: block;
 }
 
+/* Eccezione: nel lightbox la maniglia per decidere lo zoom è sempre
+   visibile, non solo in modalità modifica — vedi il commento su
+   makeLightboxResizable in app.js sul perché. */
+.resize-handle.always-visible {
+  display: block;
+}
+
 body.edit-mode .resize-handle:hover,
+.resize-handle.always-visible:hover,
 .resize-handle.is-dragging {
   background: #b04d38;
 }

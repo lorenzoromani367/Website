@@ -1189,6 +1189,8 @@ function describeOverrideKey(key) {
   const archiveImgMatch = key.match(/^archive\.image\.([\w-]+)$/);
   if (archiveImgMatch) return `Core archive, ${photoLabel(archiveImgMatch[1])}  →  aggiorna width/height su quella voce di ARCHIVE.images`;
 
+  if (key === "lightbox.image") return `Dimensione dell'ingrandimento (lightbox), uguale per tutte le foto  →  solo una preferenza salvata nel browser, non c'è un equivalente in content.js`;
+
   const spacerBeforeMatch = key.match(/^(?:project\.(.+)|(archive))\.spacerBeforeBar$/);
   if (spacerBeforeMatch) {
     const where = spacerBeforeMatch[1] ? `Progetto "${spacerBeforeMatch[1]}"` : "Core archive";
@@ -1308,7 +1310,35 @@ function describeExtraKey(key) {
   return key;
 }
 
+// La pagina attualmente aperta, nello stesso formato delle chiavi di
+// salvataggio (galleryKey/sizeKeyPrefix: "project.<slug>", "archive",
+// "word.<id>", "simple.<titolo>", o "home"). Usata per far leggere al
+// pannello "Esporta modifiche" SOLO le modifiche di QUESTA pagina — non
+// tutte quelle accumulate nel browser su ogni pagina mai toccata, che
+// altrimenti finirebbero mescolate insieme a quello che hai appena
+// guardato, anche se non c'entrano nulla con questa modifica.
+function currentExportKeyPrefix() {
+  const { route, param } = parseHash();
+  switch (route) {
+    case "project": return `project.${param}`;
+    case "archive": return "archive";
+    case "word": return `word.${param}`;
+    case "contacts": return `simple.${CONTACTS.title.toLowerCase()}`;
+    case "about": return `simple.${ABOUT.title.toLowerCase()}`;
+    default: return "home";
+  }
+}
+
+// Le chiavi "composte" (dimensioni/ordine/posizione/didascalie) sono
+// "<prefix>.qualcosa" (es. "project.lines.image.3"); quelle "a bucket"
+// (foto eliminate/nuove, parole home, foto caricate) sono il prefix
+// stesso, senza suffisso — vedi i rispettivi loadXxxOverrides() più sopra.
+function belongsToCurrentPage(key, prefix) {
+  return key === prefix || key.startsWith(`${prefix}.`);
+}
+
 function buildExportText() {
+  const prefix = currentExportKeyPrefix();
   const sizeOverrides = loadSizeOverrides();
   const orderOverrides = loadOrderOverrides();
   const positionOverrides = loadPositionOverrides();
@@ -1317,14 +1347,14 @@ function buildExportText() {
   const extraOverrides = loadExtraImagesOverrides();
   const extraTextOverrides = loadExtraTextOverrides();
   const uploadedOverrides = loadUploadedImages();
-  const sizeKeys = Object.keys(sizeOverrides);
-  const orderKeys = Object.keys(orderOverrides);
-  const positionKeys = Object.keys(positionOverrides);
-  const captionKeys = Object.keys(captionOverrides);
-  const removedKeys = Object.keys(removedOverrides).filter((k) => removedOverrides[k].length);
-  const extraKeys = Object.keys(extraOverrides).filter((k) => extraOverrides[k].length);
-  const extraTextKeys = Object.keys(extraTextOverrides).filter((k) => extraTextOverrides[k].length);
-  const hasUploads = Object.keys(uploadedOverrides).some((k) => Object.keys(uploadedOverrides[k] || {}).length);
+  const sizeKeys = Object.keys(sizeOverrides).filter((k) => belongsToCurrentPage(k, prefix));
+  const orderKeys = Object.keys(orderOverrides).filter((k) => belongsToCurrentPage(k, prefix));
+  const positionKeys = Object.keys(positionOverrides).filter((k) => belongsToCurrentPage(k, prefix));
+  const captionKeys = Object.keys(captionOverrides).filter((k) => belongsToCurrentPage(k, prefix));
+  const removedKeys = Object.keys(removedOverrides).filter((k) => k === prefix && removedOverrides[k].length);
+  const extraKeys = Object.keys(extraOverrides).filter((k) => k === prefix && extraOverrides[k].length);
+  const extraTextKeys = Object.keys(extraTextOverrides).filter((k) => k === prefix && extraTextOverrides[k].length);
+  const hasUploads = Object.keys(uploadedOverrides).some((k) => k === prefix && Object.keys(uploadedOverrides[k] || {}).length);
 
   if (
     !sizeKeys.length &&
@@ -1336,13 +1366,13 @@ function buildExportText() {
     !extraTextKeys.length &&
     !hasUploads
   ) {
-    return "Non hai ancora modificato nulla.\n\nAttiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, × = elimina una foto, + = aggiungine una nuova, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
+    return "Non hai ancora modificato nulla IN QUESTA PAGINA.\n\nL'export legge solo le modifiche della pagina che stai guardando ora, non quelle di tutto il sito — se hai già sistemato un'altra pagina, apri l'export da lì. Attiva la modalità modifica (bottone ⇲ in basso a destra): angolo in basso a destra = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, × = elimina una foto, + = aggiungine una nuova, clicca su una didascalia per scriverla/correggerla. Poi torna qui.";
   }
 
   const lines = [
     "Modifiche personalizzate — copia i valori qui sotto (o manda a me",
     "questo testo) per aggiornare content.js e renderle permanenti sul",
-    "sito pubblicato.",
+    `sito pubblicato. Solo la pagina che stai guardando ora (${prefix}).`,
     "",
   ];
 
@@ -1431,11 +1461,13 @@ function buildExportText() {
 // nel browser di chi le ha caricate: qui un link di download per ciascuna,
 // così puoi salvarle sul tuo computer e caricarle tu nel repository al
 // posto del placeholder — il testo dell'export non può contenerle (sono
-// dati binari, non testo).
-function buildUploadedPhotosSection() {
+// dati binari, non testo). Solo quelle della pagina corrente, stesso
+// filtro del resto del pannello (vedi currentExportKeyPrefix).
+function buildUploadedPhotosSection(prefix) {
   const all = loadUploadedImages();
   const entries = [];
   Object.keys(all).forEach((galleryKey) => {
+    if (galleryKey !== prefix) return;
     Object.keys(all[galleryKey] || {}).forEach((photoId) => {
       entries.push({ galleryKey, photoId, dataUrl: all[galleryKey][photoId] });
     });
@@ -1466,7 +1498,7 @@ function openExportPanel() {
   const overlay = el("div", { class: "export-panel" });
   const textarea = el("textarea", { readonly: "readonly" });
   textarea.value = buildExportText();
-  const uploadsSection = buildUploadedPhotosSection();
+  const uploadsSection = buildUploadedPhotosSection(currentExportKeyPrefix());
 
   const copyBtn = el("button", {}, "Copia");
   const resetBtn = el("button", {}, "Reset modifiche");
@@ -1591,10 +1623,91 @@ function setupMobilePreviewToggle() {
    contenuta con un margine). Disattivo in modalità modifica, per non
    aprirlo per sbaglio mentre si trascina una maniglia di resize.
    ------------------------------------------------------------------------- */
+// Chiave UNICA e condivisa da tutte le foto: la misura scelta trascinando
+// la maniglia si applica a ogni foto che apri dopo (non è per-foto), così
+// tutte le foto ingrandite hanno una dimensione coerente fra loro.
+const LIGHTBOX_SIZE_KEY = "lightbox.image";
+
+// Maniglia di resize sempre visibile (non solo in modalità modifica): a
+// differenza di makeResizable, qui non c'è un "sito in modalità modifica"
+// da attivare prima — il lightbox è già di per sé una vista a parte,
+// raggiungibile solo aprendo una foto, quindi la maniglia per decidere
+// quanto deve essere grande lo zoom è sempre lì, pronta all'uso.
+function makeLightboxResizable(frame, img, { onResizeEnd } = {}) {
+  let dragStart = null;
+  let activeHandle = null;
+
+  // Due maniglie, in alto e in basso (entrambe a destra): ingrandendo
+  // molto una foto molto verticale, il riquadro cresce centrato e può
+  // finire più alto dello schermo — quella di sotto sparirebbe oltre il
+  // bordo, senza più modo di riprenderla per rimpicciolirla. Con una
+  // copia anche in alto, una delle due resta sempre raggiungibile.
+  // "signX" non serve qui (niente maniglia a sinistra, a differenza delle
+  // foto in pagina): la larghezza si controlla sempre trascinando verso
+  // destra/sinistra, da qualunque angolo.
+  function createHandle(extraClass) {
+    const h = el("div", { class: `resize-handle always-visible${extraClass ? ` ${extraClass}` : ""}` });
+    frame.appendChild(h);
+    h.addEventListener("click", (e) => e.stopPropagation()); // non deve mai chiudere il lightbox
+    h.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = frame.getBoundingClientRect();
+      activeHandle = h;
+      dragStart = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startWidth: rect.width,
+        aspectRatio: img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : rect.width / rect.height,
+      };
+      h.classList.add("is-dragging");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+    return h;
+  }
+
+  function onPointerMove(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    const dx = e.clientX - dragStart.startX;
+    let newWidth = Math.max(120, dragStart.startWidth + dx);
+    // Mai più grande di quanto ci stia nello schermo (stesso margine di
+    // "applyDefaultSize"): è il limite che tiene entrambe le maniglie
+    // sempre visibili, non solo un ripiego se quella giusta manca.
+    const maxWidth = window.innerWidth - 96;
+    const maxHeight = window.innerHeight - 96;
+    if (newWidth / dragStart.aspectRatio > maxHeight) newWidth = maxHeight * dragStart.aspectRatio;
+    if (newWidth > maxWidth) newWidth = maxWidth;
+    const newHeight = Math.round(newWidth / dragStart.aspectRatio);
+    frame.style.width = `${Math.round(newWidth)}px`;
+    frame.style.height = `${newHeight}px`;
+  }
+  function onPointerUp(e) {
+    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+    if (activeHandle) activeHandle.classList.remove("is-dragging");
+    activeHandle = null;
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    saveSizeOverride(LIGHTBOX_SIZE_KEY, { width: frame.style.width, height: frame.style.height });
+    dragStart = null;
+    // Il riquadro resta centrato dal flex del lightbox: se si restringe,
+    // il bordo che stai trascinando si sposta di MENO di quanto ti sei
+    // mosso tu col mouse (il centro non si muove, quindi ogni bordo fa
+    // solo metà strada). La maniglia, agganciata al bordo, resta quindi
+    // "indietro" rispetto al cursore, e il rilascio del clic finisce per
+    // cadere sul riquadro invece che su di lei: onResizeEnd avvisa
+    // openLightbox di ignorare quell'unico clic (altrimenti chiuderebbe
+    // il lightbox appena finito di ridimensionare).
+    if (onResizeEnd) onResizeEnd();
+  }
+
+  createHandle();
+  createHandle("resize-handle-top");
+}
+
 // Apertura/chiusura di un lightbox (foto o testo): zoom-in all'apertura,
-// zoom-out alla chiusura, niente maniglie di resize manuale — la misura è
-// sempre quella "contain" calcolata in JS (vedi applyDefaultSize in
-// openLightbox). Il doppio requestAnimationFrame serve perché il browser
+// zoom-out alla chiusura — vedi ".lightbox.is-open"/".lightbox.is-closing"
+// in style.css. Il doppio requestAnimationFrame serve perché il browser
 // deve prima dipingere lo stato INIZIALE (opacità 0, scala ridotta) prima
 // che aggiungere la classe scateni davvero la transizione: farlo nello
 // stesso frame in cui l'elemento viene creato la salterebbe del tutto
@@ -1620,14 +1733,22 @@ function closeLightboxOverlay(overlay, cleanup) {
 function openLightbox(src, alt) {
   const img = el("img", { src, alt: alt || "" });
   const frame = el("div", { class: "lightbox-frame" }, [img]);
-  const overlay = el("div", { class: "lightbox" }, [frame]);
+  const guideV = el("div", { class: "lightbox-guide lightbox-guide-v" });
+  const guideH = el("div", { class: "lightbox-guide lightbox-guide-h" });
+  const overlay = el("div", { class: "lightbox" }, [frame, guideV, guideH]);
   const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
 
-  // Dimensione fissa: la foto quanto più grande possibile restando
+  // Dimensione di default: la foto quanto più grande possibile restando
   // interamente visibile nello spazio disponibile (esattamente come
-  // "contain" — nessun taglio). Nessun resize manuale: lo zoom è solo
-  // l'animazione di apertura/chiusura (vedi ".lightbox-frame" in style.css).
+  // "contain" — nessun taglio). Se hai già trascinato la maniglia in
+  // precedenza, si usa invece quella misura per tutte le foto.
   function applyDefaultSize() {
+    const saved = loadSizeOverrides()[LIGHTBOX_SIZE_KEY];
+    if (saved && saved.width && saved.height) {
+      frame.style.width = saved.width;
+      frame.style.height = saved.height;
+      return;
+    }
     if (!img.naturalWidth || !img.naturalHeight) return; // non ancora caricata: riproviamo al load
     const availableWidth = window.innerWidth - 96; // 48px di padding di .lightbox per lato
     const availableHeight = window.innerHeight - 96;
@@ -1643,10 +1764,15 @@ function openLightbox(src, alt) {
   }
   if (img.complete) applyDefaultSize();
   img.addEventListener("load", applyDefaultSize);
-  // Ridisegna la misura se ridimensioni la finestra del browser mentre il
-  // lightbox è aperto.
-  function onWindowResize() { applyDefaultSize(); }
+  // Solo se NON hai già impostato tu una misura: la ridisegna quando
+  // ridimensioni la finestra del browser mentre il lightbox è aperto.
+  function onWindowResize() {
+    if (!loadSizeOverrides()[LIGHTBOX_SIZE_KEY]) applyDefaultSize();
+  }
   window.addEventListener("resize", onWindowResize);
+
+  let justResized = false;
+  makeLightboxResizable(frame, img, { onResizeEnd: () => { justResized = true; } });
 
   function close() {
     closeLightboxOverlay(overlay, () => {
@@ -1658,7 +1784,13 @@ function openLightbox(src, alt) {
     if (e.key === "Escape") close();
   }
 
-  overlay.addEventListener("click", () => close());
+  overlay.addEventListener("click", (e) => {
+    // Il clic che chiude il rilascio della maniglia di resize non deve
+    // chiudere anche il lightbox — vedi il commento in makeLightboxResizable.
+    if (justResized) { justResized = false; return; }
+    if (e.target.closest(".resize-handle")) return;
+    close();
+  });
   closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
   document.addEventListener("keydown", onKeydown);
 
@@ -2337,8 +2469,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   // Stesso zoom delle foto (vedi makeZoomable), sul blocco di testo: un
   // clic vero e proprio (non il rilascio di un trascinamento — vedi
-  // "marqueeJustDragged" sopra) lo apre ingrandito. Niente zoom se il
-  // progetto non ha proprio testo (pagine-parola, per ora).
+  // "marqueeJustDragged" sopra, stesso principio di "justResized" nel
+  // lightbox delle foto) lo apre ingrandito. Niente zoom se il progetto
+  // non ha proprio testo (pagine-parola, per ora).
   if (description && description.length) {
     descBlock.addEventListener("click", () => {
       if (isEditMode()) return;
