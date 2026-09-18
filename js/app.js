@@ -525,6 +525,23 @@ function removeExtraText(key, id) {
   }
 })();
 
+// Stessa migrazione, seconda tornata: "beach" e "solo" sono ora anche loro
+// vere pagine progetto — flag separato ("v2") perché chi ha già visitato
+// il sito ha già la "v1" segnata come fatta, e non ripasserebbe più di lì.
+(function removeWordsPromotedToProjectsOnceV2() {
+  const FLAG_KEY = "site-words-promoted-v2";
+  try {
+    if (localStorage.getItem(FLAG_KEY)) return;
+    const promotedNames = new Set(["beach", "solo"]);
+    extraTextFor("home").forEach((word) => {
+      if (promotedNames.has(word.text.trim().toLowerCase())) removeExtraText("home", word.id);
+    });
+    localStorage.setItem(FLAG_KEY, "1");
+  } catch (e) {
+    /* storage non disponibile: non c'è nulla da migrare */
+  }
+})();
+
 /* -------------------------------------------------------------------------
    Posizione libera a trascinamento (per ora solo le didascalie: si spostano
    indipendentemente dalla loro foto, non seguono l'ordine/resize della
