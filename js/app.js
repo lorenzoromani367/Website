@@ -92,6 +92,17 @@ function desktopOnly(value) {
   return isMobileViewport() ? undefined : value;
 }
 
+// Come desktopOnly(), ma per i campi che HANNO anche un default mobile
+// esplicito (LAYOUT.galleryMobile, o un "mobile: {...}" sulla singola
+// voce di content.js): sotto i 700px usa, nell'ordine, l'eventuale
+// override della SINGOLA foto/blocco, poi il default generale mobile,
+// altrimenti niente (mai il valore desktop, che conterebbe solo sopra i
+// 700px).
+function pickLayout(desktopValue, mobileSpecific, mobileGeneral) {
+  if (!isMobileViewport()) return desktopValue;
+  return mobileSpecific !== undefined ? mobileSpecific : mobileGeneral;
+}
+
 // Arrotonda un valore in px al multiplo di GRID_SIZE più vicino — usato da
 // resize, riordino e spostamento libero così che, agganciandosi tutti alla
 // stessa griglia, foto e blocchi diversi finiscono per allinearsi tra loro
@@ -2030,13 +2041,13 @@ function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange } = {}) {
     el("span", {}), el("span", {}), el("span", {}),
   ]);
   makeMovableFree(topbarIndexEl, `${keyPrefix}.topbarIndexPos`, "Trascina per spostare il numero", {
-    defaultOffset: desktopOnly(LAYOUT.gallery.topbarIndexOffset),
+    defaultOffset: pickLayout(LAYOUT.gallery.topbarIndexOffset, undefined, LAYOUT.galleryMobile.topbarIndexOffset),
   });
   makeMovableFree(topbarTitleEl, `${keyPrefix}.topbarTitlePos`, "Trascina per spostare il titolo", {
-    defaultOffset: desktopOnly(LAYOUT.gallery.topbarTitleOffset),
+    defaultOffset: pickLayout(LAYOUT.gallery.topbarTitleOffset, undefined, LAYOUT.galleryMobile.topbarTitleOffset),
   });
   makeMovableFree(hamburgerEl, `${keyPrefix}.hamburgerPos`, "Trascina per spostare l'hamburger", {
-    defaultOffset: desktopOnly(LAYOUT.gallery.hamburgerOffset),
+    defaultOffset: pickLayout(LAYOUT.gallery.hamburgerOffset, undefined, LAYOUT.galleryMobile.hamburgerOffset),
   });
   const topbar = el("div", { class: "topbar" }, [
     el("div", { class: "topbar-row" }, [topbarIndexEl]),
@@ -2068,7 +2079,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // galleria — un blocco di testo tolto così non torna più finché non fai
   // "Reset modifiche" (nessun altro modo di recuperarlo, stessa scelta già
   // fatta per le foto).
-  const descriptionRemoved = removedIdsFor(sizeKeyPrefix).includes("description");
+  // Un array vuoto in content.js (vedi "michelin", "tower", ecc.) nasconde
+  // il blocco allo stesso modo del flag salvato dal tasto "×": è il modo
+  // permanente di "togliere la descrizione" richiesto dall'export panel,
+  // dato che description.map() più sotto ha comunque bisogno di un array.
+  const descriptionRemoved = removedIdsFor(sizeKeyPrefix).includes("description") || !description.length;
 
   let bottomIndexEl; // assegnato più sotto, ma la callback lo usa solo su un futuro "input" dell'utente
   const { topbar, resolvedIndexText } = buildTopbar(sizeKeyPrefix, String(indexNumber), title, {
@@ -2092,18 +2107,31 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const descBlock = el("div", { class: "description" }, [descTrack]);
   resizeObservers.push(
     makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
-      // Larghezza e altezza restano quelle di sempre anche su mobile (non
-      // "desktopOnly"): la larghezza è comunque limitata da "max-width:
-      // 100%" già in CSS, e l'altezza qui non è un vezzo estetico ma
-      // serve al marquee per ritagliare la copia duplicata del testo
-      // (vedi il commento su ".description-track" più sopra) — toglierla
-      // farebbe vedere il testo due volte di seguito invece di scorrere.
-      width: (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
-      height: defaultDescHeight,
+      // Larghezza e altezza non sono mai "desktopOnly": l'altezza qui non è
+      // un vezzo estetico ma serve al marquee per ritagliare la copia
+      // duplicata del testo (vedi il commento su ".description-track" più
+      // sopra) — lasciarla vuota farebbe vedere il testo due volte di
+      // seguito invece di scorrere, anche su mobile. Se il progetto ha un
+      // "descriptionBox.mobile" dedicato (es. "lines") lo usa sotto i
+      // 700px, altrimenti resta il valore desktop su entrambi i viewport.
+      width: pickLayout(
+        (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
+        descriptionBox && descriptionBox.mobile && descriptionBox.mobile.width,
+        undefined
+      ) || (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
+      height: pickLayout(
+        defaultDescHeight,
+        descriptionBox && descriptionBox.mobile && descriptionBox.mobile.height,
+        undefined
+      ) || defaultDescHeight,
     })
   );
   makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo", {
-    defaultOffset: desktopOnly((descriptionBox && descriptionBox.offset) || LAYOUT.gallery.descriptionOffset),
+    defaultOffset: pickLayout(
+      (descriptionBox && descriptionBox.offset) || LAYOUT.gallery.descriptionOffset,
+      descriptionBox && descriptionBox.mobile && descriptionBox.mobile.offset,
+      undefined
+    ),
   });
   const descDeleteBtn = el(
     "button",
@@ -2160,7 +2188,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         // pezzo di didascalia che via via esce dall'altezza calcolata finora
         // resterebbe tagliato da "overflow: hidden" finché non la rilasci.
         onMove: () => { if (i === current) updateViewportHeight(); },
-        defaultOffset: desktopOnly(image.captionOffset || LAYOUT.gallery.captionOffset),
+        defaultOffset: pickLayout(
+          image.captionOffset || LAYOUT.gallery.captionOffset,
+          image.mobile && image.mobile.captionOffset,
+          undefined
+        ),
         dualHandles: true,
       }
     );
@@ -2173,12 +2205,16 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         // esplicita in content.js, l'altezza la calcola/applica
         // applyDefaultPhotoHeights() più sotto (stessa altezza per tutte
         // le foto, in base allo spazio lasciato libero dal testo). Su
-        // mobile "desktopOnly" toglie anche una misura esplicita di
-        // content.js (pensata per il pannello da 740px): senza, la foto
+        // mobile una misura desktop esplicita in content.js (pensata per
+        // il pannello da 740px) viene ignorata a meno che la foto non
+        // abbia anche un "mobile.width/height" dedicato — senza, la foto
         // passa allo stesso calcolo automatico invece di restare fissa
         // a una larghezza pensata per tutt'altro schermo (vedi anche
         // isUntouched() più sotto, che deve ignorarla allo stesso modo).
-        { width: desktopOnly(image.width), height: desktopOnly(image.height) },
+        {
+          width: pickLayout(image.width, image.mobile && image.mobile.width, undefined),
+          height: pickLayout(image.height, image.mobile && image.mobile.height, undefined),
+        },
         {
           lockRatioTo: img,
           onResizeEnd: () => {
@@ -2191,7 +2227,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     makeZoomable(frame, img);
     makeMovableFree(frame, `${sizeKeyPrefix}.imagePos.${origIndex}`, "Trascina per spostare la foto", {
       onMove: () => { if (i === current) updateViewportHeight(); },
-      defaultOffset: desktopOnly(image.offset || LAYOUT.gallery.imageOffset),
+      defaultOffset: pickLayout(
+        image.offset || LAYOUT.gallery.imageOffset,
+        image.mobile && image.mobile.offset,
+        undefined
+      ),
     });
 
     // "×" elimina questa foto, "+" ne aggiunge una nuova (segnaposto,
@@ -2259,7 +2299,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // corrisponde più a quello che vedi davvero): meglio una maniglia verde
   // come le altre, così lo allinei tu guardando lo schermo.
   makeMovableFree(bottomIndexEl, `${sizeKeyPrefix}.bottomIndexPos`, "Trascina per spostare/allineare il numero", {
-    defaultOffset: desktopOnly(LAYOUT.gallery.bottomIndexOffset),
+    defaultOffset: pickLayout(LAYOUT.gallery.bottomIndexOffset, undefined, LAYOUT.galleryMobile.bottomIndexOffset),
   });
   const footerBar = el("div", { class: "gallerybar" }, [prevBtn, bottomIndexEl, nextBtn]);
 
@@ -2665,7 +2705,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function isUntouched(i) {
     const key = `${sizeKeyPrefix}.image.${images[i]._index}`;
     const saved = overridesForRatio[key];
-    const contentDefault = desktopOnly(images[i].width) || desktopOnly(images[i].height);
+    const mobileOverride = images[i].mobile && (images[i].mobile.width || images[i].mobile.height);
+    const contentDefault = pickLayout(images[i].width || images[i].height, mobileOverride, undefined);
     return !((saved && (saved.width || saved.height)) || contentDefault);
   }
   function widestUntouchedRatio() {
