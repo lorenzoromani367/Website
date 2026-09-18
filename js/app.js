@@ -2398,9 +2398,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // dentro .photo-viewport, è attiva. Un clic sulla foto stessa (dentro
   // il riquadro) resta gestito da makeZoomable (ingrandimento), quindi
   // qui basta controllare se il clic è fuori dal riquadro della foto
-  // corrente, a sinistra o a destra.
+  // corrente, a sinistra o a destra. Attivo ANCHE in modalità modifica
+  // (a differenza dello zoom): le maniglie/pulsanti di editing stanno
+  // tutti dentro il riquadro della foto, mai nei margini laterali, quindi
+  // scorrere le foto per poterle modificare una dopo l'altra non entra
+  // mai in conflitto con loro.
   viewport.addEventListener("click", (e) => {
-    if (isEditMode() || figures.length < 2) return;
+    if (figures.length < 2) return;
     const activeFrame = figures[current].querySelector(".photo-frame");
     const r = activeFrame.getBoundingClientRect();
     if (e.clientY < r.top || e.clientY > r.bottom) return; // sopra/sotto la foto (didascalia, margini): non fare nulla
