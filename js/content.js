@@ -78,6 +78,18 @@ const LAYOUT = {
     spacerBeforeBarHeight: "100px",
     spacerBottomHeight: "40px",
   },
+  // Stessi campi di "gallery" qui sopra, ma letti SOLO sotto i 700px (vedi
+  // pickLayout() in app.js) — presi dall'impaginazione mobile scelta
+  // per "lines" (vedi anche il commento sul progetto "lines" più sotto) e
+  // resi lo standard per ogni galleria su schermo stretto. Un campo non
+  // presente qui vuol dire "nessun offset" su mobile (parte da zero/auto),
+  // non "usa il valore desktop qui sopra".
+  galleryMobile: {
+    topbarTitleOffset: { x: 0, y: 40 },
+    bottomIndexOffset: { x: 0, y: 0 },
+    hamburgerOffset: { x: 0, y: -20 },
+    spacerBottomHeight: "60px",
+  },
 };
 
 const PROJECTS = [
@@ -89,22 +101,56 @@ const PROJECTS = [
       "I shoot on film, which slows the process down and changes what I notice. Light and grain do work that description can't.",
       "Each image is a single encounter with a specific place and a specific quality of light. As for my stills, they form a growing archive, i will endlessly keep returning to.",
     ],
-    // Nessuna "descriptionBox" qui: la dimensione/posizione di questo
-    // blocco è ormai quella di default in LAYOUT.gallery (presa proprio
-    // da qui) — se un giorno la vuoi diversa SOLO per "lines", aggiungi
-    // "descriptionBox: { width, height, offset: { x, y } }".
+    // Nessuna "descriptionBox" desktop qui: la dimensione/posizione di
+    // quel blocco resta quella di default in LAYOUT.gallery. Solo su
+    // mobile ha una misura sua (vedi pickLayout() in app.js).
+    descriptionBox: {
+      mobile: { width: "360px", height: "340px", offset: { x: 0, y: 100 } },
+    },
+    // Ordine, didascalie e "mobile: {...}" aggiornati dall'export panel
+    // (foto #N = indice N-1, sempre quello ORIGINALE: vedi photoLabel in
+    // app.js — non cambia se riordini). "mobile" è un override letto
+    // SOLO sotto i 700px (vedi pickLayout() in app.js): stessa idea
+    // di offset/captionOffset/width/height, ma non tocca la versione
+    // desktop, che resta quella di sempre.
     images: [
-      { caption: "house, norway", src: "images/lines/lines-1.jpg", width: "480px", height: "673px", captionOffset: { x: 100, y: 360 } },
-      { caption: "sky", src: "images/lines/lines-2.jpg", width: "440px", height: "630px" },
-      { caption: "winery, sicily", src: "images/lines/lines-4.jpg", captionOffset: { x: 80, y: 380 } },
+      {
+        caption: "house, norway",
+        src: "images/lines/lines-1.jpg",
+        width: "480px",
+        height: "673px",
+        captionOffset: { x: 100, y: 360 },
+        mobile: { offset: { x: 0, y: 100 } },
+      },
+      {
+        caption: "winery, sicily",
+        src: "images/lines/lines-4.jpg",
+        captionOffset: { x: 80, y: 380 },
+      },
+      {
+        caption: "sky",
+        src: "images/lines/lines-2.jpg",
+        width: "440px",
+        height: "630px",
+        mobile: { offset: { x: 0, y: 120 }, captionOffset: { x: 0, y: 100 } },
+      },
       { caption: "church", src: "images/lines/lines-5.jpg", width: "440px", height: "622px" },
       { caption: "olympus", src: "images/lines/lines-6.jpg", width: "520px", height: "599px", captionOffset: { x: 100, y: 360 } },
-      { caption: "syros", src: "images/lines/lines-7.jpg", width: "520px", height: "590px" },
+      { caption: "construction", src: "images/lines/lines-7.jpg", width: "520px", height: "590px" },
       { caption: "unfinished", src: "images/lines/lines-8.jpg" },
       { caption: "mountain pasture", src: "images/lines/lines-9.jpg", width: "480px", height: "568px" },
-      { caption: "cable", src: "images/lines/lines-10.jpg", width: "420px", height: "663px", offset: { x: 120, y: 300 }, captionOffset: { x: -120, y: 400 } },
+      { caption: "home", src: "images/lines/lines-10.jpg", width: "420px", height: "663px", offset: { x: 120, y: 300 }, captionOffset: { x: -120, y: 400 } },
       { caption: "field", src: "images/lines/lines-11.jpg", width: "460px", height: "575px", captionOffset: { x: 100, y: 360 } },
-      { caption: "unknown", src: "images/lines/lines-12.jpg" },
+      {
+        caption: "ignored column",
+        src: "images/lines/lines-12.jpg",
+        mobile: {
+          width: "340px",
+          height: "385px",
+          offset: { x: 0, y: 180 },
+          captionOffset: { x: 0, y: 240 },
+        },
+      },
       { caption: "emst", src: "images/lines/lines-13.jpg", width: "480px", height: "640px" },
     ],
   },
@@ -116,71 +162,30 @@ const PROJECTS = [
       `I chose to show only one image of each subject. The one that best rejects the label under which the subject would fall.`,
     ],
     images: [
-      { caption: "", src: "images/stills/stills-1.jpg" },
-      { caption: "", src: "images/stills/stills-2.jpg" },
-      { caption: "", src: "images/stills/stills-3.jpg" },
-      { caption: "", src: "images/stills/stills-4.jpg" },
-      { caption: "", src: "images/stills/stills-5.jpg" },
-      { caption: "", src: "images/stills/stills-6.jpg" },
-      { caption: "", src: "images/stills/stills-7.jpg" },
-      { caption: "", src: "images/stills/stills-8.jpg" },
-      { caption: "", src: "images/stills/stills-9.jpg" },
-      { caption: "", src: "images/stills/stills-10.jpg" },
-      { caption: "", src: "images/stills/stills-11.jpg" },
-      { caption: "", src: "images/stills/stills-12.jpg" },
-      { caption: "", src: "images/stills/stills-13.jpg" },
-      { caption: "", src: "images/stills/stills-14.jpg" },
-      { caption: "", src: "images/stills/stills-15.jpg" },
-      { caption: "", src: "images/stills/stills-16.jpg" },
+      { caption: "J. Kronester Bavaria Tea Settt", src: "images/stills/stills-1.jpg" },
+      { caption: "pot and bowl", src: "images/stills/stills-2.jpg" },
+      { caption: "furla men’s bag", src: "images/stills/stills-3.jpg" },
+      { caption: "apples", src: "images/stills/stills-4.jpg" },
+      { caption: "ionia porcelain set", src: "images/stills/stills-5.jpg" },
+      { caption: "ikea flowers", src: "images/stills/stills-6.jpg" },
+      { caption: "perfume bottle", src: "images/stills/stills-7.jpg" },
+      { caption: "table cloth", src: "images/stills/stills-8.jpg" },
+      { caption: "chairs", src: "images/stills/stills-9.jpg" },
+      { caption: "jewelry, rabat", src: "images/stills/stills-10.jpg" },
+      { caption: "mercedes, back seat", src: "images/stills/stills-11.jpg" },
+      { caption: "tie, yves saint laurent", src: "images/stills/stills-13.jpg" },
+      { caption: "twins", src: "images/stills/stills-14.jpg" },
+      { caption: "car window", src: "images/stills/stills-15.jpg" },
+      { caption: "cutlery", src: "images/stills/stills-16.jpg" },
     ],
   },
   {
     slug: "tower",
     name: "Tower",
-    description: ["Descrizione da definire per il progetto “Tower”."],
+    description: [], // blocco di testo tolto dall'export panel, vedi commento su "michelin"
     images: [
-      { caption: "", src: "images/tower/tower-1.jpg" },
-      { caption: "", src: "images/tower/tower-2.jpg" },
-    ],
-  },
-  {
-    slug: "bar",
-    name: "Bar",
-    description: ["Descrizione da definire per il progetto “Bar”."],
-    images: [
-      { caption: "", src: "images/bar/bar-1.jpg" },
-      { caption: "", src: "images/bar/bar-2.jpg" },
-    ],
-  },
-  {
-    slug: "fluoxetine",
-    name: "Fluoxetine",
-    description: ["Descrizione da definire per il progetto “Fluoxetine”."],
-    images: [{ caption: "", src: "images/fluoxetine/fluoxetine-1.jpg" }],
-  },
-  {
-    slug: "licking",
-    name: "Licking",
-    description: ["Descrizione da definire per il progetto “Licking”."],
-    images: [{ caption: "", src: "images/licking/licking-1.jpg" }],
-  },
-  {
-    slug: "moon",
-    name: "Moon",
-    description: ["Descrizione da definire per il progetto “Moon”."],
-    images: [{ caption: "", src: "images/moon/moon-1.jpg" }],
-  },
-  {
-    slug: "compression",
-    name: "Compression",
-    description: ["Descrizione da definire per il progetto “Compression”."],
-    images: [
-      { caption: "", src: "images/compression/compression-1.jpg" },
-      { caption: "", src: "images/compression/compression-2.jpg" },
-      { caption: "", src: "images/compression/compression-3.jpg" },
-      { caption: "", src: "images/compression/compression-4.jpg" },
-      { caption: "", src: "images/compression/compression-5.jpg" },
-      { caption: "", src: "images/compression/compression-6.jpg" },
+      { caption: "repetition", src: "images/tower/tower-1.jpg" },
+      { caption: "repetition", src: "images/tower/tower-2.jpg" },
     ],
   },
   {
@@ -192,32 +197,37 @@ const PROJECTS = [
       `I find solace in naming them, not with the identifiers we impose upon one another as humans, but with words that allow me to witness them exactly as they appear in that fleeting moment. Doing so, for reasons I cannot entirely grasp, it's relieving.`,
     ],
     images: [
-      { caption: "", src: "images/recognition/recognition-1.jpg" },
-      { caption: "", src: "images/recognition/recognition-2.jpg" },
-      { caption: "", src: "images/recognition/recognition-3.jpg" },
-      { caption: "", src: "images/recognition/recognition-4.jpg" },
-      { caption: "", src: "images/recognition/recognition-5.jpg" },
-      { caption: "", src: "images/recognition/recognition-6.jpg" },
-      { caption: "", src: "images/recognition/recognition-7.jpg" },
-      { caption: "", src: "images/recognition/recognition-8.jpg" },
-      { caption: "", src: "images/recognition/recognition-9.jpg" },
-      { caption: "", src: "images/recognition/recognition-10.jpg" },
-      { caption: "", src: "images/recognition/recognition-11.jpg" },
-      { caption: "", src: "images/recognition/recognition-12.jpg" },
+      { caption: "fetus", src: "images/recognition/recognition-1.jpg" },
+      { caption: "jumping jack", src: "images/recognition/recognition-2.jpg" },
+      { caption: "cake, sponge", src: "images/recognition/recognition-3.jpg" },
+      { caption: "self portrait", src: "images/recognition/recognition-4.jpg" },
+      { caption: "circuit", src: "images/recognition/recognition-5.jpg" },
+      { caption: "bacon", src: "images/recognition/recognition-6.jpg" },
+      { caption: "belvedere", src: "images/recognition/recognition-7.jpg" },
+      { caption: "dreamy landscape", src: "images/recognition/recognition-8.jpg" },
+      { caption: "fishes", src: "images/recognition/recognition-9.jpg" },
+      { caption: "cocoon", src: "images/recognition/recognition-10.jpg" },
+      { caption: "iceberg", src: "images/recognition/recognition-11.jpg" },
     ],
   },
   {
     slug: "michelin",
     name: "Michelin",
-    description: ["Descrizione da definire per il progetto “Michelin”."],
+    // Blocco di testo tolto dall'export panel ("elimina descrizione"):
+    // array vuoto invece del campo del tutto assente, così renderGallery
+    // (che chiama sempre description.map(...)) non deve gestire un caso
+    // speciale — vedi descriptionRemoved in app.js, che nasconde il
+    // blocco anche quando l'array è vuoto, non solo col flag salvato.
+    description: [],
     images: [
-      { caption: "", src: "images/michelin/michelin-1.jpg" },
-      { caption: "", src: "images/michelin/michelin-2.jpg" },
-      { caption: "", src: "images/michelin/michelin-3.jpg" },
-      { caption: "", src: "images/michelin/michelin-4.jpg" },
-      { caption: "", src: "images/michelin/michelin-5.jpg" },
+      { caption: "delta, restaurant", src: "images/michelin/michelin-1.jpg" },
+      { caption: "delta, restaurant", src: "images/michelin/michelin-2.jpg" },
+      { caption: "delta, restaurant", src: "images/michelin/michelin-3.jpg" },
+      { caption: "delta, restaurant", src: "images/michelin/michelin-4.jpg" },
+      { caption: "delta, restaurant", src: "images/michelin/michelin-5.jpg" },
     ],
   },
+  { slug: "paper-tape", name: "Paper tape", description: [], images: [{ caption: "", src: "images/paper-tape/paper-tape-1.jpg" }] },
   {
     slug: "mediality",
     name: "Mediality",
@@ -262,6 +272,12 @@ const PROJECTS = [
     ],
   },
   {
+    slug: "beach",
+    name: "Beach",
+    description: ["Descrizione da definire per il progetto “Beach”."],
+    images: [{ caption: "", src: "images/beach/beach-1.jpg" }],
+  },
+  {
     slug: "estrangement",
     name: "Estrangement",
     description: [
@@ -282,8 +298,6 @@ const PROJECTS = [
     description: ["Descrizione da definire per il progetto “Plastic”."],
     images: [{ caption: "", src: "images/plastic/plastic-1.jpg" }],
   },
-  { slug: "tech", name: "Tech", description: ["Descrizione da definire per il progetto “Tech”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
-  { slug: "pink", name: "Pink", description: ["Descrizione da definire per il progetto “Pink”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   {
     slug: "stasis",
     name: "Stasis",
@@ -294,17 +308,18 @@ const PROJECTS = [
       `The images presented here constitute a selection from an ongoing project and should be considered as part of a broader body of work currently in development. These images may change as the project unfolds.`,
     ],
     images: [
-      { caption: "", src: "images/stasis/recognition-1.jpg" },
-      { caption: "", src: "images/stasis/recognition-2.jpg" },
-      { caption: "", src: "images/stasis/recognition-3.jpg" },
-      { caption: "", src: "images/stasis/recognition-4.jpg" },
-      { caption: "", src: "images/stasis/recognition-6.jpg" },
-      { caption: "", src: "images/stasis/recognition-7.jpg" },
-      { caption: "", src: "images/stasis/recognition-8.jpg" },
-      { caption: "", src: "images/stasis/recognition-9.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-1.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-2.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-3.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-4.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-6.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-7.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-8.jpg" },
+      { caption: "untitled (part of series)", src: "images/stasis/recognition-9.jpg" },
     ],
   },
   { slug: "hair", name: "Hair", description: ["Descrizione da definire per il progetto “Hair”."], images: [{ caption: "", src: "images/hair/hair-1.jpg" }] },
+  { slug: "eating", name: "Eating", description: ["Descrizione da definire per il progetto “Eating”."], images: [{ caption: "", src: "images/eating/dreams.jpg" }] },
   {
     slug: "maniac",
     name: "Maniac",
@@ -315,26 +330,63 @@ const PROJECTS = [
       `Their anonymity is a condition of existence before it is a formal choice. Bodies with no declared history, no recognizable identity, no sense of belonging to the surrounding context. A tangible disjunction between the self and the world, that sensation of being a system error within a reality that continues to function without you.`,
     ],
     images: [
-      { caption: "", src: "images/maniac/maniac-1.jpg" },
-      { caption: "", src: "images/maniac/maniac-2.jpg" },
-      { caption: "", src: "images/maniac/maniac-3.jpg" },
-      { caption: "", src: "images/maniac/maniac-4.jpg" },
-      { caption: "", src: "images/maniac/maniac-5.jpg" },
+      { caption: "unknown II", src: "images/maniac/maniac-1.jpg" },
+      { caption: "unknown III", src: "images/maniac/maniac-2.jpg" },
+      { caption: "unknown IV", src: "images/maniac/maniac-3.jpg" },
+      { caption: "unknown V", src: "images/maniac/maniac-4.jpg" },
+      { caption: "unknown I", src: "images/maniac/maniac-5.jpg" },
       { caption: "", src: "images/maniac/maniac-6.jpg" },
     ],
   },
-  { slug: "eating", name: "Eating", description: ["Descrizione da definire per il progetto “Eating”."], images: [{ caption: "", src: "images/eating/dreams.jpg" }] },
   { slug: "vacation", name: "Vacation", description: ["Descrizione da definire per il progetto “Vacation”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   { slug: "toy", name: "Toy", description: ["Descrizione da definire per il progetto “Toy”."], images: [{ caption: "", src: "images/toy/toy-1.jpg" }] },
   { slug: "perfume", name: "Perfume", description: ["Descrizione da definire per il progetto “Perfume”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   { slug: "whitening", name: "Whitening", description: ["Descrizione da definire per il progetto “Whitening”."], images: [{ caption: "", src: "images/whitening/whitening-1.jpg" }] },
-  { slug: "paper-tape", name: "Paper tape", description: ["Descrizione da definire per il progetto “Paper tape”."], images: [{ caption: "", src: "images/paper-tape/paper-tape-1.jpg" }] },
   {
-    slug: "beach",
-    name: "Beach",
-    description: ["Descrizione da definire per il progetto “Beach”."],
-    images: [{ caption: "", src: "images/beach/beach-1.jpg" }],
+    slug: "bar",
+    name: "Bar",
+    description: ["Descrizione da definire per il progetto “Bar”."],
+    images: [
+      { caption: "", src: "images/bar/bar-1.jpg" },
+      { caption: "", src: "images/bar/bar-2.jpg" },
+    ],
   },
+  {
+    slug: "fluoxetine",
+    name: "Fluoxetine",
+    description: ["Descrizione da definire per il progetto “Fluoxetine”."],
+    // Unica foto eliminata dall'export panel: segnaposto vuoto al suo
+    // posto, stesso pattern già usato per gli altri progetti senza foto
+    // caricate (tech/pink/vacation/perfume), invece di un array vuoto.
+    images: [{ caption: "placeholder 01", src: null }],
+  },
+  {
+    slug: "licking",
+    name: "Licking",
+    description: [], // blocco di testo tolto dall'export panel, vedi commento su "michelin"
+    images: [{ caption: "father", src: "images/licking/licking-1.jpg" }],
+  },
+  {
+    slug: "moon",
+    name: "Moon",
+    description: [], // blocco di testo tolto dall'export panel, vedi commento su "michelin"
+    images: [{ caption: "embossing", src: "images/moon/moon-1.jpg" }],
+  },
+  {
+    slug: "compression",
+    name: "Compression",
+    description: ["Descrizione da definire per il progetto “Compression”."],
+    images: [
+      { caption: "", src: "images/compression/compression-1.jpg" },
+      { caption: "", src: "images/compression/compression-2.jpg" },
+      { caption: "", src: "images/compression/compression-3.jpg" },
+      { caption: "", src: "images/compression/compression-4.jpg" },
+      { caption: "", src: "images/compression/compression-5.jpg" },
+      { caption: "", src: "images/compression/compression-6.jpg" },
+    ],
+  },
+  { slug: "tech", name: "Tech", description: ["Descrizione da definire per il progetto “Tech”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
+  { slug: "pink", name: "Pink", description: ["Descrizione da definire per il progetto “Pink”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   {
     slug: "solo",
     name: "Solo",
