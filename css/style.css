@@ -383,6 +383,12 @@ body.edit-mode .topbar-index-input:focus {
   max-width: 100%;
   position: relative;
   overflow: hidden;
+  /* Con l'offset verticale di default (LAYOUT.gallery.descriptionOffset) il
+     riquadro finisce per sovrapporsi alla galleria foto sotto — senza uno
+     z-index esplicito qui, ".photo-viewport" (che viene dopo nel markup)
+     ci dipinge sopra, rendendo la maniglia di resize nell'angolo
+     irraggiungibile col mouse. */
+  z-index: 2;
 }
 
 .description-track {
@@ -973,7 +979,16 @@ body.edit-mode .move-handle {
   display: inline-flex;
 }
 
+/* Eccezione, come per .resize-handle.always-visible: nel testo ingrandito
+   dello zoom la maniglia per riposizionarlo è sempre visibile, non solo in
+   modalità modifica — è l'unico modo per aggiustarne la posizione mentre
+   lo guardi davvero ingrandito. */
+.move-handle.always-visible {
+  display: inline-flex;
+}
+
 body.edit-mode .move-handle:hover,
+.move-handle.always-visible:hover,
 .move-handle.is-dragging {
   background: #3a8ab0;
   cursor: grabbing;
@@ -983,7 +998,8 @@ body.edit-mode .move-handle:hover,
    resize resta in basso a destra, l'etichetta con le misure in alto a
    sinistra) */
 .photo-frame .move-handle,
-.description .move-handle {
+.description .move-handle,
+.lightbox-text-content .move-handle {
   position: absolute;
   top: 4px;
   right: 4px;

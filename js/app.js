@@ -613,7 +613,7 @@ function clearCaptionOverride(key) {
 // sempre al punto di partenza — sembrava "magnetico"/rotto. Qui invece
 // qualunque trascinamento, anche piccolo, sposta la foto esattamente lì
 // e ce la lascia.
-function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, defaultOffset, dualHandles } = {}) {
+function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, defaultOffset, dualHandles, alwaysVisible } = {}) {
   if (!node.style.position) node.style.position = "relative";
 
   // "defaultOffset" è la posizione di partenza quando non hai ancora
@@ -632,7 +632,8 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
   // finire scomoda da raggiungere. Le due maniglie condividono lo stesso
   // trascinamento: quale delle due parte non fa differenza.
   function createHandle(extraClass) {
-    const h = el("div", { class: `move-handle free-move${extraClass ? ` ${extraClass}` : ""}`, title });
+    const classes = `move-handle free-move${alwaysVisible ? " always-visible" : ""}${extraClass ? ` ${extraClass}` : ""}`;
+    const h = el("div", { class: classes, title });
     node.appendChild(h);
     // Se "node" è (o sta dentro) un link — l'hamburger, es. — un clic sulla
     // maniglia senza spostamento (o al rilascio dopo un trascinamento)
@@ -644,7 +645,7 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
       e.stopPropagation();
     });
     h.addEventListener("pointerdown", (e) => {
-      if (!isEditMode()) return;
+      if (!alwaysVisible && !isEditMode()) return;
       // Se dentro "node" c'è un testo in modifica (es. la didascalia) con
       // ancora il cursore attivo, va salvato ORA: il preventDefault() qui
       // sotto impedisce anche lo sfocamento naturale che cliccando altrove
@@ -1442,14 +1443,25 @@ function openLightbox(src, alt) {
 // intero, ingrandito, in un overlay identico (stessa dissolvenza, stesso
 // "click ovunque per chiudere", stesso tasto Esc) — solo il contenuto
 // cambia (testo invece di un'immagine).
-function openTextLightbox(paragraphs) {
-  const textBox = el(
+function openTextLightbox(paragraphs, sizeKeyPrefix) {
+  const content = el(
     "div",
-    { class: "lightbox-text" },
+    { class: "lightbox-text-content" },
     paragraphs.map((p) => el("p", {}, p))
   );
+  const textBox = el("div", { class: "lightbox-text" }, [content]);
   const overlay = el("div", { class: "lightbox lightbox-text-overlay" }, [textBox]);
   const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
+
+  // Maniglia sempre visibile (come quella di resize nel lightbox foto, vedi
+  // makeLightboxResizable): qui non ha senso legarla alla modalità modifica
+  // del sito, perché l'unico momento in cui ha senso aggiustare la
+  // posizione del testo ingrandito è mentre lo guardi davvero ingrandito.
+  if (sizeKeyPrefix) {
+    makeMovableFree(content, `${sizeKeyPrefix}.descriptionZoomPos`, "Trascina per spostare il testo ingrandito", {
+      alwaysVisible: true,
+    });
+  }
 
   function close() {
     closeLightboxOverlay(overlay, () => {
@@ -2041,7 +2053,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     descBlock.addEventListener("click", () => {
       if (isEditMode()) return;
       if (marqueeJustDragged) { marqueeJustDragged = false; return; }
-      openTextLightbox(description);
+      openTextLightbox(description, sizeKeyPrefix);
     });
   }
 
