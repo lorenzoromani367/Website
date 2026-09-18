@@ -1076,6 +1076,126 @@ body.edit-mode .hamburger .move-handle {
   pointer-events: auto;
 }
 
+/* -------------------------------------------------------------------------
+   GUIDE DI ALLINEAMENTO stile Photoshop — vedi setupAlignmentGuides in
+   app.js. Due righelli fissi ai bordi del viewport da cui trascini fuori
+   una linea guida: a differenza delle maniglie (che spostano UN elemento),
+   la guida è un riferimento condiviso da TUTTA la galleria — resta
+   esattamente dove l'hai messa (stessa riga per ogni foto), finché non la
+   sposti o la ributti sul righello di origine per toglierla. Solo in
+   modalità modifica, come ogni altro strumento di editing.
+   ------------------------------------------------------------------------- */
+.guide-ruler {
+  display: none;
+  position: fixed;
+  z-index: 250;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(34, 211, 238, 0.4),
+    rgba(34, 211, 238, 0.4) 4px,
+    rgba(34, 211, 238, 0.15) 4px,
+    rgba(34, 211, 238, 0.15) 8px
+  );
+}
+
+body.edit-mode .guide-ruler {
+  display: block;
+}
+
+.guide-ruler-h {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 14px;
+  cursor: ns-resize;
+}
+
+.guide-ruler-v {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 14px;
+  cursor: ew-resize;
+}
+
+@media (max-width: 700px) {
+  /* L'allineamento di precisione è uno strumento da desktop: sul telefono
+     i righelli ai bordi ruberebbero solo spazio prezioso allo schermo. */
+  .guide-ruler {
+    display: none !important;
+  }
+}
+
+/* Vive dentro ".page" (position: relative), non nel viewport: così le
+   guide scorrono col resto della pagina invece di restare incollate allo
+   schermo mentre navighi tra le foto o scorri il testo. */
+.guides-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.guide-line {
+  display: none;
+  position: absolute;
+  pointer-events: auto;
+}
+
+body.edit-mode .guide-line {
+  display: block;
+}
+
+/* Zona cliccabile allargata (9px) attorno alla riga vera (1px): un filo
+   così sottile sarebbe troppo difficile da riagganciare col mouse. */
+.guide-line-h {
+  left: 0;
+  right: 0;
+  height: 9px;
+  margin-top: -4px;
+  cursor: ns-resize;
+}
+
+.guide-line-v {
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  margin-left: -4px;
+  cursor: ew-resize;
+}
+
+.guide-line::after {
+  content: "";
+  position: absolute;
+  background: #22d3ee;
+}
+
+.guide-line-h::after {
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 1px;
+}
+
+.guide-line-v::after {
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+}
+
+.guide-line.is-dragging::after,
+.guide-line:hover::after {
+  background: #67e8f9;
+}
+
+/* Sopra al righello di origine mentre la trascini: il rilascio la elimina
+   (stesso principio del "cestino" di Photoshop) — tinta rossa di anteprima
+   coerente con lo stesso colore usato per eliminare altrove nel sito. */
+.guide-line.guide-will-delete::after {
+  background: #b04d38;
+}
+
 .export-panel {
   position: fixed;
   inset: 0;
