@@ -260,6 +260,16 @@ body.edit-mode .home-word-delete-btn:hover {
   opacity: 0.6;
 }
 
+/* Stessi -2pt del resto del testo "principale" su mobile (vedi il
+   commento sul @media della sezione GALLERY più sotto) — qui copre
+   intestazione, nomi progetto/parole in home e footer. */
+@media (max-width: 700px) {
+  .home-header,
+  .home-list li,
+  .home-word-input,
+  .home-footer { font-size: calc(0.95rem - 2pt); }
+}
+
 /* -------------------------------------------------------------------------
    GALLERY (progetti + core archive) — descrizione in alto, poi le foto.
    Tra una foto e l'altra (manuale o in automatico) lo scorrimento è
