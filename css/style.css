@@ -663,21 +663,23 @@ body.edit-mode .caption-input:focus {
    c'è solo l'aspetto, non le coordinate.
    ========================================================================== */
 .lightbox-backdrop {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background: rgba(13, 13, 13, 0.96);
-  z-index: 300;
-  opacity: 0;
-  pointer-events: none;
-  /* Nessuna transition fissa qui: la imposta JS di volta in volta (vedi
+  /* Posizione, dimensione, colore e z-index reali sono impostati IN RIGA
+     da JS (vedi ensureZoomElements in app.js), non qui: dopo aver
+     scoperto che "inset: 0" veniva ignorato da alcuni browser (lasciando
+     lo sfondo scuro senza dimensione, con la pagina beige sotto la foto
+     ancora visibile), questi valori non devono più dipendere da nessuna
+     regola del foglio di stile — solo lo stato is-active/pointer-events
+     resta qui. Colore pieno, niente alpha: prima 0.96 di opacità
+     lasciava un 4% di trasparenza che, sommato al problema di copertura,
+     peggiorava il "residuo" beige.
+     Nessuna transition fissa: la imposta JS di volta in volta (vedi
      makeZoomable) — deve arrivare a piena opacità MOLTO prima che la foto
      finisca di volare (altrimenti per gran parte dell'animazione si vede
-     la pagina reale, beige e testo, trasparire attraverso lo sfondo
-     ancora a metà dissolvenza), e restare piena per quasi tutto il volo
-     di ritorno in chiusura, sparendo solo all'ultimo. */
+     la pagina reale trasparire attraverso lo sfondo ancora a metà
+     dissolvenza), e restare piena per quasi tutto il volo di ritorno in
+     chiusura, sparendo solo all'ultimo. */
+  opacity: 0;
+  pointer-events: none;
 }
 
 .lightbox-backdrop.is-active {

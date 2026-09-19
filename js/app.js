@@ -1717,6 +1717,22 @@ function ensureZoomElements() {
   if (zoomBackdrop) return;
   zoomBackdrop = el("div", { class: "lightbox-backdrop" });
   zoomBackdrop.id = "lightboxBackdrop";
+  // Geometria e colore impostati QUI, in riga, invece di lasciarli solo al
+  // CSS: dopo aver scoperto che "inset: 0" veniva ignorato su alcuni
+  // browser (lasciando lo sfondo scuro senza nessuna dimensione, con la
+  // pagina beige visibile sotto la foto), lo sfondo di QUESTO elemento non
+  // deve più dipendere da nessuna regola esterna che potrebbe non
+  // applicarsi — vince sempre lo stile in riga, qualunque cosa succeda al
+  // foglio di stile. Colore pieno (niente alpha/trasparenza: prima era
+  // rgba(13,13,13,0.96), un 4% di trasparenza che sommato a un eventuale
+  // problema di copertura peggiorava l'effetto "residuo").
+  zoomBackdrop.style.position = "fixed";
+  zoomBackdrop.style.top = "0";
+  zoomBackdrop.style.left = "0";
+  zoomBackdrop.style.width = "100vw";
+  zoomBackdrop.style.height = "100vh";
+  zoomBackdrop.style.background = "#161616";
+  zoomBackdrop.style.zIndex = "300";
   zoomActiveImg = el("img", { class: "lightbox-active-img" });
   zoomActiveImg.id = "lightboxActiveImg";
   const triggerClose = () => { if (zoomCurrentClose) zoomCurrentClose(); };
