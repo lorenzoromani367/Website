@@ -1651,13 +1651,17 @@ function ensureZoomTextPanel() {
   document.body.appendChild(zoomTextPanel);
 }
 
-// Stesso zoom FLIP delle foto (vedi makeZoomable): il pannello beige parte
-// dalla posizione/misura ESATTA del blocco descrizione in pagina e vola
-// fino al rettangolo ingrandito, e viceversa alla chiusura — stesso
-// sfondo scuro condiviso (zoomBackdrop). A differenza delle foto, qui
-// resta un vero rettangolo BEIGE (il "foglio" del sito), non un semplice
+// A differenza delle foto (vedi makeZoomable, un vero FLIP con volo dalla
+// posizione esatta della miniatura) qui apertura e chiusura sono un
+// semplice scale(0.94)↔1 centrato + dissolvenza in opacità, IDENTICI nelle
+// due direzioni — vedi il commento dentro openTextLightbox per il perché
+// (un FLIP è stato provato anche per il testo, ma su questo sito il
+// blocco descrizione e il pannello ingrandito hanno quasi la stessa
+// larghezza, quindi il "volo" risultava impercettibile). Sfondo scuro
+// condiviso con le foto (zoomBackdrop); a differenza delle foto, qui resta
+// un vero rettangolo BEIGE (il "foglio" del sito), non un semplice
 // contenuto su sfondo nero: il colore/aspetto restano quelli di
-// ".lightbox-text" in style.css, solo la posizione è calcolata qui.
+// ".lightbox-text" in style.css.
 function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   // Salva la posizione di scroll della PAGINA (non del testo che scorre
   // dentro il blocco, quello è un'altra cosa) prima di aprire, e la
@@ -1667,13 +1671,6 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   // apre a metà lettura, si chiude e la pagina è tornata in cima al
   // titolo). Non dipende da cosa lo causa: lo riimponiamo e basta.
   const savedScrollY = window.scrollY;
-
-  // Coordinate ESATTE del blocco cliccato, catturate PRIMA di nasconderlo:
-  // sono il punto di partenza dell'apertura (vedi più sotto) — senza,
-  // l'ingrandimento comparirebbe già piazzato al centro dello schermo con
-  // un salto secco, invece di "distendersi" fluidamente a partire da dove
-  // hai davvero cliccato.
-  const firstRect = descBlock.getBoundingClientRect();
 
   // Nasconde il blocco originale — che scorre in continuazione (marquee)
   // — durante lo zoom: senza, resta visibile "attraverso" lo sfondo scuro
@@ -1721,35 +1718,22 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     });
   }
 
-  // APERTURA: FLIP vero, dalla posizione/misura esatta del blocco cliccato
-  // (non più un semplice scale(0.94)→1 centrato su se stesso, che appariva
-  // già piazzato al centro con un salto — bug confermato via video). Il
-  // pannello finale è già posizionato/dimensionato dal CSS/JS di
-  // ensureZoomTextPanel (è sempre lo stesso rettangolo, a schermo intero):
-  // ne misuriamo il rect così com'è ORA, prima di applicargli qualunque
-  // transform, ed è il punto di ARRIVO del volo.
-  const targetRect = panel.getBoundingClientRect();
-
-  const firstCenterX = firstRect.left + firstRect.width / 2;
-  const firstCenterY = firstRect.top + firstRect.height / 2;
-  const targetCenterX = targetRect.left + targetRect.width / 2;
-  const targetCenterY = targetRect.top + targetRect.height / 2;
-  const deltaX = firstCenterX - targetCenterX;
-  const deltaY = firstCenterY - targetCenterY;
-
-  // Un SOLO fattore di scala (mai scaleX/scaleY indipendenti come per le
-  // foto): il blocco descrizione e il pannello ingrandito hanno proporzioni
-  // diverse, quindi scalarli separatamente sui due assi stirerebbe/
-  // schiaccerebbe il testo durante il volo (lo stesso problema già trovato
-  // e risolto in precedenza). Basato sul rapporto tra le LARGHEZZE (le due
-  // hanno in pratica la stessa larghezza del "foglio" beige del sito, per
-  // cui il rapporto è già vicino a 1 e il testo non appare né troppo
-  // piccolo né tagliato all'istante iniziale del volo).
-  const scale = Math.min(1, firstRect.width / targetRect.width);
-
-  // Porta il pannello esattamente sopra il blocco cliccato, ancora invisibile.
+  // Apertura e chiusura usano LO STESSO stile — mai una tecnica diversa per
+  // le due direzioni (prima erano evidentemente diverse: la chiusura un
+  // semplice scale(0.94) centrato, l'apertura un FLIP con volo dalla
+  // posizione del blocco cliccato, curve ed effetti diversi). Un vero FLIP
+  // per il testo È STATO PROVATO e scartato di nuovo: il blocco descrizione
+  // e il pannello ingrandito occupano quasi la stessa identica larghezza
+  // dello schermo su questo sito (è sempre lo stesso "foglio" beige, solo a
+  // schermo intero) — lo spostamento/cambio di scala risultava troppo
+  // piccolo per leggersi come un vero movimento, quindi sembrava comunque
+  // un'apparizione improvvisa al centro (verificato via video). Restano
+  // quindi un semplice scale(0.94)→1 centrato + dissolvenza in opacità
+  // (0→1), IDENTICI in apertura e chiusura — stessa durata, stessa curva,
+  // solo la direzione è invertita. Vedi zoomCurrentClose più sotto per la
+  // chiusura, che condivide questi stessi identici valori.
   panel.style.transition = "none";
-  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scale})`;
+  panel.style.transform = "scale(0.94)";
   panel.style.opacity = "0";
   // Doppio requestAnimationFrame: forza il browser a disegnare questo stato
   // di partenza PRIMA di innescare la transizione qui sotto, altrimenti i
@@ -1757,8 +1741,8 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   // senza alcuna animazione visibile.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      panel.style.transition = "transform 750ms cubic-bezier(0.16, 1, 0.3, 1), opacity 750ms cubic-bezier(0.16, 1, 0.3, 1)";
-      panel.style.transform = "translate(0px, 0px) scale(1)";
+      panel.style.transition = "transform 650ms cubic-bezier(0.25, 1, 0.5, 1), opacity 650ms cubic-bezier(0.25, 1, 0.5, 1)";
+      panel.style.transform = "scale(1)";
       panel.style.opacity = "1";
       // Vedi il commento su "savedScrollY" sopra: riafferma la posizione
       // subito dopo aver innescato la transizione, nel caso lo scatto
@@ -1773,10 +1757,15 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   document.addEventListener("keydown", onKeydown);
 
   zoomCurrentClose = function close() {
+    // Sfondo scuro: resta pieno più a lungo di quanto duri lo scale/opacità
+    // del pannello (che parte prima), e sparisce solo negli ultimi 150ms —
+    // vedi il commento sul FLIP delle foto per il perché di questo ritardo.
     backdrop.classList.remove("is-active");
-    backdrop.style.transition = "opacity 150ms ease-in 400ms";
+    backdrop.style.transition = "opacity 150ms ease-in 500ms";
 
-    panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1), opacity 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+    // Stessi identici valori dell'apertura qui sopra (stile unico, vedi
+    // commento lì), solo leggermente rallentata rispetto a prima.
+    panel.style.transition = "transform 650ms cubic-bezier(0.25, 1, 0.5, 1), opacity 650ms cubic-bezier(0.25, 1, 0.5, 1)";
     panel.style.transform = "scale(0.94)";
     panel.style.opacity = "0";
 
@@ -1793,7 +1782,7 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
       // in cui il pannello torna invisibile/si svuota, questo è l'ultimo
       // istante utile per correggerlo.
       if (window.scrollY !== savedScrollY) window.scrollTo(0, savedScrollY);
-    }, 550);
+    }, 650);
   };
 }
 
