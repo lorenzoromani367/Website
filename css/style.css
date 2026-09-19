@@ -603,7 +603,10 @@ body.edit-mode .caption-input:focus {
    ========================================================================== */
 .lightbox {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 300;
   background: var(--bg);
   display: flex;
@@ -661,7 +664,10 @@ body.edit-mode .caption-input:focus {
    ========================================================================== */
 .lightbox-backdrop {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: rgba(13, 13, 13, 0.96);
   z-index: 300;
   opacity: 0;
@@ -837,7 +843,10 @@ body.edit-mode .caption-input:focus {
    telefono vero, editing compreso — non serve duplicare o simulare nulla. */
 .mobile-preview-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 400;
   background: rgba(10, 10, 10, 0.94);
   display: none;
@@ -1159,7 +1168,10 @@ body.edit-mode .home-list li {
 .resize-handle::after {
   content: "";
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   margin: auto;
   width: 8px;
   height: 8px;
@@ -1244,7 +1256,10 @@ body.edit-mode .guide-ruler {
    schermo mentre navighi tra le foto o scorri il testo. */
 .guides-layer {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   pointer-events: none;
   z-index: 6;
 }
@@ -1311,7 +1326,10 @@ body.edit-mode .guide-line {
 
 .export-panel {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 200;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
