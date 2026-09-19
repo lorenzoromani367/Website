@@ -1657,7 +1657,6 @@ function ensureZoomTextPanel() {
 // contenuto su sfondo nero: il colore/aspetto restano quelli di
 // ".lightbox-text" in style.css, solo la posizione è calcolata qui.
 function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
-  const firstRect = descBlock.getBoundingClientRect();
   // Nasconde il blocco originale — che scorre in continuazione (marquee)
   // — durante lo zoom: senza, resta visibile "attraverso" lo sfondo scuro
   // per tutta la durata dell'animazione (finché non arriva a piena
@@ -1704,34 +1703,20 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     });
   }
 
-  // 2. LAST: misura la posizione/misura FINALE (quella normale, decisa
-  // dal CSS di ".lightbox-text") mettendo il pannello a schermo un
-  // istante, "visibility: hidden" per non farlo lampeggiare lì prima di
-  // riportarlo indietro (via transform) sulla posizione della miniatura.
+  // Zoom semplice e uniforme (scale unico, non un FLIP dalla posizione
+  // esatta del blocco in pagina come le foto): il blocco descrizione
+  // (largo e basso) e il pannello ingrandito (stretto e alto) hanno
+  // proporzioni molto diverse — scalarli separatamente su X e Y per
+  // "volare" dall'uno all'altro stirerebbe/schiaccerebbe il testo dentro
+  // durante il movimento. Un solo fattore di scala (qui: 0.94) ingrandisce
+  // in modo fluido senza mai deformare le lettere, esattamente come
+  // chiesto ("senza effetti particolari").
   panel.style.transition = "none";
-  panel.style.transform = "none";
-  panel.style.visibility = "hidden";
-  const targetRect = panel.getBoundingClientRect();
-  panel.style.visibility = "";
-
-  // 3. INVERT: delta centro-blocco-in-pagina → centro-pannello-ingrandito.
-  const firstCenterX = firstRect.left + firstRect.width / 2;
-  const firstCenterY = firstRect.top + firstRect.height / 2;
-  const targetCenterX = targetRect.left + targetRect.width / 2;
-  const targetCenterY = targetRect.top + targetRect.height / 2;
-
-  const deltaX = firstCenterX - targetCenterX;
-  const deltaY = firstCenterY - targetCenterY;
-  const scaleX = firstRect.width / targetRect.width;
-  const scaleY = firstRect.height / targetRect.height;
-
-  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
-
-  // 4. PLAY.
+  panel.style.transform = "scale(0.94)";
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       panel.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
-      panel.style.transform = "translate(0px, 0px) scale(1)";
+      panel.style.transform = "scale(1)";
     });
   });
 
@@ -1741,22 +1726,11 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   document.addEventListener("keydown", onKeydown);
 
   zoomCurrentClose = function close() {
-    // Ricalcola la posizione del blocco in pagina al MOMENTO della
-    // chiusura (se nel frattempo hai scrollato, "firstRect" è vecchia).
-    const currentRect = descBlock.getBoundingClientRect();
-    const currentCenterX = currentRect.left + currentRect.width / 2;
-    const currentCenterY = currentRect.top + currentRect.height / 2;
-
-    const closingDeltaX = currentCenterX - targetCenterX;
-    const closingDeltaY = currentCenterY - targetCenterY;
-    const closingScaleX = currentRect.width / targetRect.width;
-    const closingScaleY = currentRect.height / targetRect.height;
-
     backdrop.classList.remove("is-active");
     backdrop.style.transition = "opacity 150ms ease-in 400ms";
 
     panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
-    panel.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
+    panel.style.transform = "scale(0.94)";
 
     setTimeout(() => {
       panel.classList.remove("is-active");
