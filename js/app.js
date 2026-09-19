@@ -1624,45 +1624,75 @@ function setupMobilePreviewToggle() {
    Disattivo in modalità modifica, per non aprirlo per sbaglio mentre si
    lavora sulla pagina.
    ------------------------------------------------------------------------- */
-// Apertura/chiusura del lightbox di TESTO: zoom-in all'apertura,
-// zoom-out alla chiusura — vedi ".lightbox.is-open"/".lightbox.is-closing"
-// in style.css. Il doppio requestAnimationFrame serve perché il browser
-// deve prima dipingere lo stato INIZIALE (opacità 0, scala ridotta) prima
-// che aggiungere la classe scateni davvero la transizione: farlo nello
-// stesso frame in cui l'elemento viene creato la salterebbe del tutto
-// (nessuna animazione visibile). Curve ed durate diverse tra apertura e
-// chiusura (vedi ".lightbox"/".lightbox.is-closing" in style.css): questa
-// costante deve restare allineata alla durata di chiusura lì, è quanto si
-// aspetta prima di rimuovere davvero l'elemento dal DOM, altrimenti
-// sparirebbe a metà animazione invece che alla fine.
-const LIGHTBOX_FADE_MS = 550;
+// Pannello beige ingrandito, singolo e riusato per ogni apertura (come
+// zoomActiveImg per le foto): il contenuto (paragrafi) cambia ad ogni
+// apertura, non l'elemento stesso.
+let zoomTextPanel = null;
 
-function animateLightboxOpen(overlay) {
-  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add("is-open")));
+function ensureZoomTextPanel() {
+  if (zoomTextPanel) return;
+  zoomTextPanel = el("div", { class: "lightbox-text" });
+  zoomTextPanel.id = "lightboxTextPanel";
+  // Posizione impostata in riga per lo stesso motivo dello sfondo scuro
+  // (vedi ensureZoomElements): un "position: fixed" senza left/right/top
+  // in riga dipenderebbe dal solo CSS per centrarsi ed essere scrollabile
+  // se il testo è lungo — qui mettiamo SOLO l'essenziale (struttura),
+  // aspetto/larghezza restano nel foglio di stile (vedi ".lightbox-text").
+  zoomTextPanel.style.position = "fixed";
+  zoomTextPanel.style.top = "0";
+  zoomTextPanel.style.left = "0";
+  zoomTextPanel.style.right = "0";
+  zoomTextPanel.style.maxHeight = "100vh";
+  zoomTextPanel.style.overflowY = "auto";
+  zoomTextPanel.style.zIndex = "301";
+  zoomTextPanel.addEventListener("click", () => { if (zoomCurrentClose) zoomCurrentClose(); });
+  document.body.appendChild(zoomTextPanel);
 }
 
-function closeLightboxOverlay(overlay, cleanup) {
-  if (overlay.classList.contains("is-closing")) return;
-  overlay.classList.add("is-closing");
-  overlay.classList.remove("is-open");
-  if (cleanup) cleanup();
-  setTimeout(() => overlay.remove(), LIGHTBOX_FADE_MS);
-}
+// Stesso zoom FLIP delle foto (vedi makeZoomable): il pannello beige parte
+// dalla posizione/misura ESATTA del blocco descrizione in pagina e vola
+// fino al rettangolo ingrandito, e viceversa alla chiusura — stesso
+// sfondo scuro condiviso (zoomBackdrop). A differenza delle foto, qui
+// resta un vero rettangolo BEIGE (il "foglio" del sito), non un semplice
+// contenuto su sfondo nero: il colore/aspetto restano quelli di
+// ".lightbox-text" in style.css, solo la posizione è calcolata qui.
+function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
+  const firstRect = descBlock.getBoundingClientRect();
+  // Nasconde il blocco originale — che scorre in continuazione (marquee)
+  // — durante lo zoom: senza, resta visibile "attraverso" lo sfondo scuro
+  // per tutta la durata dell'animazione (finché non arriva a piena
+  // opacità), sembrando un doppione fantasma dello stesso testo.
+  descBlock.style.opacity = "0";
 
-// Stesso "zoom" delle foto, applicato al blocco di testo che scorre in
-// verticale: click fuori dalla modalità modifica apre il testo per
-// intero, ingrandito, in un overlay identico (stessa dissolvenza, stesso
-// "click ovunque per chiudere", stesso tasto Esc) — solo il contenuto
-// cambia (testo invece di un'immagine).
-function openTextLightbox(paragraphs, sizeKeyPrefix) {
+  ensureZoomElements();
+  ensureZoomTextPanel();
+  const backdrop = zoomBackdrop;
+  const panel = zoomTextPanel;
+
+  // Sfondo scuro: stessa logica delle foto, arriva subito, sparisce solo
+  // alla fine della chiusura (vedi i commenti su ensureZoomElements).
+  backdrop.style.transition = "opacity 200ms ease-out";
+  backdrop.classList.add("is-active");
+  // Visibile/cliccabile SOLO da qui alla fine della chiusura (vedi
+  // zoomCurrentClose sotto, che la toglie solo a fine animazione): senza,
+  // a chiusura completata il pannello (vuoto ma comunque a piena
+  // dimensione per via di "min-height" in CSS) resterebbe un rettangolo
+  // beige invisibile-ma-cliccabile sopra il resto della pagina.
+  panel.classList.add("is-active");
+
+  panel.innerHTML = "";
+  const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
+  closeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (zoomCurrentClose) zoomCurrentClose();
+  });
   const content = el(
     "div",
     { class: "lightbox-text-content" },
     paragraphs.map((p) => el("p", {}, p))
   );
-  const textBox = el("div", { class: "lightbox-text" }, [content]);
-  const overlay = el("div", { class: "lightbox lightbox-text-overlay" }, [textBox]);
-  const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
+  panel.appendChild(content);
+  panel.appendChild(closeBtn);
 
   // Maniglia sempre visibile (non solo in modalità modifica): qui non ha
   // senso legarla alla modalità modifica del sito, perché l'unico momento
@@ -1674,22 +1704,70 @@ function openTextLightbox(paragraphs, sizeKeyPrefix) {
     });
   }
 
-  function close() {
-    closeLightboxOverlay(overlay, () => {
-      document.removeEventListener("keydown", onKeydown);
-    });
-  }
-  function onKeydown(e) {
-    if (e.key === "Escape") close();
-  }
+  // 2. LAST: misura la posizione/misura FINALE (quella normale, decisa
+  // dal CSS di ".lightbox-text") mettendo il pannello a schermo un
+  // istante, "visibility: hidden" per non farlo lampeggiare lì prima di
+  // riportarlo indietro (via transform) sulla posizione della miniatura.
+  panel.style.transition = "none";
+  panel.style.transform = "none";
+  panel.style.visibility = "hidden";
+  const targetRect = panel.getBoundingClientRect();
+  panel.style.visibility = "";
 
-  overlay.addEventListener("click", () => close());
-  closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
+  // 3. INVERT: delta centro-blocco-in-pagina → centro-pannello-ingrandito.
+  const firstCenterX = firstRect.left + firstRect.width / 2;
+  const firstCenterY = firstRect.top + firstRect.height / 2;
+  const targetCenterX = targetRect.left + targetRect.width / 2;
+  const targetCenterY = targetRect.top + targetRect.height / 2;
+
+  const deltaX = firstCenterX - targetCenterX;
+  const deltaY = firstCenterY - targetCenterY;
+  const scaleX = firstRect.width / targetRect.width;
+  const scaleY = firstRect.height / targetRect.height;
+
+  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+
+  // 4. PLAY.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      panel.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
+      panel.style.transform = "translate(0px, 0px) scale(1)";
+    });
+  });
+
+  function onKeydown(e) {
+    if (e.key === "Escape" && zoomCurrentClose) zoomCurrentClose();
+  }
   document.addEventListener("keydown", onKeydown);
 
-  overlay.appendChild(closeBtn);
-  document.body.appendChild(overlay);
-  animateLightboxOpen(overlay);
+  zoomCurrentClose = function close() {
+    // Ricalcola la posizione del blocco in pagina al MOMENTO della
+    // chiusura (se nel frattempo hai scrollato, "firstRect" è vecchia).
+    const currentRect = descBlock.getBoundingClientRect();
+    const currentCenterX = currentRect.left + currentRect.width / 2;
+    const currentCenterY = currentRect.top + currentRect.height / 2;
+
+    const closingDeltaX = currentCenterX - targetCenterX;
+    const closingDeltaY = currentCenterY - targetCenterY;
+    const closingScaleX = currentRect.width / targetRect.width;
+    const closingScaleY = currentRect.height / targetRect.height;
+
+    backdrop.classList.remove("is-active");
+    backdrop.style.transition = "opacity 150ms ease-in 400ms";
+
+    panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+    panel.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
+
+    setTimeout(() => {
+      panel.classList.remove("is-active");
+      panel.style.transition = "none";
+      panel.style.transform = "";
+      panel.innerHTML = "";
+      descBlock.style.opacity = "1";
+      document.removeEventListener("keydown", onKeydown);
+      zoomCurrentClose = null;
+    }, 550);
+  };
 }
 
 // Zoom foto con tecnica FLIP (First-Last-Invert-Play): l'immagine non
@@ -2503,7 +2581,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     descBlock.addEventListener("click", () => {
       if (isEditMode()) return;
       if (marqueeJustDragged) { marqueeJustDragged = false; return; }
-      openTextLightbox(description, sizeKeyPrefix);
+      openTextLightbox(description, sizeKeyPrefix, descBlock);
     });
   }
 
