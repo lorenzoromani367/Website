@@ -1697,18 +1697,39 @@ function openTextLightbox(paragraphs, sizeKeyPrefix) {
 // visivamente dalla sua posizione/misura ESATTA nello slider e "vola" fino
 // al centro dello sfondo scuro, e viceversa alla chiusura — un vero
 // zoom-in/zoom-out, non una semplice dissolvenza. Sfondo e immagine
-// volante sono UN SOLO elemento ciascuno, creato la prima volta che apri
-// una foto e riusato per tutte le successive (anche dopo un cambio
-// pagina): l'<img> del clone cambia solo "src".
-function makeZoomable(frame, img) {
-  // "currentClose" è la funzione di chiusura dell'apertura IN CORSO: la
-  // maniglia di chiusura su sfondo/immagine (creata una sola volta, vedi
-  // sotto) deve sempre chiamare quella giusta, non quella della PRIMA
-  // foto mai aperta — altrimenti, aprendo una seconda foto diversa e poi
-  // cliccando per chiudere, l'animazione di ritorno userebbe ancora
-  // posizione/misura della prima.
-  let currentClose = null;
+// volante sono UN SOLO elemento ciascuno CONDIVISO DA TUTTE LE FOTO del
+// sito (non uno per foto), creato la prima volta che apri una foto
+// qualsiasi e riusato per tutte le successive: l'<img> del clone cambia
+// solo "src".
+let zoomBackdrop = null;
+let zoomActiveImg = null;
+// La funzione di chiusura dell'apertura IN CORSO: il click su sfondo/
+// immagine (agganciato una volta sola, vedi ensureZoomElements) deve
+// sempre richiamare QUESTA, aggiornata a ogni apertura — non una copia
+// fissata alla primissima foto mai aperta. Prima di questa correzione era
+// una variabile locale a makeZoomable (quindi una per foto): il listener
+// restava agganciato per sempre a quella della PRIMA foto cliccata in
+// assoluto, quindi chiudere una foto diversa non faceva nulla (bug
+// confermato: "chiudere funziona solo sulla prima foto, poi si blocca").
+let zoomCurrentClose = null;
 
+function ensureZoomElements() {
+  if (zoomBackdrop) return;
+  zoomBackdrop = el("div", { class: "lightbox-backdrop" });
+  zoomBackdrop.id = "lightboxBackdrop";
+  zoomActiveImg = el("img", { class: "lightbox-active-img" });
+  zoomActiveImg.id = "lightboxActiveImg";
+  const triggerClose = () => { if (zoomCurrentClose) zoomCurrentClose(); };
+  zoomBackdrop.addEventListener("click", triggerClose);
+  zoomActiveImg.addEventListener("click", triggerClose);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") triggerClose();
+  });
+  document.body.appendChild(zoomBackdrop);
+  document.body.appendChild(zoomActiveImg);
+}
+
+function makeZoomable(frame, img) {
   frame.addEventListener("click", () => {
     if (isEditMode()) return;
 
@@ -1719,25 +1740,9 @@ function makeZoomable(frame, img) {
     // in cui il clone appare esattamente sopra di lei).
     img.style.opacity = "0";
 
-    let backdrop = document.getElementById("lightboxBackdrop");
-    let activeImg = document.getElementById("lightboxActiveImg");
-
-    if (!backdrop) {
-      backdrop = el("div", { class: "lightbox-backdrop" });
-      backdrop.id = "lightboxBackdrop";
-      document.body.appendChild(backdrop);
-
-      activeImg = el("img", { class: "lightbox-active-img" });
-      activeImg.id = "lightboxActiveImg";
-      document.body.appendChild(activeImg);
-
-      const triggerClose = () => { if (currentClose) currentClose(); };
-      backdrop.addEventListener("click", triggerClose);
-      activeImg.addEventListener("click", triggerClose);
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") triggerClose();
-      });
-    }
+    ensureZoomElements();
+    const backdrop = zoomBackdrop;
+    const activeImg = zoomActiveImg;
 
     backdrop.classList.add("is-active");
     // Riattiva i click sul clone SOLO mentre è davvero visibile: senza
@@ -1793,7 +1798,7 @@ function makeZoomable(frame, img) {
       });
     });
 
-    currentClose = function close() {
+    zoomCurrentClose = function close() {
       // Ricalcola la miniatura al MOMENTO della chiusura (se nel frattempo
       // hai scrollato la pagina, "firstRect" sarebbe ormai vecchia).
       const currentThumbRect = img.getBoundingClientRect();
@@ -1813,7 +1818,21 @@ function makeZoomable(frame, img) {
 
       setTimeout(() => {
         activeImg.classList.remove("is-active");
+        activeImg.style.transition = "none";
         activeImg.style.transform = "";
+        // Ripulisce TUTTO quello che l'apertura aveva impostato (misura,
+        // posizione, alt), non solo "src": un <img> senza "src" ma con
+        // ancora l'"alt" di prima (es. "house, norway") e le vecchie
+        // width/height/left/top mostra in molti browser l'iconcina di
+        // "immagine non trovata" seguita dal testo alt — esattamente il
+        // glitch segnalato ("quella caption" accanto a un'icona rotta),
+        // perché backdrop/activeImg sono UN SOLO elemento riusato da ogni
+        // foto e prima restava con gli attributi della foto precedente.
+        activeImg.style.width = "";
+        activeImg.style.height = "";
+        activeImg.style.left = "";
+        activeImg.style.top = "";
+        activeImg.removeAttribute("alt");
         // "activeImg.src = ''" (come nel codice originale) in molti browser
         // fa ripartire una richiesta verso la PAGINA STESSA, non verso
         // "nessuna immagine" — bug confermato: dopo la chiusura, "src"
@@ -1821,7 +1840,7 @@ function makeZoomable(frame, img) {
         // toglie l'attributo senza scatenare nessuna richiesta.
         activeImg.removeAttribute("src");
         img.style.opacity = "1";
-        currentClose = null;
+        zoomCurrentClose = null;
       }, 550);
     };
   });
