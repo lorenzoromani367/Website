@@ -1189,8 +1189,6 @@ function describeOverrideKey(key) {
   const archiveImgMatch = key.match(/^archive\.image\.([\w-]+)$/);
   if (archiveImgMatch) return `Core archive, ${photoLabel(archiveImgMatch[1])}  →  aggiorna width/height su quella voce di ARCHIVE.images`;
 
-  if (key === "lightbox.image") return `Dimensione dell'ingrandimento (lightbox), uguale per tutte le foto  →  solo una preferenza salvata nel browser, non c'è un equivalente in content.js`;
-
   const spacerBeforeMatch = key.match(/^(?:project\.(.+)|(archive))\.spacerBeforeBar$/);
   if (spacerBeforeMatch) {
     const where = spacerBeforeMatch[1] ? `Progetto "${spacerBeforeMatch[1]}"` : "Core archive";
@@ -1618,94 +1616,15 @@ function setupMobilePreviewToggle() {
 }
 
 /* -------------------------------------------------------------------------
-   4. Lightbox — clic su una foto per ingrandirla (solo la foto, sfondo
-   scuro come il resto del sito, non a tutto schermo: l'immagine resta
-   contenuta con un margine). Disattivo in modalità modifica, per non
-   aprirlo per sbaglio mentre si trascina una maniglia di resize.
+   4. Lightbox — clic per ingrandire, sfondo scuro. Due varianti:
+   - foto (vedi makeZoomable): tecnica FLIP, l'immagine "vola" dalla sua
+     posizione nello slider al centro dello schermo e viceversa;
+   - testo (vedi openTextLightbox): overlay a scomparsa/dissolvenza
+     classico, invariato.
+   Disattivo in modalità modifica, per non aprirlo per sbaglio mentre si
+   lavora sulla pagina.
    ------------------------------------------------------------------------- */
-// Chiave UNICA e condivisa da tutte le foto: la misura scelta trascinando
-// la maniglia si applica a ogni foto che apri dopo (non è per-foto), così
-// tutte le foto ingrandite hanno una dimensione coerente fra loro.
-const LIGHTBOX_SIZE_KEY = "lightbox.image";
-
-// Maniglia di resize sempre visibile (non solo in modalità modifica): a
-// differenza di makeResizable, qui non c'è un "sito in modalità modifica"
-// da attivare prima — il lightbox è già di per sé una vista a parte,
-// raggiungibile solo aprendo una foto, quindi la maniglia per decidere
-// quanto deve essere grande lo zoom è sempre lì, pronta all'uso.
-function makeLightboxResizable(frame, img, { onResizeEnd } = {}) {
-  let dragStart = null;
-  let activeHandle = null;
-
-  // Due maniglie, in alto e in basso (entrambe a destra): ingrandendo
-  // molto una foto molto verticale, il riquadro cresce centrato e può
-  // finire più alto dello schermo — quella di sotto sparirebbe oltre il
-  // bordo, senza più modo di riprenderla per rimpicciolirla. Con una
-  // copia anche in alto, una delle due resta sempre raggiungibile.
-  // "signX" non serve qui (niente maniglia a sinistra, a differenza delle
-  // foto in pagina): la larghezza si controlla sempre trascinando verso
-  // destra/sinistra, da qualunque angolo.
-  function createHandle(extraClass) {
-    const h = el("div", { class: `resize-handle always-visible${extraClass ? ` ${extraClass}` : ""}` });
-    frame.appendChild(h);
-    h.addEventListener("click", (e) => e.stopPropagation()); // non deve mai chiudere il lightbox
-    h.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const rect = frame.getBoundingClientRect();
-      activeHandle = h;
-      dragStart = {
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startWidth: rect.width,
-        aspectRatio: img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : rect.width / rect.height,
-      };
-      h.classList.add("is-dragging");
-      document.addEventListener("pointermove", onPointerMove);
-      document.addEventListener("pointerup", onPointerUp);
-    });
-    return h;
-  }
-
-  function onPointerMove(e) {
-    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
-    const dx = e.clientX - dragStart.startX;
-    let newWidth = Math.max(120, dragStart.startWidth + dx);
-    // Mai più grande di quanto ci stia nello schermo (stesso margine di
-    // "applyDefaultSize"): è il limite che tiene entrambe le maniglie
-    // sempre visibili, non solo un ripiego se quella giusta manca.
-    const maxWidth = window.innerWidth - 96;
-    const maxHeight = window.innerHeight - 96;
-    if (newWidth / dragStart.aspectRatio > maxHeight) newWidth = maxHeight * dragStart.aspectRatio;
-    if (newWidth > maxWidth) newWidth = maxWidth;
-    const newHeight = Math.round(newWidth / dragStart.aspectRatio);
-    frame.style.width = `${Math.round(newWidth)}px`;
-    frame.style.height = `${newHeight}px`;
-  }
-  function onPointerUp(e) {
-    if (!dragStart || e.pointerId !== dragStart.pointerId) return;
-    if (activeHandle) activeHandle.classList.remove("is-dragging");
-    activeHandle = null;
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerUp);
-    saveSizeOverride(LIGHTBOX_SIZE_KEY, { width: frame.style.width, height: frame.style.height });
-    dragStart = null;
-    // Il riquadro resta centrato dal flex del lightbox: se si restringe,
-    // il bordo che stai trascinando si sposta di MENO di quanto ti sei
-    // mosso tu col mouse (il centro non si muove, quindi ogni bordo fa
-    // solo metà strada). La maniglia, agganciata al bordo, resta quindi
-    // "indietro" rispetto al cursore, e il rilascio del clic finisce per
-    // cadere sul riquadro invece che su di lei: onResizeEnd avvisa
-    // openLightbox di ignorare quell'unico clic (altrimenti chiuderebbe
-    // il lightbox appena finito di ridimensionare).
-    if (onResizeEnd) onResizeEnd();
-  }
-
-  createHandle();
-  createHandle("resize-handle-top");
-}
-
-// Apertura/chiusura di un lightbox (foto o testo): zoom-in all'apertura,
+// Apertura/chiusura del lightbox di TESTO: zoom-in all'apertura,
 // zoom-out alla chiusura — vedi ".lightbox.is-open"/".lightbox.is-closing"
 // in style.css. Il doppio requestAnimationFrame serve perché il browser
 // deve prima dipingere lo stato INIZIALE (opacità 0, scala ridotta) prima
@@ -1728,75 +1647,6 @@ function closeLightboxOverlay(overlay, cleanup) {
   overlay.classList.remove("is-open");
   if (cleanup) cleanup();
   setTimeout(() => overlay.remove(), LIGHTBOX_FADE_MS);
-}
-
-function openLightbox(src, alt) {
-  const img = el("img", { src, alt: alt || "" });
-  const frame = el("div", { class: "lightbox-frame" }, [img]);
-  const guideV = el("div", { class: "lightbox-guide lightbox-guide-v" });
-  const guideH = el("div", { class: "lightbox-guide lightbox-guide-h" });
-  const overlay = el("div", { class: "lightbox" }, [frame, guideV, guideH]);
-  const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi" }, "×");
-
-  // Dimensione di default: la foto quanto più grande possibile restando
-  // interamente visibile nello spazio disponibile (esattamente come
-  // "contain" — nessun taglio). Se hai già trascinato la maniglia in
-  // precedenza, si usa invece quella misura per tutte le foto.
-  function applyDefaultSize() {
-    const saved = loadSizeOverrides()[LIGHTBOX_SIZE_KEY];
-    if (saved && saved.width && saved.height) {
-      frame.style.width = saved.width;
-      frame.style.height = saved.height;
-      return;
-    }
-    if (!img.naturalWidth || !img.naturalHeight) return; // non ancora caricata: riproviamo al load
-    const availableWidth = window.innerWidth - 96; // 48px di padding di .lightbox per lato
-    const availableHeight = window.innerHeight - 96;
-    const ratio = img.naturalWidth / img.naturalHeight;
-    let w = availableWidth;
-    let h = w / ratio;
-    if (h > availableHeight) {
-      h = availableHeight;
-      w = h * ratio;
-    }
-    frame.style.width = `${Math.round(w)}px`;
-    frame.style.height = `${Math.round(h)}px`;
-  }
-  if (img.complete) applyDefaultSize();
-  img.addEventListener("load", applyDefaultSize);
-  // Solo se NON hai già impostato tu una misura: la ridisegna quando
-  // ridimensioni la finestra del browser mentre il lightbox è aperto.
-  function onWindowResize() {
-    if (!loadSizeOverrides()[LIGHTBOX_SIZE_KEY]) applyDefaultSize();
-  }
-  window.addEventListener("resize", onWindowResize);
-
-  let justResized = false;
-  makeLightboxResizable(frame, img, { onResizeEnd: () => { justResized = true; } });
-
-  function close() {
-    closeLightboxOverlay(overlay, () => {
-      window.removeEventListener("resize", onWindowResize);
-      document.removeEventListener("keydown", onKeydown);
-    });
-  }
-  function onKeydown(e) {
-    if (e.key === "Escape") close();
-  }
-
-  overlay.addEventListener("click", (e) => {
-    // Il clic che chiude il rilascio della maniglia di resize non deve
-    // chiudere anche il lightbox — vedi il commento in makeLightboxResizable.
-    if (justResized) { justResized = false; return; }
-    if (e.target.closest(".resize-handle")) return;
-    close();
-  });
-  closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
-  document.addEventListener("keydown", onKeydown);
-
-  overlay.appendChild(closeBtn);
-  document.body.appendChild(overlay);
-  animateLightboxOpen(overlay);
 }
 
 // Stesso "zoom" delle foto, applicato al blocco di testo che scorre in
@@ -1842,10 +1692,138 @@ function openTextLightbox(paragraphs, sizeKeyPrefix) {
   animateLightboxOpen(overlay);
 }
 
+// Zoom foto con tecnica FLIP (First-Last-Invert-Play): l'immagine non
+// compare al centro già ingrandita (come il vecchio lightbox), ma parte
+// visivamente dalla sua posizione/misura ESATTA nello slider e "vola" fino
+// al centro dello sfondo scuro, e viceversa alla chiusura — un vero
+// zoom-in/zoom-out, non una semplice dissolvenza. Sfondo e immagine
+// volante sono UN SOLO elemento ciascuno, creato la prima volta che apri
+// una foto e riusato per tutte le successive (anche dopo un cambio
+// pagina): l'<img> del clone cambia solo "src".
 function makeZoomable(frame, img) {
+  // "currentClose" è la funzione di chiusura dell'apertura IN CORSO: la
+  // maniglia di chiusura su sfondo/immagine (creata una sola volta, vedi
+  // sotto) deve sempre chiamare quella giusta, non quella della PRIMA
+  // foto mai aperta — altrimenti, aprendo una seconda foto diversa e poi
+  // cliccando per chiudere, l'animazione di ritorno userebbe ancora
+  // posizione/misura della prima.
+  let currentClose = null;
+
   frame.addEventListener("click", () => {
     if (isEditMode()) return;
-    openLightbox(img.src, img.alt);
+
+    // 1. FIRST: coordinate della miniatura nello slider.
+    const firstRect = img.getBoundingClientRect();
+
+    // Nasconde temporaneamente l'originale (niente "doppione" per l'istante
+    // in cui il clone appare esattamente sopra di lei).
+    img.style.opacity = "0";
+
+    let backdrop = document.getElementById("lightboxBackdrop");
+    let activeImg = document.getElementById("lightboxActiveImg");
+
+    if (!backdrop) {
+      backdrop = el("div", { class: "lightbox-backdrop" });
+      backdrop.id = "lightboxBackdrop";
+      document.body.appendChild(backdrop);
+
+      activeImg = el("img", { class: "lightbox-active-img" });
+      activeImg.id = "lightboxActiveImg";
+      document.body.appendChild(activeImg);
+
+      const triggerClose = () => { if (currentClose) currentClose(); };
+      backdrop.addEventListener("click", triggerClose);
+      activeImg.addEventListener("click", triggerClose);
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") triggerClose();
+      });
+    }
+
+    backdrop.classList.add("is-active");
+    // Riattiva i click sul clone SOLO mentre è davvero visibile: senza
+    // questa classe, a fine chiusura il clone resta comunque nel DOM
+    // (a grandezza/posizione della miniatura, "position: fixed") e
+    // intercetterebbe per sempre i click su qualunque cosa si trovi in
+    // quello stesso punto dello schermo — bug confermato con un test
+    // automatico (impossibile riaprire una foto in quella posizione).
+    activeImg.classList.add("is-active");
+
+    // 2. LAST: dimensione finale, centrata sullo schermo.
+    const maxW = window.innerWidth * 0.85;
+    const maxH = window.innerHeight * 0.82;
+    const ratio = firstRect.width / firstRect.height;
+
+    let targetW = maxW;
+    let targetH = targetW / ratio;
+    if (targetH > maxH) {
+      targetH = maxH;
+      targetW = targetH * ratio;
+    }
+
+    const targetX = (window.innerWidth - targetW) / 2;
+    const targetY = (window.innerHeight - targetH) / 2;
+
+    activeImg.src = img.src;
+    activeImg.alt = img.alt;
+    activeImg.style.width = `${targetW}px`;
+    activeImg.style.height = `${targetH}px`;
+    activeImg.style.left = `${targetX}px`;
+    activeImg.style.top = `${targetY}px`;
+
+    // 3. INVERT: delta centro-miniatura → centro-target.
+    const firstCenterX = firstRect.left + firstRect.width / 2;
+    const firstCenterY = firstRect.top + firstRect.height / 2;
+    const targetCenterX = targetX + targetW / 2;
+    const targetCenterY = targetY + targetH / 2;
+
+    const deltaX = firstCenterX - targetCenterX;
+    const deltaY = firstCenterY - targetCenterY;
+    const scaleX = firstRect.width / targetW;
+    const scaleY = firstRect.height / targetH;
+
+    // Porta il clone esattamente sopra la miniatura, ancora invisibile agli occhi.
+    activeImg.style.transition = "none";
+    activeImg.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+
+    // 4. PLAY: anima verso il centro.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        activeImg.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
+        activeImg.style.transform = "translate(0px, 0px) scale(1)";
+      });
+    });
+
+    currentClose = function close() {
+      // Ricalcola la miniatura al MOMENTO della chiusura (se nel frattempo
+      // hai scrollato la pagina, "firstRect" sarebbe ormai vecchia).
+      const currentThumbRect = img.getBoundingClientRect();
+      const thumbCenterX = currentThumbRect.left + currentThumbRect.width / 2;
+      const thumbCenterY = currentThumbRect.top + currentThumbRect.height / 2;
+
+      const closingDeltaX = thumbCenterX - targetCenterX;
+      const closingDeltaY = thumbCenterY - targetCenterY;
+      const closingScaleX = currentThumbRect.width / targetW;
+      const closingScaleY = currentThumbRect.height / targetH;
+
+      backdrop.classList.remove("is-active");
+      backdrop.style.transition = "opacity 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+
+      activeImg.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+      activeImg.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
+
+      setTimeout(() => {
+        activeImg.classList.remove("is-active");
+        activeImg.style.transform = "";
+        // "activeImg.src = ''" (come nel codice originale) in molti browser
+        // fa ripartire una richiesta verso la PAGINA STESSA, non verso
+        // "nessuna immagine" — bug confermato: dopo la chiusura, "src"
+        // risultava l'URL della pagina invece che vuoto. removeAttribute
+        // toglie l'attributo senza scatenare nessuna richiesta.
+        activeImg.removeAttribute("src");
+        img.style.opacity = "1";
+        currentClose = null;
+      }, 550);
+    };
   });
 }
 
@@ -2469,9 +2447,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   // Stesso zoom delle foto (vedi makeZoomable), sul blocco di testo: un
   // clic vero e proprio (non il rilascio di un trascinamento — vedi
-  // "marqueeJustDragged" sopra, stesso principio di "justResized" nel
-  // lightbox delle foto) lo apre ingrandito. Niente zoom se il progetto
-  // non ha proprio testo (pagine-parola, per ora).
+  // "marqueeJustDragged" sopra) lo apre ingrandito. Niente zoom se il
+  // progetto non ha proprio testo (pagine-parola, per ora).
   if (description && description.length) {
     descBlock.addEventListener("click", () => {
       if (isEditMode()) return;
