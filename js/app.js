@@ -1176,6 +1176,8 @@ function photoLabel(id) {
 }
 
 function describeOverrideKey(key) {
+  if (key === LIGHTBOX_SIZE_KEY) return `Dimensione dell'ingrandimento (lightbox), uguale per tutte le foto  →  solo una preferenza salvata nel browser, non c'è un equivalente in content.js`;
+
   if (key === "home.list") return `LAYOUT.home  →  aggiorna listWidth/listHeight in content.js`;
 
   const descMatch = key.match(/^project\.(.+)\.description$/);
@@ -1657,6 +1659,15 @@ function ensureZoomTextPanel() {
 // contenuto su sfondo nero: il colore/aspetto restano quelli di
 // ".lightbox-text" in style.css, solo la posizione è calcolata qui.
 function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
+  // Salva la posizione di scroll della PAGINA (non del testo che scorre
+  // dentro il blocco, quello è un'altra cosa) prima di aprire, e la
+  // riimpone alla chiusura: su alcuni browser mobili, nascondere/mostrare
+  // un elemento "position: fixed" alto quasi quanto lo schermo può far
+  // scattare la pagina in cima da sola — bug confermato via video (si
+  // apre a metà lettura, si chiude e la pagina è tornata in cima al
+  // titolo). Non dipende da cosa lo causa: lo riimponiamo e basta.
+  const savedScrollY = window.scrollY;
+
   // Nasconde il blocco originale — che scorre in continuazione (marquee)
   // — durante lo zoom: senza, resta visibile "attraverso" lo sfondo scuro
   // per tutta la durata dell'animazione (finché non arriva a piena
@@ -1710,13 +1721,25 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   // "volare" dall'uno all'altro stirerebbe/schiaccerebbe il testo dentro
   // durante il movimento. Un solo fattore di scala (qui: 0.94) ingrandisce
   // in modo fluido senza mai deformare le lettere, esattamente come
-  // chiesto ("senza effetti particolari").
+  // chiesto ("senza effetti particolari"). Insieme alla scala anima anche
+  // l'opacità (0→1): da sola, una differenza di scala del solo 6% è
+  // troppo sottile per leggersi come "si apre/chiude" — serve la
+  // dissolvenza per far sembrare il movimento fluido invece che un salto
+  // secco proprio all'ultimo istante (bug confermato via video: la
+  // chiusura restava quasi ferma al 94% per tutta la durata, poi spariva
+  // di scatto in un solo fotogramma).
   panel.style.transition = "none";
   panel.style.transform = "scale(0.94)";
+  panel.style.opacity = "0";
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      panel.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
+      panel.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1), opacity 850ms cubic-bezier(0.16, 1, 0.3, 1)";
       panel.style.transform = "scale(1)";
+      panel.style.opacity = "1";
+      // Vedi il commento su "savedScrollY" sopra: riafferma la posizione
+      // subito dopo aver innescato la transizione, nel caso lo scatto
+      // avvenga già in apertura e non solo in chiusura.
+      if (window.scrollY !== savedScrollY) window.scrollTo(0, savedScrollY);
     });
   });
 
@@ -1729,17 +1752,23 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     backdrop.classList.remove("is-active");
     backdrop.style.transition = "opacity 150ms ease-in 400ms";
 
-    panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+    panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1), opacity 550ms cubic-bezier(0.25, 1, 0.5, 1)";
     panel.style.transform = "scale(0.94)";
+    panel.style.opacity = "0";
 
     setTimeout(() => {
       panel.classList.remove("is-active");
       panel.style.transition = "none";
       panel.style.transform = "";
+      panel.style.opacity = "";
       panel.innerHTML = "";
       descBlock.style.opacity = "1";
       document.removeEventListener("keydown", onKeydown);
       zoomCurrentClose = null;
+      // Riafferma di nuovo qui: se lo scatto avviene proprio nel momento
+      // in cui il pannello torna invisibile/si svuota, questo è l'ultimo
+      // istante utile per correggerlo.
+      if (window.scrollY !== savedScrollY) window.scrollTo(0, savedScrollY);
     }, 550);
   };
 }
@@ -1753,7 +1782,19 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
 // sito (non uno per foto), creato la prima volta che apri una foto
 // qualsiasi e riusato per tutte le successive: l'<img> del clone cambia
 // solo "src".
+// Dimensione dell'ingrandimento scelta a mano trascinando le maniglie (vedi
+// makeZoomResizable): UNA sola misura salvata, condivisa da tutte le foto
+// del sito ("uguale per tutte le foto") — non ha senso una misura diversa
+// per ciascuna, è solo "quanto grande voglio vedere le foto quando le
+// ingrandisco".
+const LIGHTBOX_SIZE_KEY = "lightbox.image";
+
 let zoomBackdrop = null;
+// Il riquadro che vola (posizione/dimensione/transform) è un <div> a parte
+// dall'<img> vero e proprio: un <img> è un elemento "replaced" e non può
+// avere figli visibili, quindi le maniglie di resize devono appoggiarsi a
+// questo contenitore, non all'immagine stessa.
+let zoomActiveFrame = null;
 let zoomActiveImg = null;
 // La funzione di chiusura dell'apertura IN CORSO: il click su sfondo/
 // immagine (agganciato una volta sola, vedi ensureZoomElements) deve
@@ -1764,6 +1805,73 @@ let zoomActiveImg = null;
 // assoluto, quindi chiudere una foto diversa non faceva nulla (bug
 // confermato: "chiudere funziona solo sulla prima foto, poi si blocca").
 let zoomCurrentClose = null;
+
+// Maniglie per regolare a mano la dimensione della foto ingrandita: due,
+// una in basso e una speculare in alto (entrambe sul lato destro), così
+// almeno una resta raggiungibile anche se il riquadro ingrandito supera
+// l'altezza dello schermo. Sempre visibili (non solo in modalità
+// modifica): è l'unico momento in cui ha senso regolarla, mentre la foto è
+// davvera ingrandita davanti a te. Il ridimensionamento mantiene sempre le
+// proporzioni NATURALI della foto (mai un ritaglio): un solo trascinamento
+// orizzontale basta, l'altezza segue di conseguenza.
+function makeZoomResizable(frame, img) {
+  function addHandle(extraClass) {
+    const classes = extraClass ? `resize-handle always-visible ${extraClass}` : "resize-handle always-visible";
+    const handle = el("div", { class: classes, title: "Trascina per regolare la dimensione dell'ingrandimento" });
+    frame.appendChild(handle);
+
+    let dragStart = null; // { pointerId, startX, startWidth, startHeight, aspectRatio }
+
+    function onPointerMove(e) {
+      if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+      const dx = e.clientX - dragStart.startX;
+      const maxW = window.innerWidth - 96;
+      const maxH = window.innerHeight - 96;
+      let newWidth = Math.max(120, Math.min(maxW, dragStart.startWidth + dx));
+      let newHeight = newWidth / dragStart.aspectRatio;
+      if (newHeight > maxH) {
+        newHeight = maxH;
+        newWidth = newHeight * dragStart.aspectRatio;
+      }
+      frame.style.width = `${newWidth}px`;
+      frame.style.height = `${newHeight}px`;
+      // Ricentrata sullo schermo a ogni trascinamento: il riquadro ingrandito
+      // è sempre centrato, quindi cambiarne solo larghezza/altezza senza
+      // aggiornare anche left/top lo farebbe "scivolare" verso l'angolo in
+      // basso a destra a ogni resize.
+      frame.style.left = `${(window.innerWidth - newWidth) / 2}px`;
+      frame.style.top = `${(window.innerHeight - newHeight) / 2}px`;
+    }
+
+    function onPointerUp(e) {
+      if (!dragStart || e.pointerId !== dragStart.pointerId) return;
+      handle.classList.remove("is-dragging");
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      saveSizeOverride(LIGHTBOX_SIZE_KEY, { width: frame.style.width, height: frame.style.height });
+      dragStart = null;
+    }
+
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = frame.getBoundingClientRect();
+      dragStart = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startWidth: rect.width,
+        startHeight: rect.height,
+        aspectRatio: img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : rect.width / rect.height,
+      };
+      handle.classList.add("is-dragging");
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+  }
+
+  addHandle(null);
+  addHandle("resize-handle-top");
+}
 
 function ensureZoomElements() {
   if (zoomBackdrop) return;
@@ -1785,8 +1893,12 @@ function ensureZoomElements() {
   zoomBackdrop.style.height = "100vh";
   zoomBackdrop.style.background = "#161616";
   zoomBackdrop.style.zIndex = "300";
+  zoomActiveFrame = el("div", { class: "lightbox-active-frame" });
+  zoomActiveFrame.id = "lightboxActiveFrame";
   zoomActiveImg = el("img", { class: "lightbox-active-img" });
   zoomActiveImg.id = "lightboxActiveImg";
+  zoomActiveFrame.appendChild(zoomActiveImg);
+  makeZoomResizable(zoomActiveFrame, zoomActiveImg);
   const triggerClose = () => { if (zoomCurrentClose) zoomCurrentClose(); };
   zoomBackdrop.addEventListener("click", triggerClose);
   zoomActiveImg.addEventListener("click", triggerClose);
@@ -1794,7 +1906,7 @@ function ensureZoomElements() {
     if (e.key === "Escape") triggerClose();
   });
   document.body.appendChild(zoomBackdrop);
-  document.body.appendChild(zoomActiveImg);
+  document.body.appendChild(zoomActiveFrame);
 }
 
 function makeZoomable(frame, img) {
@@ -1810,6 +1922,7 @@ function makeZoomable(frame, img) {
 
     ensureZoomElements();
     const backdrop = zoomBackdrop;
+    const activeFrame = zoomActiveFrame;
     const activeImg = zoomActiveImg;
 
     // Lo sfondo scuro arriva SUBITO (200ms, molto più rapido delle 850ms
@@ -1828,11 +1941,22 @@ function makeZoomable(frame, img) {
     // intercetterebbe per sempre i click su qualunque cosa si trovi in
     // quello stesso punto dello schermo — bug confermato con un test
     // automatico (impossibile riaprire una foto in quella posizione).
-    activeImg.classList.add("is-active");
+    activeFrame.classList.add("is-active");
 
-    // 2. LAST: dimensione finale, centrata sullo schermo.
-    const maxW = window.innerWidth * 0.85;
-    const maxH = window.innerHeight * 0.82;
+    // 2. LAST: dimensione finale, centrata sullo schermo. Se in precedenza
+    // hai già trascinato le maniglie di resize (su QUALSIASI foto — la
+    // misura è unica e condivisa, vedi LIGHTBOX_SIZE_KEY), quella misura
+    // sostituisce il solito 85%/82% dello schermo come INGOMBRO MASSIMO:
+    // le proporzioni restano comunque quelle NATURALI di QUESTA foto (mai
+    // deformata), semplicemente adattata (in scala, non stirata) dentro
+    // l'ingombro scelto — così una foto orizzontale e una verticale
+    // condividono la stessa misura "sentita" senza mai apparire distorte,
+    // e soprattutto lo scaleX/scaleY del volo FLIP restano sempre uguali
+    // fra loro (nessuno "schiacciamento" a metà animazione, lo stesso bug
+    // già risolto per il testo).
+    const savedSize = loadSizeOverrides()[LIGHTBOX_SIZE_KEY];
+    const maxW = savedSize && savedSize.width ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : window.innerWidth * 0.85;
+    const maxH = savedSize && savedSize.height ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : window.innerHeight * 0.82;
     const ratio = firstRect.width / firstRect.height;
 
     let targetW = maxW;
@@ -1847,10 +1971,10 @@ function makeZoomable(frame, img) {
 
     activeImg.src = img.src;
     activeImg.alt = img.alt;
-    activeImg.style.width = `${targetW}px`;
-    activeImg.style.height = `${targetH}px`;
-    activeImg.style.left = `${targetX}px`;
-    activeImg.style.top = `${targetY}px`;
+    activeFrame.style.width = `${targetW}px`;
+    activeFrame.style.height = `${targetH}px`;
+    activeFrame.style.left = `${targetX}px`;
+    activeFrame.style.top = `${targetY}px`;
 
     // 3. INVERT: delta centro-miniatura → centro-target.
     const firstCenterX = firstRect.left + firstRect.width / 2;
@@ -1864,14 +1988,14 @@ function makeZoomable(frame, img) {
     const scaleY = firstRect.height / targetH;
 
     // Porta il clone esattamente sopra la miniatura, ancora invisibile agli occhi.
-    activeImg.style.transition = "none";
-    activeImg.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+    activeFrame.style.transition = "none";
+    activeFrame.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
 
     // 4. PLAY: anima verso il centro.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        activeImg.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
-        activeImg.style.transform = "translate(0px, 0px) scale(1)";
+        activeFrame.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
+        activeFrame.style.transform = "translate(0px, 0px) scale(1)";
       });
     });
 
@@ -1882,10 +2006,21 @@ function makeZoomable(frame, img) {
       const thumbCenterX = currentThumbRect.left + currentThumbRect.width / 2;
       const thumbCenterY = currentThumbRect.top + currentThumbRect.height / 2;
 
-      const closingDeltaX = thumbCenterX - targetCenterX;
-      const closingDeltaY = thumbCenterY - targetCenterY;
-      const closingScaleX = currentThumbRect.width / targetW;
-      const closingScaleY = currentThumbRect.height / targetH;
+      // Ricalcola anche il riquadro ingrandito AL MOMENTO della chiusura
+      // (non i "targetW/targetH/targetCenterX/Y" catturati all'apertura):
+      // se nel frattempo hai trascinato le maniglie di resize, il riquadro
+      // ha ormai una misura/posizione diversa da quella iniziale, e la
+      // trasformazione CSS calcola sempre a partire dalla sua misura
+      // ATTUALE — usare valori vecchi farebbe atterrare il volo di ritorno
+      // nel punto/scala sbagliati.
+      const currentFrameRect = activeFrame.getBoundingClientRect();
+      const frameCenterX = currentFrameRect.left + currentFrameRect.width / 2;
+      const frameCenterY = currentFrameRect.top + currentFrameRect.height / 2;
+
+      const closingDeltaX = thumbCenterX - frameCenterX;
+      const closingDeltaY = thumbCenterY - frameCenterY;
+      const closingScaleX = currentThumbRect.width / currentFrameRect.width;
+      const closingScaleY = currentThumbRect.height / currentFrameRect.height;
 
       // Lo sfondo scuro resta PIENO per quasi tutto il ritorno della foto
       // (400ms di ritardo) e sparisce solo negli ultimi 150ms, quando la
@@ -1896,25 +2031,26 @@ function makeZoomable(frame, img) {
       backdrop.classList.remove("is-active");
       backdrop.style.transition = "opacity 150ms ease-in 400ms";
 
-      activeImg.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
-      activeImg.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
+      activeFrame.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+      activeFrame.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
 
       setTimeout(() => {
-        activeImg.classList.remove("is-active");
-        activeImg.style.transition = "none";
-        activeImg.style.transform = "";
+        activeFrame.classList.remove("is-active");
+        activeFrame.style.transition = "none";
+        activeFrame.style.transform = "";
         // Ripulisce TUTTO quello che l'apertura aveva impostato (misura,
         // posizione, alt), non solo "src": un <img> senza "src" ma con
         // ancora l'"alt" di prima (es. "house, norway") e le vecchie
         // width/height/left/top mostra in molti browser l'iconcina di
         // "immagine non trovata" seguita dal testo alt — esattamente il
         // glitch segnalato ("quella caption" accanto a un'icona rotta),
-        // perché backdrop/activeImg sono UN SOLO elemento riusato da ogni
-        // foto e prima restava con gli attributi della foto precedente.
-        activeImg.style.width = "";
-        activeImg.style.height = "";
-        activeImg.style.left = "";
-        activeImg.style.top = "";
+        // perché backdrop/activeFrame/activeImg sono UN SOLO elemento
+        // riusato da ogni foto e prima restava con gli attributi della foto
+        // precedente.
+        activeFrame.style.width = "";
+        activeFrame.style.height = "";
+        activeFrame.style.left = "";
+        activeFrame.style.top = "";
         activeImg.removeAttribute("alt");
         // "activeImg.src = ''" (come nel codice originale) in molti browser
         // fa ripartire una richiesta verso la PAGINA STESSA, non verso

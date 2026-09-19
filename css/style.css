@@ -645,12 +645,14 @@ body.edit-mode .caption-input:focus {
   pointer-events: auto;
 }
 
-.lightbox-active-img {
+/* Riquadro che vola (vedi makeZoomable in app.js): posizione/dimensione
+   impostate in riga da JS, qui solo l'aspetto — è un <div>, non l'<img>
+   direttamente, per poterci appoggiare le maniglie di resize (le <img>
+   sono elementi "replaced", non possono avere figli visibili). */
+.lightbox-active-frame {
   position: fixed;
   z-index: 301;
-  object-fit: contain;
   will-change: transform;
-  cursor: zoom-out;
   /* Senza "chiuso" non intercetta i click: a fine chiusura resta comunque
      nel DOM (a grandezza/posizione della miniatura), e senza questo
      bloccherebbe per sempre i click su qualunque cosa si trovi in quello
@@ -660,8 +662,16 @@ body.edit-mode .caption-input:focus {
      diversa per apertura e chiusura, vedi makeZoomable). */
 }
 
-.lightbox-active-img.is-active {
+.lightbox-active-frame.is-active {
   pointer-events: auto;
+}
+
+.lightbox-active-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: zoom-out;
 }
 
 /* Zoom sul testo: stesso identico rettangolo beige di ".page" (stessa
@@ -958,6 +968,23 @@ body.edit-mode .resizable-label {
   cursor: nesw-resize;
 }
 
+/* Solo sulla foto ingrandita dello zoom (vedi makeZoomResizable in
+   app.js): copia in alto a destra della maniglia di resize, così una
+   delle due resta sempre raggiungibile anche se il riquadro ingrandito
+   supera l'altezza dello schermo. */
+.resize-handle.resize-handle-top {
+  bottom: auto;
+  top: 4px;
+  cursor: nwse-resize;
+}
+
+/* Eccezione: sulla foto ingrandita dello zoom la maniglia per decidere
+   la dimensione è sempre visibile, non solo in modalità modifica — è
+   l'unico modo per regolarla mentre la guardi davvero ingrandita. */
+.resize-handle.always-visible {
+  display: block;
+}
+
 /* Elimina questa foto ("×") / aggiungine una nuova qui accanto ("+"):
    stesso quadratino delle altre maniglie, centrate in alto — gli angoli
    sono già occupati dall'etichetta delle misure (sinistra) e dalla
@@ -1136,6 +1163,7 @@ body.edit-mode .resize-handle {
 }
 
 body.edit-mode .resize-handle:hover,
+.resize-handle.always-visible:hover,
 .resize-handle.is-dragging {
   background: #b04d38;
 }
