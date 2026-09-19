@@ -596,49 +596,14 @@ body.edit-mode .caption-input:focus {
 }
 
 /* ==========================================================================
-   LIGHTBOX TESTO — clic sulla descrizione per ingrandirla a schermo
-   intero, sfondo scuro identico al resto del sito. Per lo zoom delle
-   FOTO vedi invece ".lightbox-backdrop"/".lightbox-active-img" più sotto
-   (tecnica diversa: FLIP, non dissolvenza).
+   LIGHTBOX — zoom con tecnica FLIP (vedi makeZoomable/openTextLightbox in
+   app.js): foto e testo condividono lo stesso sfondo scuro
+   (".lightbox-backdrop", più sotto) e la stessa idea — un solo elemento
+   "volante" per tipo, creato una volta e riusato, con posizione/scala di
+   partenza e arrivo calcolate in JS in base a dove si trova davvero
+   l'elemento sullo schermo in quel momento. Qui in CSS c'è solo
+   l'aspetto, non le coordinate.
    ========================================================================== */
-.lightbox {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 300;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48px;
-  cursor: zoom-out;
-  /* Zoom-in all'apertura, zoom-out alla chiusura, invece di comparire/
-     sparire di scatto (vedi animateLightboxOpen/closeLightboxOverlay in
-     app.js). Le due curve sono deliberatamente diverse: l'apertura è più
-     lenta e "cinematica" (l'occhio segue quello che COMPARE, può prendersi
-     il suo tempo), la chiusura più rapida e diretta (l'occhio resta fisso
-     su dove c'era prima, quindi una chiusura lenta si percepirebbe come
-     un'attesa inutile). */
-  opacity: 0;
-  transition: opacity 850ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.lightbox.is-open {
-  opacity: 1;
-}
-
-/* Chiusura: curva diversa e più rapida (zoom-out "chirurgico") — non più
-   intercetta i click, resta a schermo intero nel DOM per tutta la durata
-   (vedi LIGHTBOX_FADE_MS/closeLightboxOverlay in app.js, che deve restare
-   allineato a questa stessa cifra) solo per far vedere l'animazione, non
-   per bloccare un click successivo sulla foto sotto. */
-.lightbox.is-closing {
-  transition: opacity 550ms cubic-bezier(0.25, 1, 0.5, 1);
-  pointer-events: none;
-}
-
 .lightbox-close {
   position: fixed;
   top: 20px;
@@ -654,14 +619,7 @@ body.edit-mode .caption-input:focus {
   opacity: 1;
 }
 
-/* ==========================================================================
-   LIGHTBOX FOTO — tecnica FLIP (vedi makeZoomable in app.js): un solo
-   sfondo scuro (.lightbox-backdrop) e una sola immagine "volante"
-   (.lightbox-active-img), creati una volta e riusati per ogni foto. La
-   posizione/scala di partenza e arrivo le calcola JS in base a dove si
-   trova davvero la miniatura sullo schermo in quel momento — qui in CSS
-   c'è solo l'aspetto, non le coordinate.
-   ========================================================================== */
+/* Sfondo scuro CONDIVISO da foto e testo (vedi ensureZoomElements). */
 .lightbox-backdrop {
   /* Posizione, dimensione, colore e z-index reali sono impostati IN RIGA
      da JS (vedi ensureZoomElements in app.js), non qui: dopo aver
@@ -706,22 +664,16 @@ body.edit-mode .caption-input:focus {
   pointer-events: auto;
 }
 
-/* Zoom sul testo (overlay scuro classico, vedi openTextLightbox in
-   app.js): allineato in alto invece che centrato in verticale, e con
-   scroll proprio, per un testo più lungo dell'altezza dello schermo — al
-   contrario di una foto, che ha sempre una sola "misura naturale" nota in
-   anticipo, qui non possiamo sapere quanto sarà lungo. */
-.lightbox-text-overlay {
-  align-items: flex-start;
-  overflow-y: auto;
-  padding: 0;
-}
-
-/* Non più testo chiaro "a nudo" sullo sfondo scuro: lo stesso identico
-   rettangolo beige di ".page" (stessa larghezza, stessa altezza minima
-   quasi a schermo intero, stesso margine) — non un box che si stringe
-   attorno al testo, ma il "foglio" pieno come in ogni altra pagina del
-   sito, solo senza topbar/foto/gallerybar dentro. */
+/* Zoom sul testo: stesso identico rettangolo beige di ".page" (stessa
+   larghezza, stessa altezza minima quasi a schermo intero, stesso
+   margine) — non un box che si stringe attorno al testo, ma il "foglio"
+   pieno come in ogni altra pagina del sito, solo senza topbar/foto/
+   gallerybar dentro. Posizione (position/top/left/right) e scroll
+   (max-height/overflow-y) impostati in riga da JS (vedi
+   ensureZoomTextPanel in app.js), non qui — stesso motivo dello sfondo
+   scuro qui sopra. "transform" NON ha una regola fissa: la imposta JS di
+   volta in volta (curva diversa per apertura e chiusura, vedi
+   openTextLightbox), esattamente come ".lightbox-active-img". */
 .lightbox-text {
   width: min(100%, var(--panel-width));
   min-height: calc(100vh - 40px);
@@ -731,12 +683,18 @@ body.edit-mode .caption-input:focus {
   padding: 32px 40px 56px;
   font-size: 0.95rem;
   line-height: 1.65;
-  transform: scale(0.9);
-  transition: transform 850ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Invisibile e non-cliccabile finché non è davvero aperto: senza
+     questo, a chiusura completata (contenuto svuotato ma "min-height"
+     qui sopra lo terrebbe comunque alto quasi quanto lo schermo) il
+     pannello resterebbe un rettangolo beige vuoto che blocca i click su
+     tutto quello che gli sta sotto — stesso bug già trovato e risolto
+     per ".lightbox-active-img" con "pointer-events", qui serve anche
+     nascondere la vista, non solo i click. */
+  visibility: hidden;
 }
 
-.lightbox.is-closing .lightbox-text {
-  transition: transform 550ms cubic-bezier(0.25, 1, 0.5, 1);
+.lightbox-text.is-active {
+  visibility: visible;
 }
 
 @media (max-width: 700px) {
@@ -751,16 +709,8 @@ body.edit-mode .caption-input:focus {
   }
 }
 
-.lightbox.is-open .lightbox-text {
-  transform: scale(1);
-}
-
 .lightbox-text p + p {
   margin-top: 1.1em;
-}
-
-@media (max-width: 700px) {
-  .lightbox { padding: 20px; }
 }
 
 /* ==========================================================================
