@@ -1668,6 +1668,13 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   // titolo). Non dipende da cosa lo causa: lo riimponiamo e basta.
   const savedScrollY = window.scrollY;
 
+  // Coordinate ESATTE del blocco cliccato, catturate PRIMA di nasconderlo:
+  // sono il punto di partenza dell'apertura (vedi più sotto) — senza,
+  // l'ingrandimento comparirebbe già piazzato al centro dello schermo con
+  // un salto secco, invece di "distendersi" fluidamente a partire da dove
+  // hai davvero cliccato.
+  const firstRect = descBlock.getBoundingClientRect();
+
   // Nasconde il blocco originale — che scorre in continuazione (marquee)
   // — durante lo zoom: senza, resta visibile "attraverso" lo sfondo scuro
   // per tutta la durata dell'animazione (finché non arriva a piena
@@ -1714,27 +1721,44 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     });
   }
 
-  // Zoom semplice e uniforme (scale unico, non un FLIP dalla posizione
-  // esatta del blocco in pagina come le foto): il blocco descrizione
-  // (largo e basso) e il pannello ingrandito (stretto e alto) hanno
-  // proporzioni molto diverse — scalarli separatamente su X e Y per
-  // "volare" dall'uno all'altro stirerebbe/schiaccerebbe il testo dentro
-  // durante il movimento. Un solo fattore di scala (qui: 0.94) ingrandisce
-  // in modo fluido senza mai deformare le lettere, esattamente come
-  // chiesto ("senza effetti particolari"). Insieme alla scala anima anche
-  // l'opacità (0→1): da sola, una differenza di scala del solo 6% è
-  // troppo sottile per leggersi come "si apre/chiude" — serve la
-  // dissolvenza per far sembrare il movimento fluido invece che un salto
-  // secco proprio all'ultimo istante (bug confermato via video: la
-  // chiusura restava quasi ferma al 94% per tutta la durata, poi spariva
-  // di scatto in un solo fotogramma).
+  // APERTURA: FLIP vero, dalla posizione/misura esatta del blocco cliccato
+  // (non più un semplice scale(0.94)→1 centrato su se stesso, che appariva
+  // già piazzato al centro con un salto — bug confermato via video). Il
+  // pannello finale è già posizionato/dimensionato dal CSS/JS di
+  // ensureZoomTextPanel (è sempre lo stesso rettangolo, a schermo intero):
+  // ne misuriamo il rect così com'è ORA, prima di applicargli qualunque
+  // transform, ed è il punto di ARRIVO del volo.
+  const targetRect = panel.getBoundingClientRect();
+
+  const firstCenterX = firstRect.left + firstRect.width / 2;
+  const firstCenterY = firstRect.top + firstRect.height / 2;
+  const targetCenterX = targetRect.left + targetRect.width / 2;
+  const targetCenterY = targetRect.top + targetRect.height / 2;
+  const deltaX = firstCenterX - targetCenterX;
+  const deltaY = firstCenterY - targetCenterY;
+
+  // Un SOLO fattore di scala (mai scaleX/scaleY indipendenti come per le
+  // foto): il blocco descrizione e il pannello ingrandito hanno proporzioni
+  // diverse, quindi scalarli separatamente sui due assi stirerebbe/
+  // schiaccerebbe il testo durante il volo (lo stesso problema già trovato
+  // e risolto in precedenza). Basato sul rapporto tra le LARGHEZZE (le due
+  // hanno in pratica la stessa larghezza del "foglio" beige del sito, per
+  // cui il rapporto è già vicino a 1 e il testo non appare né troppo
+  // piccolo né tagliato all'istante iniziale del volo).
+  const scale = Math.min(1, firstRect.width / targetRect.width);
+
+  // Porta il pannello esattamente sopra il blocco cliccato, ancora invisibile.
   panel.style.transition = "none";
-  panel.style.transform = "scale(0.94)";
+  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scale})`;
   panel.style.opacity = "0";
+  // Doppio requestAnimationFrame: forza il browser a disegnare questo stato
+  // di partenza PRIMA di innescare la transizione qui sotto, altrimenti i
+  // due stati (partenza e arrivo) verrebbero uniti in un solo fotogramma,
+  // senza alcuna animazione visibile.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      panel.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1), opacity 850ms cubic-bezier(0.16, 1, 0.3, 1)";
-      panel.style.transform = "scale(1)";
+      panel.style.transition = "transform 750ms cubic-bezier(0.16, 1, 0.3, 1), opacity 750ms cubic-bezier(0.16, 1, 0.3, 1)";
+      panel.style.transform = "translate(0px, 0px) scale(1)";
       panel.style.opacity = "1";
       // Vedi il commento su "savedScrollY" sopra: riafferma la posizione
       // subito dopo aver innescato la transizione, nel caso lo scatto
