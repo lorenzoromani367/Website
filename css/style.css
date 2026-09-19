@@ -666,7 +666,12 @@ body.edit-mode .caption-input:focus {
   z-index: 300;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 850ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Nessuna transition fissa qui: la imposta JS di volta in volta (vedi
+     makeZoomable) — deve arrivare a piena opacità MOLTO prima che la foto
+     finisca di volare (altrimenti per gran parte dell'animazione si vede
+     la pagina reale, beige e testo, trasparire attraverso lo sfondo
+     ancora a metà dissolvenza), e restare piena per quasi tutto il volo
+     di ritorno in chiusura, sparendo solo all'ultimo. */
 }
 
 .lightbox-backdrop.is-active {

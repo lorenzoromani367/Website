@@ -1744,6 +1744,15 @@ function makeZoomable(frame, img) {
     const backdrop = zoomBackdrop;
     const activeImg = zoomActiveImg;
 
+    // Lo sfondo scuro arriva SUBITO (200ms, molto più rapido delle 850ms
+    // del volo della foto): deve coprire il beige/testo della pagina ben
+    // prima che la foto finisca di ingrandirsi, altrimenti per gran parte
+    // dell'animazione si vede la pagina reale trasparire attraverso uno
+    // sfondo ancora a metà dissolvenza — il "residuo beige con testo"
+    // segnalato. Impostato ogni volta esplicitamente (non lasciato alla
+    // regola CSS di base): altrimenti resterebbe quello impostato
+    // dall'ultima CHIUSURA (vedi sotto), con un ritardo che qui non ha senso.
+    backdrop.style.transition = "opacity 200ms ease-out";
     backdrop.classList.add("is-active");
     // Riattiva i click sul clone SOLO mentre è davvero visibile: senza
     // questa classe, a fine chiusura il clone resta comunque nel DOM
@@ -1810,8 +1819,14 @@ function makeZoomable(frame, img) {
       const closingScaleX = currentThumbRect.width / targetW;
       const closingScaleY = currentThumbRect.height / targetH;
 
+      // Lo sfondo scuro resta PIENO per quasi tutto il ritorno della foto
+      // (400ms di ritardo) e sparisce solo negli ultimi 150ms, quando la
+      // foto è ormai tornata quasi esattamente al suo posto: 400+150 = gli
+      // stessi 550ms del volo, ma senza mai mostrare insieme "foto ancora
+      // a metà volo" e "pagina beige/testo reale già visibile sotto" — lo
+      // stesso "residuo" del volo di apertura, ma in chiusura.
       backdrop.classList.remove("is-active");
-      backdrop.style.transition = "opacity 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+      backdrop.style.transition = "opacity 150ms ease-in 400ms";
 
       activeImg.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
       activeImg.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
