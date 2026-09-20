@@ -227,7 +227,7 @@ const PROJECTS = [
       { caption: "delta, restaurant", src: "images/michelin/michelin-5.jpg" },
     ],
   },
-  { slug: "paper-tape", name: "Paper tape", description: [], images: [{ caption: "", src: "images/paper-tape/paper-tape-1.jpg" }] },
+  { slug: "paper-tape", name: "Paper tape", description: [], images: [{ caption: "", src: "images/paper-tape/rock.JPG" }] },
   {
     slug: "mediality",
     name: "Mediality",
@@ -355,10 +355,7 @@ const PROJECTS = [
     slug: "fluoxetine",
     name: "Fluoxetine",
     description: ["Descrizione da definire per il progetto “Fluoxetine”."],
-    // Unica foto eliminata dall'export panel: segnaposto vuoto al suo
-    // posto, stesso pattern già usato per gli altri progetti senza foto
-    // caricate (tech/pink/vacation/perfume), invece di un array vuoto.
-    images: [{ caption: "placeholder 01", src: null }],
+    images: [{ caption: "", src: "images/fluoxetine/dinner.JPG" }],
   },
   {
     slug: "licking",
@@ -388,20 +385,10 @@ const PROJECTS = [
   { slug: "tech", name: "Tech", description: ["Descrizione da definire per il progetto “Tech”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   { slug: "pink", name: "Pink", description: ["Descrizione da definire per il progetto “Pink”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
   {
-    slug: "solo",
-    name: "Solo",
-    description: ["Descrizione da definire per il progetto “Solo”."],
-    images: [
-      { caption: "", src: "images/solo/solo-1.jpg" },
-      { caption: "", src: "images/solo/solo-2.jpg" },
-      { caption: "", src: "images/solo/solo-3.jpg" },
-      { caption: "", src: "images/solo/solo-4.jpg" },
-      { caption: "", src: "images/solo/solo-5.jpg" },
-      { caption: "", src: "images/solo/solo-6.jpg" },
-      { caption: "", src: "images/solo/solo-7.jpg" },
-      { caption: "", src: "images/solo/solo-8.jpg" },
-      { caption: "", src: "images/solo/solo-9.jpg" },
-    ],
+    slug: "sofa",
+    name: "Sofa",
+    description: ["Descrizione da definire per il progetto “Sofa”."],
+    images: [{ caption: "", src: "images/sofa/sushi discotheque.jpg" }],
   },
 ];
 
@@ -421,10 +408,25 @@ const ARCHIVE = {
   title: "core archive",
   description: ["Una selezione trasversale, aggiornata a mano."],
   images: [
-    { caption: "lines — winery, sicily", src: null, width: "420px" },
-    { caption: "lines — cocoon", src: null, width: "420px" },
-    // Aggiungi qui le altre foto della selezione, stesso formato:
-    // { caption: "didascalia", src: "images/archive/01.jpg", width: "420px" },
+    { caption: "", src: "images/core archive/beach-1.jpg" },
+    { caption: "", src: "images/core archive/compression-5.jpg" },
+    { caption: "", src: "images/core archive/estrangement-1.jpg" },
+    { caption: "", src: "images/core archive/lines-11.jpg" },
+    { caption: "", src: "images/core archive/lines-5.jpg" },
+    { caption: "", src: "images/core archive/michelin-1.jpg" },
+    { caption: "", src: "images/core archive/michelin-5.jpg" },
+    { caption: "", src: "images/core archive/recognition-10.jpg" },
+    { caption: "", src: "images/core archive/recognition-3.jpg" },
+    { caption: "", src: "images/core archive/recognition-9.jpg" },
+    { caption: "", src: "images/core archive/springtime.jpg" },
+    { caption: "", src: "images/core archive/stills-1.jpg" },
+    { caption: "", src: "images/core archive/stills-10.jpg" },
+    { caption: "", src: "images/core archive/stills-11.jpg" },
+    { caption: "", src: "images/core archive/stills-16.jpg" },
+    { caption: "", src: "images/core archive/stills-3.jpg" },
+    { caption: "", src: "images/core archive/stills-5.jpg" },
+    // Aggiungi qui altre foto della selezione, stesso formato:
+    // { caption: "didascalia", src: "images/core archive/01.jpg" },
   ],
 };
 
