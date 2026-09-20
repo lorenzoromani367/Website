@@ -1692,23 +1692,8 @@ function ensureZoomTextPanel() {
 // contenuto su sfondo nero: il colore/aspetto restano quelli di
 // ".lightbox-text" in style.css.
 function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
-  // Salva la posizione di scroll della PAGINA (non del testo che scorre
-  // dentro il blocco, quello è un'altra cosa) prima di aprire, e la
-  // riimpone alla chiusura: su alcuni browser mobili, nascondere/mostrare
-  // un elemento "position: fixed" alto quasi quanto lo schermo può far
-  // scattare la pagina in cima da sola — bug confermato via video (si
-  // apre a metà lettura, si chiude e la pagina è tornata in cima al
-  // titolo). Non dipende da cosa lo causa: lo riimponiamo e basta.
   const savedScrollY = window.scrollY;
-
-  // Coordinate ESATTE del blocco cliccato, catturate PRIMA di nasconderlo:
-  // servono a calcolare la traiettoria (translate) dell'apertura qui sotto.
   const firstRect = descBlock.getBoundingClientRect();
-
-  // Nasconde il blocco originale — che scorre in continuazione (marquee)
-  // — durante lo zoom: senza, resta visibile "attraverso" lo sfondo scuro
-  // per tutta la durata dell'animazione (finché non arriva a piena
-  // opacità), sembrando un doppione fantasma dello stesso testo.
   descBlock.style.opacity = "0";
 
   ensureZoomElements();
@@ -1716,15 +1701,8 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   const backdrop = zoomBackdrop;
   const panel = zoomTextPanel;
 
-  // Sfondo scuro: stessa logica delle foto, arriva subito, sparisce solo
-  // alla fine della chiusura (vedi i commenti su ensureZoomElements).
   backdrop.style.transition = "opacity 200ms ease-out";
   backdrop.classList.add("is-active");
-  // Visibile/cliccabile SOLO da qui alla fine della chiusura (vedi
-  // zoomCurrentClose sotto, che la toglie solo a fine animazione): senza,
-  // a chiusura completata il pannello (vuoto ma comunque a piena
-  // dimensione per via di "min-height" in CSS) resterebbe un rettangolo
-  // beige invisibile-ma-cliccabile sopra il resto della pagina.
   panel.classList.add("is-active");
 
   panel.innerHTML = "";
@@ -1741,52 +1719,38 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   panel.appendChild(content);
   panel.appendChild(closeBtn);
 
-  // Maniglia sempre visibile (non solo in modalità modifica): qui non ha
-  // senso legarla alla modalità modifica del sito, perché l'unico momento
-  // in cui ha senso aggiustare la posizione del testo ingrandito è mentre
-  // lo guardi davvero ingrandito.
   if (sizeKeyPrefix) {
     makeMovableFree(content, `${sizeKeyPrefix}.descriptionZoomPos`, "Trascina per spostare il testo ingrandito", {
       alwaysVisible: true,
     });
   }
 
-  // Traiettoria (translate) dalla posizione originaria del blocco cliccato
-  // fino al centro dello schermo — non solo uno scale in place. Distanza in
-  // pixel tra il centro del blocco e il centro della finestra:
-  const centerX = window.innerWidth / 2;
-  const centerY = window.innerHeight / 2;
-  const sourceCenterX = firstRect.left + firstRect.width / 2;
-  const sourceCenterY = firstRect.top + firstRect.height / 2;
-  const deltaX = sourceCenterX - centerX;
-  const deltaY = sourceCenterY - centerY;
-
-  // Apertura e chiusura restano LO STESSO stile (mai una tecnica diversa per
-  // le due direzioni): stessa durata, stessa curva, stesso scale(0.94), solo
-  // ORA anche lo stesso translate calcolato sopra — così il pannello si
-  // stacca visibilmente dalla posizione del blocco invece di limitarsi a
-  // scalare fermo al centro. Vedi zoomCurrentClose più sotto per la
-  // chiusura, che rifà lo stesso calcolo (ricalcolato lì, non riusato da
-  // qui, perché se scrolli mentre il testo è aperto la posizione del
-  // blocco è cambiata).
+  // 1. FIRST & INVERT: Calcolo geometrico reale (come le foto)
   panel.style.transition = "none";
-  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.94)`;
-  panel.style.opacity = "0";
-  // Doppio requestAnimationFrame: forza il browser a disegnare questo stato
-  // di partenza PRIMA di innescare la transizione qui sotto, altrimenti i
-  // due stati (partenza e arrivo) verrebbero uniti in un solo fotogramma,
-  // senza alcuna animazione visibile.
+  panel.style.transform = "none";
+  // Forza layout per leggere le dimensioni finali vere del pannello (targetRect)
+  const targetRect = panel.getBoundingClientRect();
+
+  const scaleX = firstRect.width / targetRect.width;
+  const scaleY = firstRect.height / targetRect.height;
+  
+  const firstCenterX = firstRect.left + firstRect.width / 2;
+  const firstCenterY = firstRect.top + firstRect.height / 2;
+  const targetCenterX = targetRect.left + targetRect.width / 2;
+  const targetCenterY = targetRect.top + targetRect.height / 2;
+  
+  const deltaX = firstCenterX - targetCenterX;
+  const deltaY = firstCenterY - targetCenterY;
+
+  // Applica trasformazione senza nessuna opacità (0 fade, parte solido come la foto)
+  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+  
+  // 2. PLAY
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      panel.style.transition = "transform 650ms cubic-bezier(0.25, 1, 0.5, 1), opacity 650ms cubic-bezier(0.25, 1, 0.5, 1)";
+      // 850ms come la foto
+      panel.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
       panel.style.transform = "translate(0px, 0px) scale(1)";
-      panel.style.opacity = "1";
-      // NIENTE window.scrollTo qui dentro: chiamarlo a metà del volo forza
-      // un ricalcolo sincrono del layout della pagina proprio mentre la
-      // transizione CSS è in corso, che si vede come un microscatto. Lo
-      // scroll è già stato salvato sopra ("savedScrollY") e viene riimposto
-      // solo a chiusura completata (vedi sotto), quando non c'è più
-      // nessuna animazione in corso da disturbare.
     });
   });
 
@@ -1796,44 +1760,37 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   document.addEventListener("keydown", onKeydown);
 
   zoomCurrentClose = function close() {
-    // Ricalcola la posizione del blocco descrizione AL MOMENTO della
-    // chiusura, non riusando "firstRect" dell'apertura: se hai scrollato la
-    // pagina mentre il testo era aperto, quella sarebbe ormai vecchia.
     const currentRect = descBlock.getBoundingClientRect();
-    const closingCenterX = window.innerWidth / 2;
-    const closingCenterY = window.innerHeight / 2;
+    const currentTargetRect = panel.getBoundingClientRect();
+    
     const closingSourceCenterX = currentRect.left + currentRect.width / 2;
     const closingSourceCenterY = currentRect.top + currentRect.height / 2;
-    const closingDeltaX = closingSourceCenterX - closingCenterX;
-    const closingDeltaY = closingSourceCenterY - closingCenterY;
+    const closingTargetCenterX = currentTargetRect.left + currentTargetRect.width / 2;
+    const closingTargetCenterY = currentTargetRect.top + currentTargetRect.height / 2;
+    
+    const closingDeltaX = closingSourceCenterX - closingTargetCenterX;
+    const closingDeltaY = closingSourceCenterY - closingTargetCenterY;
+    const closingScaleX = currentRect.width / currentTargetRect.width;
+    const closingScaleY = currentRect.height / currentTargetRect.height;
 
-    // Sfondo scuro: resta pieno più a lungo di quanto duri lo scale/opacità
-    // del pannello (che parte prima), e sparisce solo negli ultimi 150ms —
-    // vedi il commento sul FLIP delle foto per il perché di questo ritardo.
     backdrop.classList.remove("is-active");
-    backdrop.style.transition = "opacity 150ms ease-in 500ms";
+    backdrop.style.transition = "opacity 150ms ease-in 400ms";
 
-    // Stessa tecnica dell'apertura qui sopra (stile unico: stessa durata,
-    // stessa curva, stesso scale, e ora anche lo stesso translate), solo
-    // invertita di direzione.
-    panel.style.transition = "transform 650ms cubic-bezier(0.25, 1, 0.5, 1), opacity 650ms cubic-bezier(0.25, 1, 0.5, 1)";
-    panel.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(0.94)`;
-    panel.style.opacity = "0";
+    panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
+    panel.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
+    
+    closeBtn.style.opacity = "0";
 
     setTimeout(() => {
       panel.classList.remove("is-active");
       panel.style.transition = "none";
       panel.style.transform = "";
-      panel.style.opacity = "";
       panel.innerHTML = "";
       descBlock.style.opacity = "1";
       document.removeEventListener("keydown", onKeydown);
       zoomCurrentClose = null;
-      // Riafferma di nuovo qui: se lo scatto avviene proprio nel momento
-      // in cui il pannello torna invisibile/si svuota, questo è l'ultimo
-      // istante utile per correggerlo.
       if (window.scrollY !== savedScrollY) window.scrollTo(0, savedScrollY);
-    }, 650);
+    }, 550); // 550ms timing reale della foto
   };
 }
 
