@@ -273,12 +273,23 @@ function currentImageOrder(key, length) {
    content.js da qui — sono solo due salvataggi nel browser, esportabili
    come tutto il resto (vedi pannello "Esporta modifiche"). Una foto
    ORIGINALE di content.js non si può cancellare per davvero: eliminarla
-   segna solo il suo id come "nascosto" (reversibile solo tramite "Reset
-   modifiche", che azzera però anche ogni altra personalizzazione). Una
-   foto AGGIUNTA con "+" invece non è mai esistita in content.js: è solo
-   un segnaposto (stesso placeholder colorato che vedi quando "src" è
-   null) con una didascalia, in attesa che tu carichi il file vero e lo
-   riporti in content.js — eliminarla la toglie del tutto dalla lista.
+   segna solo il suo id come "nascosto". Una foto AGGIUNTA con "+" invece
+   non è mai esistita in content.js: è solo un segnaposto (stesso
+   placeholder colorato che vedi quando "src" è null) con una didascalia,
+   in attesa che tu carichi il file vero e lo riporti in content.js —
+   eliminarla la toglie del tutto dalla lista.
+
+   L'id di una foto ORIGINALE è il suo "src" (es. "images/lines/lines-1.jpg"),
+   non la sua posizione nell'array: se in content.js quella foto viene
+   sostituita con un file diverso (nuovo nome), l'id cambia insieme al file,
+   quindi la nuova foto NON eredita il "nascosto" di quella vecchia — puoi
+   sempre caricare una foto diversa in un progetto, anche se in passato ne
+   avevi eliminata una che occupava la stessa posizione. Solo per i
+   segnaposto senza foto ("src: null", che non hanno nulla da identificare)
+   si ricade sulla posizione ("orig:N"). Stessa idea per la descrizione: il
+   suo id è il testo stesso, non "il blocco descrizione di questo
+   progetto" — cambiarne il testo in content.js la rende visibile di nuovo,
+   anche se in passato era stata eliminata.
    ------------------------------------------------------------------------- */
 const REMOVED_STORE_KEY = "site-removed-images-v1";
 
@@ -292,6 +303,23 @@ function loadRemovedOverrides() {
 
 function removedIdsFor(key) {
   return loadRemovedOverrides()[key] || [];
+}
+
+// Id stabile di una foto ORIGINALE (non aggiunta con "+") ai fini
+// dell'eliminazione: il contenuto (src) quando c'è, altrimenti la
+// posizione (per i segnaposto "src: null", che non hanno altro con cui
+// identificarsi). Usata sia per segnare un'eliminazione sia per
+// controllare se una foto è tra quelle eliminate — DEVE restare identica
+// nei due punti, altrimenti un'eliminazione non verrebbe mai riconosciuta.
+function imageRemovalId(image, origIndex) {
+  return image.src ? `src:${image.src}` : `orig:${origIndex}`;
+}
+
+// Stessa idea per il blocco di descrizione: il testo stesso è l'id, non
+// una posizione fissa, così cambiare il testo in content.js la fa
+// ricomparire anche se una versione precedente era stata eliminata.
+function descriptionRemovalId(description) {
+  return `description:${JSON.stringify(description)}`;
 }
 
 function markImageRemoved(key, uid) {
@@ -2355,16 +2383,15 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // scriverebbero a vicenda le foto/didascalie senza che nessuna delle
   // due lo sappia.
   const sizeKeyPrefix = galleryKey;
-  // Riusa lo stesso meccanismo delle foto eliminate (REMOVED_STORE_KEY):
-  // "description" è un id speciale, non un indice di foto, per la stessa
-  // galleria — un blocco di testo tolto così non torna più finché non fai
-  // "Reset modifiche" (nessun altro modo di recuperarlo, stessa scelta già
-  // fatta per le foto).
+  // Riusa lo stesso meccanismo delle foto eliminate (REMOVED_STORE_KEY),
+  // con lo stesso id "per contenuto" (vedi descriptionRemovalId più sopra):
+  // se il TESTO di content.js cambia, torna visibile da solo, anche se una
+  // versione precedente era stata eliminata col tasto "×".
   // Un array vuoto in content.js (vedi "michelin", "tower", ecc.) nasconde
   // il blocco allo stesso modo del flag salvato dal tasto "×": è il modo
   // permanente di "togliere la descrizione" richiesto dall'export panel,
   // dato che description.map() più sotto ha comunque bisogno di un array.
-  const descriptionRemoved = removedIdsFor(sizeKeyPrefix).includes("description") || !description.length;
+  const descriptionRemoved = removedIdsFor(sizeKeyPrefix).includes(descriptionRemovalId(description)) || !description.length;
 
   let bottomIndexEl; // assegnato più sotto, ma la callback lo usa solo su un futuro "input" dell'utente
   const { topbar, resolvedIndexText } = buildTopbar(sizeKeyPrefix, String(indexNumber), title, {
@@ -2424,7 +2451,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     e.stopPropagation();
     if (!isEditMode()) return;
     if (!confirm("Eliminare il blocco di testo della descrizione?")) return;
-    markImageRemoved(sizeKeyPrefix, "description");
+    markImageRemoved(sizeKeyPrefix, descriptionRemovalId(description));
     renderRoute();
   });
   descBlock.appendChild(descDeleteBtn);
@@ -2530,7 +2557,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       if (!isEditMode()) return;
       if (!confirm("Eliminare questa foto dalla galleria?")) return;
       if (image._extra) removeExtraImage(sizeKeyPrefix, origIndex);
-      else markImageRemoved(sizeKeyPrefix, `orig:${origIndex}`);
+      else markImageRemoved(sizeKeyPrefix, imageRemovalId(image, origIndex));
       renderRoute();
     });
     const addBtn = el(
@@ -3071,7 +3098,7 @@ function applyImageOverrides(galleryKey, seed, images) {
   const removed = removedIdsFor(galleryKey);
   const uploaded = uploadedImagesFor(galleryKey);
   const kept = images
-    .filter((img) => !removed.includes(`orig:${img._index}`))
+    .filter((img) => !removed.includes(imageRemovalId(img, img._index)))
     .map((img) => {
       const uploadedSrc = uploaded[img._index];
       return uploadedSrc ? { ...img, _src: uploadedSrc, _isPlaceholder: false } : { ...img, _isPlaceholder: !img.src };
