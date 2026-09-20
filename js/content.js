@@ -351,6 +351,11 @@ const PROJECTS = [
       { caption: "", src: "images/bar/bar-2.jpg" },
     ],
   },
+  // Progetto ricreato da zero (era rimasto bloccato da un'eliminazione
+  // fatta tempo fa in modalità modifica sul vecchio "orig:0" di questa
+  // posizione — vedi imageRemovalId/descriptionRemovalId in app.js, che
+  // ora identificano foto/descrizione dal loro contenuto invece che dalla
+  // posizione, proprio per evitare che torni a succedere).
   {
     slug: "fluoxetine",
     name: "Fluoxetine",
@@ -375,7 +380,6 @@ const PROJECTS = [
     description: ["Descrizione da definire per il progetto “Compression”."],
     images: [
       { caption: "", src: "images/compression/compression-1.jpg" },
-      { caption: "", src: "images/compression/compression-2.jpg" },
       { caption: "", src: "images/compression/compression-3.jpg" },
       { caption: "", src: "images/compression/compression-4.jpg" },
       { caption: "", src: "images/compression/compression-5.jpg" },
