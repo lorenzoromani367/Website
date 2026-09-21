@@ -1944,10 +1944,12 @@ function makeZoomable(frame, img) {
     // già risolto per il testo).
     const savedSize = loadSizeOverrides()[LIGHTBOX_SIZE_KEY];
     const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
-    const defaultMaxW = isMobile ? window.innerWidth * 0.96 : window.innerWidth * 0.85;
-    const defaultMaxH = isMobile ? window.innerHeight * 0.96 : window.innerHeight * 0.82;
-    const maxW = savedSize && savedSize.width ? Math.min(parseFloat(savedSize.width), window.innerWidth - (isMobile ? 16 : 32)) : defaultMaxW;
-    const maxH = savedSize && savedSize.height ? Math.min(parseFloat(savedSize.height), window.innerHeight - (isMobile ? 16 : 32)) : defaultMaxH;
+    const defaultMaxW = isMobile ? window.innerWidth - 16 : window.innerWidth * 0.85;
+    const defaultMaxH = isMobile ? window.innerHeight - 16 : window.innerHeight * 0.82;
+    // Su mobile ignora del tutto eventuali ridimensionamenti salvati (che
+    // impedirebbero di andare a filo), forzando il default 100% - 16px.
+    const maxW = savedSize && savedSize.width && !isMobile ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : defaultMaxW;
+    const maxH = savedSize && savedSize.height && !isMobile ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : defaultMaxH;
     const ratio = firstRect.width / firstRect.height;
 
     let targetW = maxW;
