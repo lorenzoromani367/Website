@@ -2355,12 +2355,12 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       width: pickLayout(
         (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
         descriptionBox && descriptionBox.mobile && descriptionBox.mobile.width,
-        undefined
+        LAYOUT.galleryMobile.descriptionWidth
       ) || (descriptionBox && descriptionBox.width) || LAYOUT.gallery.descriptionWidth,
       height: pickLayout(
         defaultDescHeight,
         descriptionBox && descriptionBox.mobile && descriptionBox.mobile.height,
-        undefined
+        LAYOUT.galleryMobile.descriptionHeight
       ) || defaultDescHeight,
     })
   );
@@ -2368,7 +2368,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     defaultOffset: pickLayout(
       (descriptionBox && descriptionBox.offset) || LAYOUT.gallery.descriptionOffset,
       descriptionBox && descriptionBox.mobile && descriptionBox.mobile.offset,
-      undefined
+      LAYOUT.galleryMobile.descriptionOffset
     ),
   });
   const descDeleteBtn = el(
@@ -2429,7 +2429,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         defaultOffset: pickLayout(
           image.captionOffset || LAYOUT.gallery.captionOffset,
           image.mobile && image.mobile.captionOffset,
-          undefined
+          LAYOUT.galleryMobile.captionOffset
         ),
         dualHandles: true,
       }
@@ -2468,7 +2468,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       defaultOffset: pickLayout(
         image.offset || LAYOUT.gallery.imageOffset,
         image.mobile && image.mobile.offset,
-        undefined
+        LAYOUT.galleryMobile.imageOffset
       ),
     });
 
@@ -2552,7 +2552,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     spacerBeforeBar,
     `${sizeKeyPrefix}.spacerBeforeBar`,
     "Trascina per aggiungere spazio prima delle frecce",
-    parseFloat(LAYOUT.gallery.spacerBeforeBarHeight) || 0
+    parseFloat(pickLayout(LAYOUT.gallery.spacerBeforeBarHeight, undefined, LAYOUT.galleryMobile.spacerBeforeBarHeight)) || 0
   );
   const spacerBottom = el("div", { class: "gallery-spacer" });
   makeHeightResizable(
