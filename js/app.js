@@ -2602,7 +2602,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   };
   const marqueeTick = (ts) => {
     if (marqueeLastTs == null) marqueeLastTs = ts;
-    const dt = (ts - marqueeLastTs) / 1000;
+    let dt = (ts - marqueeLastTs) / 1000;
+    if (dt > 0.1) dt = 0.1; // Evita scatti in avanti (fast-forward) quando il tab torna visibile
     marqueeLastTs = ts;
     if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
       marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
@@ -2831,7 +2832,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   function scheduleNext() {
     clearTimeout(autoplayTimer);
-    if (paused || figures.length < 2) return;
+    if (paused || figures.length < 2 || document.hidden) return;
     // Se una transizione è appena partita (autoplay, click dell'utente, o
     // swipe touch), la prossima non deve scattare dopo AUTOPLAY_DELAY
     // dall'INIZIO di questa, ma dopo che questa è FINITA di arrivare
@@ -2861,6 +2862,16 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function restartAutoplay() {
     scheduleNext();
   }
+
+  // Blocca l'autoplay quando il tab del browser non è visibile, 
+  // per evitare che continui ad avanzare in background.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      clearTimeout(autoplayTimer);
+    } else {
+      if (!paused) scheduleNext();
+    }
+  });
 
   function handlePause() {
     paused = true;
