@@ -23,7 +23,7 @@
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const TRANSITION_MS = 700;     // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const MARQUEE_PX_PER_SEC = 8;  // velocità dello scorrimento del testo
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 const MOBILE_BREAKPOINT = 700; // px: stessa soglia del media query in style.css — sopra/sotto cambia lo "scope" di posizioni/dimensioni salvate
@@ -2385,7 +2385,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const figures = images.map((image, i) => {
     const origIndex = image._index != null ? image._index : i;
-    const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy" });
+    const img = el("img", { src: image._src, alt: image.caption || "", loading: i === 0 ? "eager" : "lazy", decoding: "async" });
     const frame = el("div", { class: "photo-frame" }, [img]);
 
     // Didascalia: un rettangolo sempre presente nella struttura della
@@ -2699,6 +2699,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // risolve (swipe touch / hover+click che riprendono l'autoplay troppo
   // presto dopo una transizione avviata mentre l'autoplay era in pausa).
   let lastTransitionStart = -Infinity;
+  let isAnimating = false;
 
   function updateViewportHeight() {
     const activeFigure = figures[current];
@@ -2777,8 +2778,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
 
   function goTo(i, { user = false } = {}) {
+    if (isAnimating) return;
     if (!figures.length) return;
+    
     lastTransitionStart = performance.now();
+    isAnimating = true;
+    setTimeout(() => { isAnimating = false; }, TRANSITION_MS);
+    
     if (pendingWrapCleanup) {
       clearTimeout(pendingWrapCleanup.timer);
       pendingWrapCleanup.cleanup();
