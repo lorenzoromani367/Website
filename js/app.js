@@ -3138,18 +3138,122 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
   app.classList.add("has-fixed-bars");
   ensureEditModeUI();
 
-  const simpleKeyPrefix = `simple.${title.toLowerCase()}`;
-  const { topbar } = buildTopbar(simpleKeyPrefix, "", title.toLowerCase());
+  const resizeObservers = [];
+  const sizeKeyPrefix = `simple.${title.toLowerCase()}`;
+  const { topbar } = buildTopbar(sizeKeyPrefix, "", title.toLowerCase());
 
-  const body = el("div", { class: "description simple-page" }, [
-    ...paragraphs.map((p) => el("p", {}, p)),
-    ...extraLines.map((line) => el("p", { class: "contact-line" }, `${line.label} — ${line.value}`)),
-  ]);
+  const allText = [...paragraphs];
+  if (extraLines.length) {
+    allText.push("");
+    extraLines.forEach((line) => allText.push(`${line.label} — ${line.value}`));
+  }
+
+  const defaultDescHeight = LAYOUT.gallery.descriptionHeight;
+  const hasExplicitDescHeight = Boolean(defaultDescHeight || loadSizeOverrides()[`${sizeKeyPrefix}.description`]?.height);
+  const makeParagraphs = () => allText.map((paragraph) => el("p", paragraph === "" ? { class: "spacer" } : {}, paragraph));
+  const secondCopy = makeParagraphs();
+  secondCopy.forEach((p) => p.setAttribute("aria-hidden", "true"));
+  
+  const descTrack = el("div", { class: "description-track" }, [...makeParagraphs(), ...secondCopy]);
+  const descBlock = el("div", { class: "description simple-page" }, [descTrack]);
+
+  resizeObservers.push(
+    makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
+      width: LAYOUT.gallery.descriptionWidth,
+      height: defaultDescHeight,
+    })
+  );
+  makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo", {
+    defaultOffset: LAYOUT.gallery.descriptionOffset,
+  });
+
+  let marqueeDistance = 0;
+  let marqueePos = 0;
+  let marqueeLastTs = null;
+  let marqueeDragState = null;
+  let marqueeRafId = null;
+  let marqueeHoverPaused = false;
+  let marqueeJustDragged = false;
+
+  const measureMarqueeDistance = () => {
+    marqueeDistance = secondCopy[0] ? secondCopy[0].offsetTop : descTrack.scrollHeight / 2;
+    marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
+    if (!hasExplicitDescHeight) {
+      descBlock.style.height = `${marqueeDistance}px`;
+    }
+  };
+  const applyMarqueeTransform = () => {
+    descTrack.style.transform = `translate3d(0, ${marqueePos - marqueeDistance}px, 0)`;
+  };
+  const marqueeTick = (ts) => {
+    if (marqueeLastTs == null) marqueeLastTs = ts;
+    let dt = (ts - marqueeLastTs) / 1000;
+    if (dt > 0.1) dt = 0.1;
+    marqueeLastTs = ts;
+    if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
+      marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
+      applyMarqueeTransform();
+    }
+    marqueeRafId = requestAnimationFrame(marqueeTick);
+  };
+  measureMarqueeDistance();
+  applyMarqueeTransform();
+  marqueeRafId = requestAnimationFrame(marqueeTick);
+
+  descBlock.addEventListener("mouseenter", () => { marqueeHoverPaused = true; });
+  descBlock.addEventListener("mouseleave", () => { marqueeHoverPaused = false; });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      measureMarqueeDistance();
+      applyMarqueeTransform();
+    });
+  }
+
+  descTrack.classList.add("draggable");
+  descTrack.addEventListener("pointerdown", (e) => {
+    if (isEditMode()) return;
+    e.preventDefault();
+    marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos, moved: false };
+    descTrack.classList.add("is-dragging");
+    document.addEventListener("pointermove", onMarqueeDragMove);
+    document.addEventListener("pointerup", onMarqueeDragEnd);
+  });
+  function onMarqueeDragMove(e) {
+    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+    const dy = e.clientY - marqueeDragState.startY;
+    if (Math.abs(dy) > 5) marqueeDragState.moved = true;
+    let next = (marqueeDragState.startPos - dy) % marqueeDistance;
+    if (next < 0) next += marqueeDistance;
+    marqueePos = next;
+    applyMarqueeTransform();
+  }
+  function onMarqueeDragEnd(e) {
+    if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
+    if (marqueeDragState.moved) marqueeJustDragged = true;
+    marqueeDragState = null;
+    descTrack.classList.remove("is-dragging");
+    document.removeEventListener("pointermove", onMarqueeDragMove);
+    document.removeEventListener("pointerup", onMarqueeDragEnd);
+  }
+
+  if (allText && allText.length) {
+    descBlock.addEventListener("click", () => {
+      if (isEditMode()) return;
+      if (marqueeJustDragged) { marqueeJustDragged = false; return; }
+      openTextLightbox(allText, sizeKeyPrefix, descBlock);
+    });
+  }
 
   app.appendChild(topbar);
-  app.appendChild(body);
+  app.appendChild(descBlock);
 
-  currentTeardown = null;
+  currentTeardown = () => {
+    cancelAnimationFrame(marqueeRafId);
+    document.removeEventListener("pointermove", onMarqueeDragMove);
+    document.removeEventListener("pointerup", onMarqueeDragEnd);
+    resizeObservers.forEach((o) => o.disconnect());
+  };
 }
 
 function renderContacts() {
