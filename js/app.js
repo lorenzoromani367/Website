@@ -1728,27 +1728,24 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     });
   }
 
-  // 1. FIRST & INVERT: Traslazione basata sull'angolo in alto a sinistra per
-  // evitare qualsiasi "rimbalzo" causato dal disallineamento dei centri
+  // 1. FIRST & INVERT: Zoom centrato invece che in volo dalla miniatura
   panel.style.transition = "none";
   panel.style.transform = "none";
-  panel.style.transformOrigin = "0 0"; // Allineamento in alto a sinistra
+  panel.style.transformOrigin = "50% 50%"; // Centro esatto
 
   const targetRect = panel.getBoundingClientRect();
   const uniformScale = firstRect.width / targetRect.width;
   
-  const deltaX = firstRect.left - targetRect.left;
-  const deltaY = firstRect.top - targetRect.top;
-
-  // Applica trasformazione senza opacità, perfettamente ancorata
-  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${uniformScale})`;
+  // Rimuoviamo deltaX e deltaY: l'animazione partirà esattamente dal centro dello schermo
+  // ma manterrà la fluidità e la proporzione della scala
+  panel.style.transform = `scale(${uniformScale})`;
   
   // 2. PLAY
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       // 2. Rallenta a 800ms per l'apertura
       panel.style.transition = "transform 800ms cubic-bezier(0.16, 1, 0.3, 1)";
-      panel.style.transform = "translate(0px, 0px) scale(1)";
+      panel.style.transform = "scale(1)";
     });
   });
 
@@ -1761,16 +1758,14 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     const currentRect = descBlock.getBoundingClientRect();
     const currentTargetRect = panel.getBoundingClientRect();
     
-    // Stessa logica solida dall'angolo in alto a sinistra per la chiusura
+    // Zoom centrato anche in chiusura
     const closingUniformScale = currentRect.width / currentTargetRect.width;
-    const closingDeltaX = currentRect.left - currentTargetRect.left;
-    const closingDeltaY = currentRect.top - currentTargetRect.top;
 
     backdrop.classList.remove("is-active");
     backdrop.style.transition = "opacity 150ms ease-in 400ms";
 
     panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
-    panel.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingUniformScale})`;
+    panel.style.transform = `scale(${closingUniformScale})`;
     
     closeBtn.style.opacity = "0";
 
