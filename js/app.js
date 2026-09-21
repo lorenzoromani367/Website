@@ -1739,26 +1739,24 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   document.addEventListener("keydown", onKeydown);
 
   zoomCurrentClose = function close() {
+    // Chiusura del tutto immediata (nessuna transizione nemmeno sullo sfondo)
+    backdrop.style.transition = "none";
     backdrop.classList.remove("is-active");
-    backdrop.style.transition = "opacity 150ms ease-in";
 
-    // CHIUSURA IMMEDIATA
     panel.style.transition = "none";
     panel.style.transform = "none";
     panel.style.opacity = "0";
     
     closeBtn.style.opacity = "0";
 
-    setTimeout(() => {
-      panel.classList.remove("is-active");
-      panel.style.opacity = "";
-      panel.innerHTML = "";
-      descBlock.style.opacity = "1";
-      document.removeEventListener("keydown", onKeydown);
-      zoomCurrentClose = null;
-      
-      document.body.style.overflow = originalBodyOverflow;
-    }, 150); // Solo il tempo di fade del backdrop
+    panel.classList.remove("is-active");
+    panel.style.opacity = "";
+    panel.innerHTML = "";
+    descBlock.style.opacity = "1";
+    document.removeEventListener("keydown", onKeydown);
+    zoomCurrentClose = null;
+    
+    document.body.style.overflow = originalBodyOverflow;
   };
 }
 
