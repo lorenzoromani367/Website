@@ -1728,26 +1728,10 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     });
   }
 
-  // 1. FIRST & INVERT: Zoom centrato invece che in volo dalla miniatura
+  // APERTURA IMMEDIATA: nessuna transizione o ingrandimento.
   panel.style.transition = "none";
   panel.style.transform = "none";
-  panel.style.transformOrigin = "50% 50%"; // Centro esatto
-
-  const targetRect = panel.getBoundingClientRect();
-  const uniformScale = firstRect.width / targetRect.width;
-  
-  // Rimuoviamo deltaX e deltaY: l'animazione partirà esattamente dal centro dello schermo
-  // ma manterrà la fluidità e la proporzione della scala
-  panel.style.transform = `scale(${uniformScale})`;
-  
-  // 2. PLAY
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      // 2. Rallenta a 800ms per l'apertura
-      panel.style.transition = "transform 800ms cubic-bezier(0.16, 1, 0.3, 1)";
-      panel.style.transform = "scale(1)";
-    });
-  });
+  panel.style.opacity = "1";
 
   function onKeydown(e) {
     if (e.key === "Escape" && zoomCurrentClose) zoomCurrentClose();
@@ -1755,32 +1739,26 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   document.addEventListener("keydown", onKeydown);
 
   zoomCurrentClose = function close() {
-    const currentRect = descBlock.getBoundingClientRect();
-    const currentTargetRect = panel.getBoundingClientRect();
-    
-    // Zoom centrato anche in chiusura
-    const closingUniformScale = currentRect.width / currentTargetRect.width;
-
     backdrop.classList.remove("is-active");
-    backdrop.style.transition = "opacity 150ms ease-in 400ms";
+    backdrop.style.transition = "opacity 150ms ease-in";
 
-    panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
-    panel.style.transform = `scale(${closingUniformScale})`;
+    // CHIUSURA IMMEDIATA
+    panel.style.transition = "none";
+    panel.style.transform = "none";
+    panel.style.opacity = "0";
     
     closeBtn.style.opacity = "0";
 
     setTimeout(() => {
       panel.classList.remove("is-active");
-      panel.style.transition = "none";
-      panel.style.transform = "";
+      panel.style.opacity = "";
       panel.innerHTML = "";
       descBlock.style.opacity = "1";
       document.removeEventListener("keydown", onKeydown);
       zoomCurrentClose = null;
       
-      // Sblocca la pagina di sfondo (senza scatti forzati di scroll)
       document.body.style.overflow = originalBodyOverflow;
-    }, 550);
+    }, 150); // Solo il tempo di fade del backdrop
   };
 }
 
