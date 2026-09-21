@@ -1731,8 +1731,10 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   // Forza layout per leggere le dimensioni finali vere del pannello (targetRect)
   const targetRect = panel.getBoundingClientRect();
 
-  const scaleX = firstRect.width / targetRect.width;
-  const scaleY = firstRect.height / targetRect.height;
+  // USA UNA SCALA UNIFORME! (scaleX == scaleY)
+  // Questo previene l'effetto "schiacciato" sul testo. La proporzione del testo
+  // viene preservata durante il volo, rendendolo solido ed elegante come un'immagine.
+  const uniformScale = firstRect.width / targetRect.width;
   
   const firstCenterX = firstRect.left + firstRect.width / 2;
   const firstCenterY = firstRect.top + firstRect.height / 2;
@@ -1743,7 +1745,7 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
   const deltaY = firstCenterY - targetCenterY;
 
   // Applica trasformazione senza nessuna opacità (0 fade, parte solido come la foto)
-  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+  panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${uniformScale})`;
   
   // 2. PLAY
   requestAnimationFrame(() => {
@@ -1770,14 +1772,15 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     
     const closingDeltaX = closingSourceCenterX - closingTargetCenterX;
     const closingDeltaY = closingSourceCenterY - closingTargetCenterY;
-    const closingScaleX = currentRect.width / currentTargetRect.width;
-    const closingScaleY = currentRect.height / currentTargetRect.height;
+    
+    // SCALA UNIFORME anche in chiusura!
+    const closingUniformScale = currentRect.width / currentTargetRect.width;
 
     backdrop.classList.remove("is-active");
     backdrop.style.transition = "opacity 150ms ease-in 400ms";
 
     panel.style.transition = "transform 550ms cubic-bezier(0.25, 1, 0.5, 1)";
-    panel.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingScaleX}, ${closingScaleY})`;
+    panel.style.transform = `translate(${closingDeltaX}px, ${closingDeltaY}px) scale(${closingUniformScale})`;
     
     closeBtn.style.opacity = "0";
 
