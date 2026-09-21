@@ -85,9 +85,16 @@ const LAYOUT = {
   // presente qui vuol dire "nessun offset" su mobile (parte da zero/auto),
   // non "usa il valore desktop qui sopra".
   galleryMobile: {
-    topbarTitleOffset: { x: 0, y: 40 },
+    descriptionWidth: "340px",
+    descriptionHeight: "340px",
+    descriptionOffset: { x: 0, y: 100 },
+    imageOffset: { x: 0, y: 160 },
+    captionOffset: { x: 0, y: 220 },
+    topbarTitleOffset: { x: 60, y: 40 },
+    topbarIndexOffset: { x: 60, y: 0 },
     bottomIndexOffset: { x: 0, y: 0 },
     hamburgerOffset: { x: 0, y: -20 },
+    spacerBeforeBarHeight: "100px",
     spacerBottomHeight: "60px",
   },
 };
@@ -101,12 +108,8 @@ const PROJECTS = [
       "I shoot on film, which slows the process down and changes what I notice. Light and grain do work that description can't.",
       "Each image is a single encounter with a specific place and a specific quality of light. As for my stills, they form a growing archive, i will endlessly keep returning to.",
     ],
-    // Nessuna "descriptionBox" desktop qui: la dimensione/posizione di
-    // quel blocco resta quella di default in LAYOUT.gallery. Solo su
-    // mobile ha una misura sua (vedi pickLayout() in app.js).
-    descriptionBox: {
-      mobile: { width: "360px", height: "340px", offset: { x: 0, y: 100 } },
-    },
+    // Nessuna "descriptionBox" qui: la dimensione/posizione di
+    // quel blocco resta quella di default in LAYOUT sia per desktop che per mobile.
     // Ordine, didascalie e "mobile: {...}" aggiornati dall'export panel
     // (foto #N = indice N-1, sempre quello ORIGINALE: vedi photoLabel in
     // app.js — non cambia se riordini). "mobile" è un override letto
@@ -126,13 +129,6 @@ const PROJECTS = [
         caption: "winery, sicily",
         src: "images/lines/lines-4.jpg",
         captionOffset: { x: 80, y: 380 },
-      },
-      {
-        caption: "sky",
-        src: "images/lines/lines-2.jpg",
-        width: "440px",
-        height: "630px",
-        mobile: { offset: { x: 0, y: 120 }, captionOffset: { x: 0, y: 100 } },
       },
       { caption: "church", src: "images/lines/lines-5.jpg", width: "440px", height: "622px" },
       { caption: "olympus", src: "images/lines/lines-6.jpg", width: "520px", height: "599px", captionOffset: { x: 100, y: 360 } },

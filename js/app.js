@@ -1943,8 +1943,11 @@ function makeZoomable(frame, img) {
     // fra loro (nessuno "schiacciamento" a metà animazione, lo stesso bug
     // già risolto per il testo).
     const savedSize = loadSizeOverrides()[LIGHTBOX_SIZE_KEY];
-    const maxW = savedSize && savedSize.width ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : window.innerWidth * 0.85;
-    const maxH = savedSize && savedSize.height ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : window.innerHeight * 0.82;
+    const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+    const defaultMaxW = isMobile ? window.innerWidth * 0.96 : window.innerWidth * 0.85;
+    const defaultMaxH = isMobile ? window.innerHeight * 0.96 : window.innerHeight * 0.82;
+    const maxW = savedSize && savedSize.width ? Math.min(parseFloat(savedSize.width), window.innerWidth - (isMobile ? 16 : 32)) : defaultMaxW;
+    const maxH = savedSize && savedSize.height ? Math.min(parseFloat(savedSize.height), window.innerHeight - (isMobile ? 16 : 32)) : defaultMaxH;
     const ratio = firstRect.width / firstRect.height;
 
     let targetW = maxW;
