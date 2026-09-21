@@ -45,7 +45,7 @@ button {
   --muted: #8a877c;
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
-  --transition-ms: 6000ms;
+  --transition-ms: 700ms;
   /* Due estremi già provati e scartati: un ease-in-out marcato
      (cubic-bezier(0.65,0,0.35,1)) si sente come due fasi diverse — parte
      lenta, "accelera" verso metà corsa, poi rallenta di nuovo; lineare
@@ -54,7 +54,7 @@ button {
      stessa curva "ease" di default del browser, molto più tenue della
      prima — un accenno di morbidezza in apertura/chiusura del movimento,
      quasi impercettibile, senza leggersi come due fasi distinte. */
-  --transition-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mono {
