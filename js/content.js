@@ -123,7 +123,6 @@ const PROJECTS = [
         width: "480px",
         height: "673px",
         captionOffset: { x: 100, y: 360 },
-        mobile: { offset: { x: 0, y: 100 } },
       },
       {
         caption: "winery, sicily",
@@ -140,12 +139,6 @@ const PROJECTS = [
       {
         caption: "ignored column",
         src: "images/lines/lines-12.jpg",
-        mobile: {
-          width: "340px",
-          height: "385px",
-          offset: { x: 0, y: 180 },
-          captionOffset: { x: 0, y: 240 },
-        },
       },
       { caption: "emst", src: "images/lines/lines-13.jpg", width: "480px", height: "640px" },
     ],
