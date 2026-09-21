@@ -23,7 +23,7 @@
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
-const TRANSITION_MS = 700;     // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const MARQUEE_PX_PER_SEC = 8;  // velocità dello scorrimento del testo
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 const MOBILE_BREAKPOINT = 700; // px: stessa soglia del media query in style.css — sopra/sotto cambia lo "scope" di posizioni/dimensioni salvate
@@ -2783,7 +2783,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     
     lastTransitionStart = performance.now();
     isAnimating = true;
-    setTimeout(() => { isAnimating = false; }, TRANSITION_MS);
+    setTimeout(() => { isAnimating = false; }, 500); // 500ms di debounce per evitare doppi clic veloci, ma senza bloccare i 6s di transizione
     
     if (pendingWrapCleanup) {
       clearTimeout(pendingWrapCleanup.timer);
