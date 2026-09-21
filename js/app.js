@@ -24,6 +24,7 @@
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
 const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
+const MARQUEE_PX_PER_SEC = 8;  // velocità dello scorrimento del testo
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 const MOBILE_BREAKPOINT = 700; // px: stessa soglia del media query in style.css — sopra/sotto cambia lo "scope" di posizioni/dimensioni salvate
 // Le foto vere (src in content.js) restano in cache nel browser di chi
@@ -2247,7 +2248,7 @@ function renderHome() {
 // found) a parte i testi e il prefisso delle chiavi di posizione salvate:
 // costruita qui una sola volta invece che duplicata in renderGallery e
 // renderSimplePage.
-function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange } = {}) {
+function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange, hideIndex } = {}) {
   // Il numero mostrato in alto era un testo fisso (sempre "1" su una
   // pagina-parola, dato che parte sempre con una sola foto) — ora è un
   // <input> scrivibile in modalità modifica, stesso meccanismo di
@@ -2268,6 +2269,7 @@ function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange } = {}) {
     if (onIndexChange) onIndexChange(indexInput.value);
   });
   const topbarIndexEl = el("span", { class: "topbar-index" }, [indexInput]);
+  if (hideIndex) topbarIndexEl.style.display = "none";
   const topbarTitleEl = el("span", { class: "topbar-title" }, titleText);
   const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
     el("span", {}), el("span", {}), el("span", {}),
@@ -2571,7 +2573,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // senza scattare indietro. La distanza è quella ESATTA misurata sul DOM
   // (non una percentuale) — vedi il commento in style.css sul perché
   // "50%" darebbe un salto visibile.
-  const MARQUEE_PX_PER_SEC = 8;
+
   let marqueeDistance = 0;
   let marqueePos = 0;
   let marqueeLastTs = null;
@@ -3140,7 +3142,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [] }) {
 
   const resizeObservers = [];
   const sizeKeyPrefix = `simple.${title.toLowerCase()}`;
-  const { topbar } = buildTopbar(sizeKeyPrefix, "", title.toLowerCase());
+  const { topbar } = buildTopbar(sizeKeyPrefix, "", title.toLowerCase(), { hideIndex: true });
 
   const allText = [...paragraphs];
   if (extraLines.length) {
