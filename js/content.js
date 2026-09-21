@@ -437,12 +437,10 @@ const ARCHIVE = {
 // Testo placeholder per le pagine statiche — da sostituire con i tuoi contenuti.
 const CONTACTS = {
   title: "Contacts",
-  paragraphs: [
-    "Per commissioni, stampe o collaborazioni scrivimi.",
-  ],
+  paragraphs: [],
   lines: [
-    { label: "email", value: "hello@lorenzoromani.example" },
-    { label: "instagram", value: "@lorenzoromani" },
+    { label: "email", value: "scrivi@la-tua-email.com" },
+    { label: "cellulare", value: "+39 123 456 7890" },
   ],
 };
 
