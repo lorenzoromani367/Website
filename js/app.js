@@ -1692,7 +1692,10 @@ function ensureZoomTextPanel() {
 // contenuto su sfondo nero: il colore/aspetto restano quelli di
 // ".lightbox-text" in style.css.
 function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
-  const savedScrollY = window.scrollY;
+  // 3. Blocca la pagina di sfondo per impedire qualsiasi scorrimento o salto accidentale
+  const originalBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+
   const firstRect = descBlock.getBoundingClientRect();
   descBlock.style.opacity = "0";
 
@@ -1725,33 +1728,26 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     });
   }
 
-  // 1. FIRST & INVERT: Calcolo geometrico reale (come le foto)
+  // 1. FIRST & INVERT: Traslazione basata sull'angolo in alto a sinistra per
+  // evitare qualsiasi "rimbalzo" causato dal disallineamento dei centri
   panel.style.transition = "none";
   panel.style.transform = "none";
-  // Forza layout per leggere le dimensioni finali vere del pannello (targetRect)
-  const targetRect = panel.getBoundingClientRect();
+  panel.style.transformOrigin = "0 0"; // Allineamento in alto a sinistra
 
-  // USA UNA SCALA UNIFORME! (scaleX == scaleY)
-  // Questo previene l'effetto "schiacciato" sul testo. La proporzione del testo
-  // viene preservata durante il volo, rendendolo solido ed elegante come un'immagine.
+  const targetRect = panel.getBoundingClientRect();
   const uniformScale = firstRect.width / targetRect.width;
   
-  const firstCenterX = firstRect.left + firstRect.width / 2;
-  const firstCenterY = firstRect.top + firstRect.height / 2;
-  const targetCenterX = targetRect.left + targetRect.width / 2;
-  const targetCenterY = targetRect.top + targetRect.height / 2;
-  
-  const deltaX = firstCenterX - targetCenterX;
-  const deltaY = firstCenterY - targetCenterY;
+  const deltaX = firstRect.left - targetRect.left;
+  const deltaY = firstRect.top - targetRect.top;
 
-  // Applica trasformazione senza nessuna opacità (0 fade, parte solido come la foto)
+  // Applica trasformazione senza opacità, perfettamente ancorata
   panel.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${uniformScale})`;
   
   // 2. PLAY
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      // 850ms come la foto
-      panel.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
+      // 2. Rallenta a 800ms per l'apertura
+      panel.style.transition = "transform 800ms cubic-bezier(0.16, 1, 0.3, 1)";
       panel.style.transform = "translate(0px, 0px) scale(1)";
     });
   });
@@ -1765,16 +1761,10 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
     const currentRect = descBlock.getBoundingClientRect();
     const currentTargetRect = panel.getBoundingClientRect();
     
-    const closingSourceCenterX = currentRect.left + currentRect.width / 2;
-    const closingSourceCenterY = currentRect.top + currentRect.height / 2;
-    const closingTargetCenterX = currentTargetRect.left + currentTargetRect.width / 2;
-    const closingTargetCenterY = currentTargetRect.top + currentTargetRect.height / 2;
-    
-    const closingDeltaX = closingSourceCenterX - closingTargetCenterX;
-    const closingDeltaY = closingSourceCenterY - closingTargetCenterY;
-    
-    // SCALA UNIFORME anche in chiusura!
+    // Stessa logica solida dall'angolo in alto a sinistra per la chiusura
     const closingUniformScale = currentRect.width / currentTargetRect.width;
+    const closingDeltaX = currentRect.left - currentTargetRect.left;
+    const closingDeltaY = currentRect.top - currentTargetRect.top;
 
     backdrop.classList.remove("is-active");
     backdrop.style.transition = "opacity 150ms ease-in 400ms";
@@ -1792,8 +1782,10 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock) {
       descBlock.style.opacity = "1";
       document.removeEventListener("keydown", onKeydown);
       zoomCurrentClose = null;
-      if (window.scrollY !== savedScrollY) window.scrollTo(0, savedScrollY);
-    }, 550); // 550ms timing reale della foto
+      
+      // Sblocca la pagina di sfondo (senza scatti forzati di scroll)
+      document.body.style.overflow = originalBodyOverflow;
+    }, 550);
   };
 }
 
