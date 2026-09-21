@@ -439,8 +439,8 @@ const CONTACTS = {
   title: "Contacts",
   paragraphs: [],
   lines: [
-    { label: "email", value: "scrivi@la-tua-email.com" },
-    { label: "cellulare", value: "+39 123 456 7890" },
+    { label: "email", value: "lorenzoromani1@gmail.com" },
+    { label: "cellulare", value: "+39 3911618380" },
   ],
 };
 
