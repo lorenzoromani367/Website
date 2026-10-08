@@ -6,9 +6,16 @@
   src:
     url("../fonts/StrichpunktSans-Regular.woff2") format("woff2"),
     url("../fonts/StrichpunktSans-Regular.ttf") format("truetype");
-  font-weight: 400;
+  /* C'è un solo file (peso normale), ma il sito lo usa "in grassetto". Dichiarando che
+     il file copre tutti i pesi, nessun browser si inventa un grassetto suo: ognuno lo
+     disegnava in modo diverso (più sottile su Safari, più spesso su Vivaldi/Chrome).
+     Lo spessore lo disegniamo noi, identico ovunque: vedi --sans-stroke qui sotto. */
+  font-weight: 100 900;
   font-style: normal;
-  font-display: swap;
+  /* "block": finché il carattere non è arrivato (pochi millesimi con la precarica in index.html) il testo
+     resta invisibile invece di comparire in un altro carattere e poi "saltare" — era uno dei motivi per cui
+     al primo ingresso la pagina sembrava rotta e dopo qualche visita (carattere già in memoria) no. */
+  font-display: block;
 }
 
 /* -------------------------------------------------------------------------
@@ -23,6 +30,13 @@ body {
   height: 100%;
 }
 
+html {
+  /* iPhone/iPad ingrandiscono da soli il testo quando giri lo schermo: qui no */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  font-synthesis-weight: none;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -30,6 +44,39 @@ body {
   font-family: "Strichpunkt Sans", Helvetica, Arial, sans-serif;
   font-weight: 600;
   -webkit-font-smoothing: antialiased;
+  /* Lo "spessore" del testo (il vecchio grassetto finto, ora disegnato da noi): 0.035 volte
+     la grandezza della lettera — misurato per coincidere con quello che mostra Vivaldi/Chrome.
+     Tutto ciò che sta nella pagina lo eredita; pulsanti e testo a macchina da scrivere lo
+     azzerano più sotto, perché non erano in grassetto. */
+  --sans-stroke: 0.035em;
+}
+
+*,
+*::before,
+*::after {
+  -webkit-text-stroke-width: var(--sans-stroke, 0);
+}
+
+/* Non erano in grassetto prima, quindi niente spessore: pulsanti e testo a macchina da scrivere. */
+button,
+.mono,
+.home-add-word-btn,
+.home-view-all-photos-btn,
+.home-word-delete-btn,
+.caption-input,
+.contact-line,
+.resizable-label,
+.photo-delete-btn,
+.photo-link-btn,
+.photo-add-btn,
+.description-delete-btn,
+.export-panel textarea,
+.photo-caption-text,
+.archive-word,
+.lightbox-project-label,
+body.edit-mode .home-word-input::placeholder {
+  --sans-stroke: 0;
+  -webkit-text-stroke-width: 0;
 }
 
 a {
@@ -53,6 +100,11 @@ button {
   --hairline: rgba(43, 43, 40, 0.12);
   --panel-width: 740px;
   --transition-ms: 6000ms;
+  /* Testo "a macchina da scrivere" (didascalie, contatti, pulsanti di modifica). Prima l'elenco
+     cominciava con font di sistema che esistono solo su Safari (SF Mono): lì le didascalie
+     uscivano con un altro disegno e un'altra larghezza rispetto a Vivaldi. Courier New c'è su
+     ogni Mac, Windows e iPad. */
+  --mono: "Courier New", Courier, monospace;
   /* Due estremi già provati e scartati: un ease-in-out marcato
      (cubic-bezier(0.65,0,0.35,1)) si sente come due fasi diverse — parte
      lenta, "accelera" verso metà corsa, poi rallenta di nuovo; lineare
@@ -65,7 +117,7 @@ button {
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
 }
 
 /* -------------------------------------------------------------------------
@@ -144,7 +196,7 @@ button {
   display: none;
   margin: 20px 0 4px;
   padding: 6px 14px;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--paper);
   background: #2b7a4b;
@@ -165,7 +217,7 @@ body.edit-mode .home-add-word-btn:hover {
   display: none;
   margin: 20px 0 4px;
   padding: 6px 14px;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 0.8rem;
   color: var(--paper);
   background: #2b547a;
@@ -259,7 +311,7 @@ body.edit-mode .home-word-input:focus {
   border: 2px solid var(--paper);
   color: var(--paper);
   background: #8a3b2b;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
@@ -569,7 +621,7 @@ body.edit-mode .description-editable {
   display: block;
   width: 100%;
   padding: 8px 12px;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 0.8rem;
   font-weight: 550;
   color: var(--muted);
@@ -683,7 +735,7 @@ body.edit-mode .grid-btn {
 }
 
 .contact-line {
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 0.85rem;
   color: var(--muted);
 }
@@ -1006,7 +1058,7 @@ body.edit-mode .page {
   position: absolute;
   top: -30px;
   left: -20px;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 0.7rem;
   background: #8a3b2b;
   color: var(--paper);
@@ -1101,7 +1153,7 @@ body.edit-mode .resizable-label,
   border-radius: 4px;
   border: 2px solid var(--paper);
   color: var(--paper);
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
@@ -1159,7 +1211,7 @@ body.edit-mode .photo-add-btn:hover {
   border: 2px solid var(--paper);
   color: var(--paper);
   background: #8a3b2b;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
@@ -1461,7 +1513,7 @@ body.edit-mode .guide-line {
 .export-panel textarea {
   width: 100%;
   height: 260px;
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 0.78rem;
   padding: 12px;
   box-sizing: border-box;
@@ -1681,7 +1733,7 @@ body.edit-mode .guide-line {
 
 /* Stili per le didascalie all'interno del Core Archive */
 .photo-caption-text {
-  font-family: ui-monospace, SFMono-Regular, "Courier New", monospace;
+  font-family: var(--mono);
   font-size: 0.8rem;
   font-weight: normal;
   color: var(--muted);

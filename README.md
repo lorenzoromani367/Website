@@ -94,3 +94,13 @@ Quando hai il dominio:
 - **Certificato HTTPS**: incluso gratis da GitHub Pages, nessun costo aggiuntivo.
 
 Totale realistico: **circa 10–20 €/anno**, solo per il rinnovo del dominio — l'hosting in sé resta gratuito.
+
+## Salvataggio delle modifiche e pubblicazione (aggiornato)
+
+- **Modalità modifica solo sul tuo computer.** I pulsanti ⇲ / ⇩ / anteprima mobile compaiono solo su `localhost` (o con `?edit` in fondo all'indirizzo). Chi visita il sito pubblicato non li vede. Con `?visitor` su localhost vedi il sito esattamente come lo vede un visitatore.
+- **`js/site-state.js` = tutte le modifiche fatte in modalità modifica** (posizioni, misure, voci tolte dalla home, parole dell'archivio...). Lo scrive il server locale (`server.js`, endpoint `/api/sync-state`) mentre lavori: non si modifica a mano. Va pubblicato insieme al resto (commit + push). I visitatori leggono solo questo file; non usano la memoria del loro browser. Copie di sicurezza locali in `.state-backups/` (non pubblicate).
+- **Nel codice non usare mai `localStorage` direttamente: si usa `siteStore`** (stessi metodi: `getItem` / `setItem` / `removeItem`), definito in cima a `js/app_v58.js`.
+- **`js/images-data.js` è generato** (elenco foto, misure vere delle foto, elenco testi): lo tiene aggiornato il server locale ogni secondo, e la pubblicazione lo rigenera (`node watch_images.js --once`). Le foto in `images/` e i file in `testi/` devono avere lo stesso nome — maiuscole comprese — in `content.js` e sul disco (su GitHub Pages `rock.jpg` e `rock.JPG` sono file diversi; il server locale lo segnala).
+- **La misura di una foto in pagina viene dalle sue proporzioni vere** (`IMAGE_SIZES`), mai da `zoomBox`, che è solo la misura dell'ingrandimento.
+- **Pubblicazione** (`.github/workflows/deploy-pages.yml`): prepara la cartella `_site` (solo i file del sito) e scrive il codice della versione dentro `index.html` (`?v=` e `SITE_VERSION`), così i browser riscaricano i file solo quando c'è qualcosa di nuovo.
+

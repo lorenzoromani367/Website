@@ -1,14 +1,14 @@
 
 let saveSuccessTimeout;
-function showSaveSuccess(timestamp) {
+function showSaveSuccess(timestamp, target = "content.js") {
   let badge = document.getElementById("save-success-badge");
   if (!badge) {
     badge = document.createElement("div");
     badge.id = "save-success-badge";
-    badge.style.cssText = "position: fixed; bottom: 20px; right: 20px; background: #2b7a4b; color: white; padding: 8px 16px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 12px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: opacity 0.3s; pointer-events: none;";
+    badge.style.cssText = "position: fixed; bottom: 20px; right: 20px; background: #2b7a4b; color: white; padding: 8px 16px; border-radius: 4px; font-family: var(--mono); font-size: 12px; --sans-stroke: 0; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: opacity 0.3s; pointer-events: none;";
     document.body.appendChild(badge);
   }
-  badge.textContent = `Salvato su content.js alle ${timestamp}`;
+  badge.textContent = `Salvato su ${target} alle ${timestamp}`;
   badge.style.opacity = "1";
   
   clearTimeout(saveSuccessTimeout);
@@ -22,7 +22,7 @@ function showSaveError() {
   if (!alarm) {
     alarm = document.createElement("div");
     alarm.id = "save-error-alarm";
-    alarm.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(220, 38, 38, 0.95); color: white; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 32px; font-weight: bold; z-index: 100000; text-align: center; padding: 40px; box-sizing: border-box; cursor: pointer; flex-direction: column; white-space: pre-wrap;";
+    alarm.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(220, 38, 38, 0.95); color: white; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 32px; font-weight: bold; --sans-stroke: 0; z-index: 100000; text-align: center; padding: 40px; box-sizing: border-box; cursor: pointer; flex-direction: column; white-space: pre-wrap;";
     alarm.textContent = "ATTENZIONE: Modifiche NON salvate su disco\n\nClicca per chiudere.";
     alarm.onclick = () => { alarm.style.display = "none"; };
     document.body.appendChild(alarm);
@@ -52,12 +52,305 @@ window.fetch = async function(url, options) {
   }
 };
 
+/* ==========================================================================
+   DOVE VIVONO LE MODIFICHE ("siteStore")
+   ==========================================================================
+   Tutto quello che sistemi in modalità modifica (misure, posizioni, voci
+   tolte dalla home, parole dell'archivio...) finiva SOLO nella memoria del
+   browser in cui lavoravi: per questo il sito sembrava diverso in Vivaldi e
+   negli altri browser. Adesso:
+     - sul tuo computer (localhost) le modifiche restano nella memoria del
+       browser come prima E vengono copiate su disco, in js/site-state.js
+       (le scrive il server locale): basta poi pubblicare quel file;
+     - per chi visita il sito pubblicato, js/site-state.js è l'unica fonte:
+       non legge e non scrive nulla nella memoria del proprio browser.
+   Ha le stesse funzioni di localStorage (getItem/setItem/removeItem).
+   ========================================================================== */
+// Chi può modificare: solo sul tuo computer (localhost, o un file aperto
+// direttamente), mai chi visita il sito pubblicato. Con "?edit" in fondo
+// all'indirizzo si forza la modalità modifica, con "?visitor" si vede il sito
+// esattamente come lo vede un visitatore.
+const IS_EDITOR = (() => {
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.has("visitor")) return false;
+    if (params.has("edit")) return true;
+  } catch (e) {
+    /* indirizzo non leggibile: si usa la regola qui sotto */
+  }
+  const host = location.hostname;
+  return location.protocol === "file:" || host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+})();
+const IS_LOCAL_SERVER = location.protocol !== "file:" && ["localhost", "127.0.0.1", "[::1]", "::1"].includes(location.hostname);
+
+const siteStore = (() => {
+  const SYNC_VERSION_KEY = "osd-synced-version"; // quale versione di site-state.js ha già visto questo browser
+  const LEGACY_BACKUP_KEY = "osd-legacy-backup"; // copia di sicurezza delle modifiche vecchie, se vengono sostituite
+  // Segni di "operazione già fatta" delle vecchie migrazioni (vedi più sotto): chi parte da zero non ha nulla da migrare.
+  const MIGRATION_FLAGS = [
+    "fixed_single_pages_v2",
+    "core_archive_reset_v1",
+    "site-words-promoted-v1",
+    "site-words-promoted-v2",
+    "site-caption-rebuild-v1",
+    "site-zoom-rebuild-v2",
+    "site-layout-scope-migration-v1",
+    "zoom_reset_v3",
+  ];
+  // Le foto caricate con "+" sono enormi (dentro ci sono le foto vere): restano solo in questo browser.
+  const NOT_SAVED_TO_DISK = ["site-uploaded-images-v1"];
+  const isTracked = (key) => {
+    if (NOT_SAVED_TO_DISK.includes(key) || key.startsWith("site-pos-v1-")) return false;
+    return key.startsWith("site-") || MIGRATION_FLAGS.includes(key);
+  };
+
+  const disk = window.SITE_STATE;
+  const diskReady = !!disk && typeof disk.version === "number" && !!disk.data && typeof disk.data === "object";
+  // Su disco ogni voce è JSON leggibile; { __raw: "..." } per i rari testi che non lo sono.
+  const decode = (value) => (value && typeof value === "object" && Object.keys(value).length === 1 && typeof value.__raw === "string" ? value.__raw : JSON.stringify(value));
+  const diskStrings = () => {
+    const out = {};
+    if (diskReady) Object.keys(disk.data).forEach((key) => { out[key] = decode(disk.data[key]); });
+    return out;
+  };
+
+  /* ---- chi visita il sito: sola lettura dal file su disco, tutto in memoria ---- */
+  if (!IS_EDITOR) {
+    const memory = new Map(Object.entries(diskStrings()));
+    MIGRATION_FLAGS.forEach((key) => memory.set(key, "1"));
+    return {
+      getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+      setItem: (key, value) => { memory.set(key, String(value)); },
+      removeItem: (key) => { memory.delete(key); },
+      keys: () => Array.from(memory.keys()),
+      flushNow: () => Promise.resolve(true),
+    };
+  }
+
+  /* ---- sul tuo computer: memoria del browser + copia su disco ---- */
+  let storage = null;
+  try {
+    storage = window.localStorage;
+    storage.getItem(SYNC_VERSION_KEY);
+  } catch (e) {
+    storage = null; // memoria del browser bloccata (es. finestra privata): si lavora comunque, ma nulla resta
+  }
+  const fallback = new Map();
+  const backend = storage
+    ? {
+        get: (key) => storage.getItem(key),
+        set: (key, value) => storage.setItem(key, value),
+        del: (key) => storage.removeItem(key),
+        keys: () => Array.from({ length: storage.length }, (_, i) => storage.key(i)),
+      }
+    : {
+        get: (key) => (fallback.has(key) ? fallback.get(key) : null),
+        set: (key, value) => { fallback.set(key, value); },
+        del: (key) => { fallback.delete(key); },
+        keys: () => Array.from(fallback.keys()),
+      };
+
+  const syncEnabled = IS_LOCAL_SERVER && diskReady;
+  let dirty = false;
+  let timer = null;
+  let chain = Promise.resolve(true);
+  let lastAlarm = 0;
+
+  const trackedKeys = () => backend.keys().filter(isTracked);
+  const collect = () => {
+    const out = {};
+    trackedKeys().sort().forEach((key) => {
+      const value = backend.get(key);
+      if (value !== null) out[key] = value;
+    });
+    return out;
+  };
+  const sortDeep = (value) => {
+    if (Array.isArray(value)) return value.map(sortDeep);
+    if (value && typeof value === "object") {
+      const out = {};
+      Object.keys(value).sort().forEach((key) => { out[key] = sortDeep(value[key]); });
+      return out;
+    }
+    return value;
+  };
+  const canonical = (text) => {
+    try { return JSON.stringify(sortDeep(JSON.parse(text))); } catch (e) { return text; }
+  };
+  const sameState = (a, b) => {
+    const ka = Object.keys(a).sort();
+    const kb = Object.keys(b).sort();
+    return ka.length === kb.length && ka.every((key, i) => key === kb[i] && canonical(a[key]) === canonical(b[key]));
+  };
+
+  function showSyncConflict() {
+    let box = document.getElementById("sync-conflict-alarm");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "sync-conflict-alarm";
+      box.style.cssText = "position: fixed; left: 0; right: 0; bottom: 0; background: #a33; color: #fff; padding: 14px 20px; font-family: var(--mono); font-size: 13px; --sans-stroke: 0; z-index: 100000; text-align: center; cursor: pointer;";
+      box.textContent = "Un'altra finestra ha salvato modifiche più recenti: le ultime fatte qui NON sono state salvate. Clicca per ricaricare la pagina.";
+      box.addEventListener("click", () => location.reload());
+      document.body.appendChild(box);
+    }
+    box.style.display = "block";
+  }
+
+  async function sendToDisk() {
+    if (!dirty) return true;
+    dirty = false;
+    const state = collect();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const base = Number(backend.get(SYNC_VERSION_KEY)) || 0;
+      try {
+        const body = JSON.stringify({ baseVersion: base, state });
+        const res = await fetch("/api/sync-state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: body.length < 60000,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+          backend.set(SYNC_VERSION_KEY, String(data.version));
+          showSaveSuccess(data.timestamp, "disco");
+          return true;
+        }
+        if (res.status === 409) {
+          // Un'altra scheda di questo stesso browser potrebbe aver appena salvato: si riprova una volta con la versione nuova.
+          if ((Number(backend.get(SYNC_VERSION_KEY)) || 0) > base) continue;
+          showSyncConflict();
+          return false;
+        }
+        throw new Error(data.error || `risposta ${res.status}`);
+      } catch (e) {
+        dirty = true;
+        if (Date.now() - lastAlarm > 20000) {
+          lastAlarm = Date.now();
+          showSaveError();
+        }
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function flushNow() {
+    clearTimeout(timer);
+    chain = chain.then(sendToDisk);
+    return chain;
+  }
+  function scheduleFlush() {
+    if (!syncEnabled) return;
+    dirty = true;
+    clearTimeout(timer);
+    timer = setTimeout(flushNow, 600);
+  }
+
+  if (diskReady) {
+    const diskState = diskStrings();
+    const localKeys = trackedKeys();
+    const rawSynced = backend.get(SYNC_VERSION_KEY);
+    const synced = rawSynced === null ? null : Number(rawSynced);
+    const replaceLocalWithDisk = () => {
+      localKeys.forEach((key) => backend.del(key));
+      Object.keys(diskState).forEach((key) => backend.set(key, diskState[key]));
+      backend.set(SYNC_VERSION_KEY, String(disk.version));
+    };
+
+    if (!localKeys.length) {
+      // Browser nuovo (o memoria svuotata): parte da quello che c'è su disco.
+      replaceLocalWithDisk();
+      MIGRATION_FLAGS.forEach((key) => { if (backend.get(key) === null) backend.set(key, "1"); });
+    } else if (synced === null) {
+      // Questo browser ha già modifiche sue, mai copiate su disco: va deciso quali tenere.
+      if (!syncEnabled || sameState(collect(), diskState)) {
+        backend.set(SYNC_VERSION_KEY, String(disk.version));
+      } else {
+        // "Quante modifiche" = quante voci ci sono dentro (una posizione, una misura, una riga tolta...): aiuta a scegliere.
+        const countChanges = (state) => Object.keys(state).filter((key) => !MIGRATION_FLAGS.includes(key)).reduce((sum, key) => {
+          try {
+            const value = JSON.parse(state[key]);
+            return sum + (Array.isArray(value) ? value.length : value && typeof value === "object" ? Object.keys(value).length : 1);
+          } catch (e) {
+            return sum + 1;
+          }
+        }, 0);
+        const askedAt = Date.now();
+        const keepThisBrowser = confirm(
+          "Questo browser contiene modifiche al sito (posizioni, misure, voci tolte...) che non sono ancora salvate nel progetto.\n\n" +
+          `In questo browser: ${countChanges(collect())} modifiche.\nGià salvate nel progetto: ${countChanges(diskState)} modifiche.\n\n` +
+          "Vuoi salvare ora nel progetto quelle di questo browser?\n\n" +
+          "OK = sì, salva queste (scegli OK nel browser dove hai fatto le modifiche, di solito Vivaldi)\n" +
+          "Annulla = no, usa quelle già salvate nel progetto"
+        );
+        if (keepThisBrowser) {
+          // Lo stato di questo browser diventa quello del progetto (chi non c'è qui sparisce anche dal disco)
+          backend.set(SYNC_VERSION_KEY, String(disk.version));
+          dirty = true;
+        } else if (Date.now() - askedAt < 150) {
+          // Risposta istantanea = il browser ha bloccato la finestra (es. "non mostrare altre finestre"): nessuno
+          // ha scelto davvero. Non si tocca nulla e si richiede al prossimo caricamento.
+        } else {
+          try { backend.set(LEGACY_BACKUP_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: collect() })); } catch (e) { /* copia di sicurezza non possibile */ }
+          replaceLocalWithDisk();
+        }
+      }
+    } else if (disk.version > synced) {
+      // Un altro browser ha salvato più di recente: si riparte da quello che c'è su disco.
+      replaceLocalWithDisk();
+    } else if (syncEnabled && !sameState(collect(), diskState)) {
+      dirty = true; // il disco è rimasto indietro (es. il server era spento): lo si aggiorna
+    }
+    if (syncEnabled && dirty) scheduleFlush();
+  }
+
+  // Se per sbaglio si è risposto "Annulla" alla domanda iniziale, una copia delle modifiche che questo browser
+  // aveva prima è rimasta (osd-legacy-backup): aprendo il sito con "?ripristina" in fondo all'indirizzo si recupera.
+  try {
+    if (new URLSearchParams(location.search).has("ripristina")) {
+      const raw = backend.get(LEGACY_BACKUP_KEY);
+      const saved = raw ? JSON.parse(raw) : null;
+      if (!saved || !saved.state) {
+        alert("In questo browser non c'è nessuna copia di modifiche da ripristinare.");
+      } else if (confirm("Ripristinare le modifiche che questo browser aveva prima?\nSostituiscono quelle attuali del progetto.")) {
+        trackedKeys().forEach((key) => backend.del(key));
+        Object.keys(saved.state).forEach((key) => backend.set(key, saved.state[key]));
+        if (syncEnabled) { dirty = true; scheduleFlush(); }
+        history.replaceState(null, "", location.pathname + location.hash);
+      }
+    }
+  } catch (e) {
+    /* indirizzo o memoria non leggibili: niente da ripristinare */
+  }
+
+  if (syncEnabled) {
+    // Se si chiude la scheda subito dopo una modifica, la copia su disco parte comunque.
+    window.addEventListener("pagehide", () => { if (dirty) flushNow(); });
+    document.addEventListener("visibilitychange", () => { if (document.hidden && dirty) flushNow(); });
+  }
+
+  return {
+    getItem: (key) => backend.get(key),
+    setItem: (key, value) => {
+      backend.set(key, String(value));
+      if (isTracked(key)) scheduleFlush();
+    },
+    removeItem: (key) => {
+      backend.del(key);
+      if (isTracked(key)) scheduleFlush();
+    },
+    keys: () => backend.keys(),
+    flushNow,
+  };
+})();
+
 // TEMPORARY CLEANUP FOR SINGLE PAGES
 (function() {
-  if (!localStorage.getItem('fixed_single_pages_v2')) {
-    localStorage.setItem('fixed_single_pages_v2', 'true');
-    const posObj = JSON.parse(localStorage.getItem('site-position-overrides-v1:d') || '{}');
-    const sizeObj = JSON.parse(localStorage.getItem('site-size-overrides-v1:d') || '{}');
+  if (!siteStore.getItem('fixed_single_pages_v2')) {
+    siteStore.setItem('fixed_single_pages_v2', 'true');
+    const posObj = JSON.parse(siteStore.getItem('site-position-overrides-v1:d') || '{}');
+    const sizeObj = JSON.parse(siteStore.getItem('site-size-overrides-v1:d') || '{}');
     
     const singleSlugs = ['beach', 'hair', 'eating', 'toy', 'whitening', 'bar', 'fluoxetine', 'compression', 'sofa', 'Pile'];
     
@@ -69,11 +362,11 @@ window.fetch = async function(url, options) {
       delete sizeObj[`project.${slug}.captionSize.0`];
     });
     
-    localStorage.setItem('site-position-overrides-v1:d', JSON.stringify(posObj));
-    localStorage.setItem('site-size-overrides-v1:d', JSON.stringify(sizeObj));
+    siteStore.setItem('site-position-overrides-v1:d', JSON.stringify(posObj));
+    siteStore.setItem('site-size-overrides-v1:d', JSON.stringify(sizeObj));
     
-    const posObjM = JSON.parse(localStorage.getItem('site-position-overrides-v1:m') || '{}');
-    const sizeObjM = JSON.parse(localStorage.getItem('site-size-overrides-v1:m') || '{}');
+    const posObjM = JSON.parse(siteStore.getItem('site-position-overrides-v1:m') || '{}');
+    const sizeObjM = JSON.parse(siteStore.getItem('site-size-overrides-v1:m') || '{}');
     
     singleSlugs.forEach(slug => {
       delete posObjM[`project.${slug}.singleImagePos.0`];
@@ -83,8 +376,8 @@ window.fetch = async function(url, options) {
       delete sizeObjM[`project.${slug}.captionSize.0`];
     });
     
-    localStorage.setItem('site-position-overrides-v1:m', JSON.stringify(posObjM));
-    localStorage.setItem('site-size-overrides-v1:m', JSON.stringify(sizeObjM));
+    siteStore.setItem('site-position-overrides-v1:m', JSON.stringify(posObjM));
+    siteStore.setItem('site-size-overrides-v1:m', JSON.stringify(sizeObjM));
     
     location.reload();
   }
@@ -127,20 +420,26 @@ const MOBILE_BREAKPOINT = 700; // px: stessa soglia del media query in style.css
 // repository) può continuare a mostrare la versione vecchia — o un 404
 // già in cache — a chi l'ha già vista prima. Bump ad ogni foto
 // aggiunta/sostituita/ripristinata in content.js (vedi resolveImageSrc).
-let IMAGE_VERSION = sessionStorage.getItem("APP_IMAGE_VERSION") || "3";
-// Se l'utente ricarica la pagina (es. F5 o hard refresh), generiamo una nuova
-// versione per forzare il browser a scaricare le immagini nuove/modificate.
-if (performance.navigation && performance.navigation.type === 1) { // 1 = TYPE_RELOAD
+// Sul sito pubblicato la versione è quella della pubblicazione (la scrive
+// il processo di pubblicazione dentro index.html): le foto restano in memoria
+// nel browser del visitatore finché non pubblichi qualcosa di nuovo, invece di
+// essere riscaricate da zero ad ogni ricarica (un primo caricamento "a freddo"
+// era proprio quello in cui la pagina sembrava rotta).
+const IS_PUBLISHED_BUILD = !!window.SITE_VERSION && window.SITE_VERSION !== "dev";
+let IMAGE_VERSION = IS_PUBLISHED_BUILD ? String(window.SITE_VERSION) : sessionStorage.getItem("APP_IMAGE_VERSION") || "3";
+// Sul tuo computer, se ricarichi la pagina (es. F5 o hard refresh), generiamo una
+// nuova versione per forzare il browser a scaricare le immagini nuove/modificate.
+if (!IS_PUBLISHED_BUILD && performance.navigation && performance.navigation.type === 1) { // 1 = TYPE_RELOAD
   IMAGE_VERSION = Date.now().toString();
   sessionStorage.setItem("APP_IMAGE_VERSION", IMAGE_VERSION);
 }
 
 // Reset the core archive offsets once to ensure it perfectly aligns with boundaries
-if (!localStorage.getItem("core_archive_reset_v1")) {
-  localStorage.removeItem("archive.topbarTitlePos");
-  localStorage.removeItem("archive.topbarIndexPos");
-  localStorage.removeItem("archive.bottomIndexPos");
-  localStorage.setItem("core_archive_reset_v1", "true");
+if (!siteStore.getItem("core_archive_reset_v1")) {
+  siteStore.removeItem("archive.topbarTitlePos");
+  siteStore.removeItem("archive.topbarIndexPos");
+  siteStore.removeItem("archive.bottomIndexPos");
+  siteStore.setItem("core_archive_reset_v1", "true");
 }
 
 // Assorbe automaticamente le modifiche alla cartella "images" usando l'elenco
@@ -158,6 +457,15 @@ if (!localStorage.getItem("core_archive_reset_v1")) {
     project.images = project.images.filter(img => {
       if (!img.src || !img.src.toLowerCase().startsWith(folderPrefix)) return true;
       return projectFiles.some(pf => pf.toLowerCase() === img.src.toLowerCase());
+    });
+
+    // Su Mac "rock.jpg" e "rock.JPG" sono lo stesso file, sul sito pubblicato (e su Windows/Linux
+    // server) no: se content.js scrive il nome con maiuscole/minuscole diverse dal file vero,
+    // si usa il nome vero — altrimenti la foto spariva (404) solo fuori dal tuo computer.
+    project.images.forEach(img => {
+      if (!img.src) return;
+      const realName = projectFiles.find(pf => pf.toLowerCase() === img.src.toLowerCase());
+      if (realName && realName !== img.src) img.src = realName;
     });
 
     // Aggiunge i nuovi file trovati nella cartella
@@ -264,7 +572,7 @@ const SIZE_STORE_KEY = "site-size-overrides-v1";
 
 function loadSizeOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(SIZE_STORE_KEY + layoutScopeSuffix())) || {};
+    return JSON.parse(siteStore.getItem(SIZE_STORE_KEY + layoutScopeSuffix())) || {};
   } catch (e) {
     return {};
   }
@@ -274,7 +582,7 @@ function saveSizeOverride(key, size) {
   const all = loadSizeOverrides();
   all[key] = size;
   try {
-    localStorage.setItem(SIZE_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
+    siteStore.setItem(SIZE_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la dimensione resta comunque applicata per questa sessione */
   }
@@ -285,7 +593,7 @@ function clearSizeOverride(key) {
   if (!(key in all)) return;
   delete all[key];
   try {
-    localStorage.setItem(SIZE_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
+    siteStore.setItem(SIZE_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la modifica resta comunque applicata per questa sessione */
   }
@@ -300,7 +608,7 @@ const ORDER_STORE_KEY = "site-order-overrides-v1";
 
 function loadOrderOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(ORDER_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(ORDER_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -310,7 +618,7 @@ function saveOrderOverride(key, order) {
   const all = loadOrderOverrides();
   all[key] = order;
   try {
-    localStorage.setItem(ORDER_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(ORDER_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: l'ordine resta comunque applicato per questa sessione */
   }
@@ -342,7 +650,7 @@ const HOME_HIDDEN_STORE_KEY = "site-home-hidden-v1";
 
 function loadHiddenHomeRows() {
   try {
-    return JSON.parse(localStorage.getItem(HOME_HIDDEN_STORE_KEY)) || [];
+    return JSON.parse(siteStore.getItem(HOME_HIDDEN_STORE_KEY)) || [];
   } catch (e) {
     return [];
   }
@@ -352,7 +660,7 @@ function hideHomeRow(tag) {
   const hidden = loadHiddenHomeRows();
   if (!hidden.includes(tag)) hidden.push(tag);
   try {
-    localStorage.setItem(HOME_HIDDEN_STORE_KEY, JSON.stringify(hidden));
+    siteStore.setItem(HOME_HIDDEN_STORE_KEY, JSON.stringify(hidden));
   } catch (e) {
     /* storage non disponibile: la riga resta comunque nascosta per questa sessione */
   }
@@ -385,7 +693,9 @@ function getHomeRows() {
   wordIds.forEach((id) => {
     if (!rows.includes(`w:${id}`)) rows.push(`w:${id}`); // parole appena aggiunte con "+"
   });
-  return rows;
+  // Le righe tolte con "×" non compaiono più: né in home né nelle frecce avanti/indietro tra progetti.
+  const hidden = new Set(loadHiddenHomeRows());
+  return rows.filter((tag) => !hidden.has(tag));
 }
 
 function getOrderedProjects() {
@@ -438,7 +748,7 @@ const REMOVED_STORE_KEY = "site-removed-images-v1";
 
 function loadRemovedOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(REMOVED_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(REMOVED_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -471,7 +781,7 @@ function markImageRemoved(key, uid) {
   if (!list.includes(uid)) list.push(uid);
   all[key] = list;
   try {
-    localStorage.setItem(REMOVED_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(REMOVED_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
   }
@@ -482,7 +792,7 @@ const LINK_STORE_KEY = "site-links-v1";
 
 function loadExtraImagesOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(EXTRA_IMAGES_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(EXTRA_IMAGES_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -490,7 +800,7 @@ function loadExtraImagesOverrides() {
 
 function loadLinkOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(LINK_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(LINK_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -505,7 +815,7 @@ function setLinkOverride(galleryKey, uid, linkTo) {
     delete all[galleryKey][uid];
   }
   try {
-    localStorage.setItem(LINK_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(LINK_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     console.warn(e);
   }
@@ -533,7 +843,7 @@ function addExtraImage(key) {
   list.push({ id });
   all[key] = list;
   try {
-    localStorage.setItem(EXTRA_IMAGES_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(EXTRA_IMAGES_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la foto aggiunta resta comunque per questa sessione */
   }
@@ -544,7 +854,7 @@ function removeExtraImage(key, id) {
   const all = loadExtraImagesOverrides();
   all[key] = (all[key] || []).filter((img) => img.id !== id);
   try {
-    localStorage.setItem(EXTRA_IMAGES_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(EXTRA_IMAGES_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
   }
@@ -578,7 +888,7 @@ const UPLOADED_IMAGE_STORE_KEY = "site-uploaded-images-v1";
 
 function loadUploadedImages() {
   try {
-    return JSON.parse(localStorage.getItem(UPLOADED_IMAGE_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(UPLOADED_IMAGE_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -593,7 +903,7 @@ function saveUploadedImage(key, photoId, dataUrl) {
   all[key] = all[key] || {};
   all[key][photoId] = dataUrl;
   try {
-    localStorage.setItem(UPLOADED_IMAGE_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(UPLOADED_IMAGE_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     alert("La foto è troppo grande (o lo spazio del browser è pieno): riprova con un file più leggero.");
   }
@@ -604,7 +914,7 @@ function clearUploadedImage(key, photoId) {
   if (!all[key] || !(photoId in all[key])) return;
   delete all[key][photoId];
   try {
-    localStorage.setItem(UPLOADED_IMAGE_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(UPLOADED_IMAGE_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
   }
@@ -706,7 +1016,7 @@ const EXTRA_TEXT_STORE_KEY = "site-extra-text-v1";
 
 function loadExtraTextOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(EXTRA_TEXT_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(EXTRA_TEXT_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -723,7 +1033,7 @@ function addExtraText(key) {
   list.push({ id, text: "" });
   all[key] = list;
   try {
-    localStorage.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la parola aggiunta resta comunque per questa sessione */
   }
@@ -736,7 +1046,7 @@ function saveExtraTextContent(key, id, text) {
   if (!item) return;
   item.text = text;
   try {
-    localStorage.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: il testo resta comunque applicato per questa sessione */
   }
@@ -746,7 +1056,7 @@ function removeExtraText(key, id) {
   const all = loadExtraTextOverrides();
   all[key] = (all[key] || []).filter((w) => w.id !== id);
   try {
-    localStorage.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(EXTRA_TEXT_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la rimozione resta comunque applicata per questa sessione */
   }
@@ -763,12 +1073,12 @@ function removeExtraText(key, id) {
 (function removeWordsPromotedToProjectsOnce() {
   const FLAG_KEY = "site-words-promoted-v1";
   try {
-    if (localStorage.getItem(FLAG_KEY)) return;
+    if (siteStore.getItem(FLAG_KEY)) return;
     const promotedNames = new Set(["bar", "fluoxetine", "licking", "moon", "plastic", "tower", "compression"]);
     extraTextFor("home").forEach((word) => {
       if (promotedNames.has(word.text.trim().toLowerCase())) removeExtraText("home", word.id);
     });
-    localStorage.setItem(FLAG_KEY, "1");
+    siteStore.setItem(FLAG_KEY, "1");
   } catch (e) {
     /* storage non disponibile: non c'è nulla da migrare */
   }
@@ -780,12 +1090,12 @@ function removeExtraText(key, id) {
 (function removeWordsPromotedToProjectsOnceV2() {
   const FLAG_KEY = "site-words-promoted-v2";
   try {
-    if (localStorage.getItem(FLAG_KEY)) return;
+    if (siteStore.getItem(FLAG_KEY)) return;
     const promotedNames = new Set(["beach", "solo"]);
     extraTextFor("home").forEach((word) => {
       if (promotedNames.has(word.text.trim().toLowerCase())) removeExtraText("home", word.id);
     });
-    localStorage.setItem(FLAG_KEY, "1");
+    siteStore.setItem(FLAG_KEY, "1");
   } catch (e) {
     /* storage non disponibile: non c'è nulla da migrare */
   }
@@ -801,7 +1111,7 @@ const POSITION_STORE_KEY = "site-position-overrides-v1";
 
 function loadPositionOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(POSITION_STORE_KEY + layoutScopeSuffix())) || {};
+    return JSON.parse(siteStore.getItem(POSITION_STORE_KEY + layoutScopeSuffix())) || {};
   } catch (e) {
     return {};
   }
@@ -811,7 +1121,7 @@ function savePositionOverride(key, pos) {
   const all = loadPositionOverrides();
   all[key] = pos;
   try {
-    localStorage.setItem(POSITION_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
+    siteStore.setItem(POSITION_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: la posizione resta comunque applicata per questa sessione */
   }
@@ -822,7 +1132,7 @@ function clearPositionOverride(key) {
   if (!(key in all)) return;
   delete all[key];
   try {
-    localStorage.setItem(POSITION_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
+    siteStore.setItem(POSITION_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile */
   }
@@ -837,7 +1147,7 @@ const CAPTION_STORE_KEY = "site-caption-overrides-v1";
 
 function loadCaptionOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(CAPTION_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(CAPTION_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -847,7 +1157,7 @@ function saveCaptionOverride(key, text) {
   const all = loadCaptionOverrides();
   all[key] = text;
   try {
-    localStorage.setItem(CAPTION_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(CAPTION_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: il testo resta comunque applicato per questa sessione */
   }
@@ -858,7 +1168,7 @@ function clearCaptionOverride(key) {
   if (!(key in all)) return;
   delete all[key];
   try {
-    localStorage.setItem(CAPTION_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(CAPTION_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile */
   }
@@ -868,7 +1178,7 @@ const DESCRIPTION_STORE_KEY = "site-description-overrides-v1";
 
 function loadDescriptionOverrides() {
   try {
-    return JSON.parse(localStorage.getItem(DESCRIPTION_STORE_KEY)) || {};
+    return JSON.parse(siteStore.getItem(DESCRIPTION_STORE_KEY)) || {};
   } catch (e) {
     return {};
   }
@@ -878,7 +1188,7 @@ function saveDescriptionOverride(key, textArray) {
   const all = loadDescriptionOverrides();
   all[key] = textArray;
   try {
-    localStorage.setItem(DESCRIPTION_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(DESCRIPTION_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* ignore */
   }
@@ -889,7 +1199,7 @@ function clearDescriptionOverride(key) {
   if (!(key in all)) return;
   delete all[key];
   try {
-    localStorage.setItem(DESCRIPTION_STORE_KEY, JSON.stringify(all));
+    siteStore.setItem(DESCRIPTION_STORE_KEY, JSON.stringify(all));
   } catch (e) {
     /* ignore */
   }
@@ -906,13 +1216,13 @@ function clearDescriptionOverride(key) {
 (function resetStaleCaptionPositionsOnce() {
   const FLAG_KEY = "site-caption-rebuild-v1";
   try {
-    if (localStorage.getItem(FLAG_KEY)) return;
+    if (siteStore.getItem(FLAG_KEY)) return;
     // Diretto sulla chiave desktop (":d"), non su loadPositionOverrides():
     // questa migrazione precede lo "scope" mobile/desktop di
     // layoutScopeSuffix() — tutti i dati vecchi da ripulire sono per
     // forza desktop (il mobile è uno store nuovo, nato già vuoto).
     const rawKey = POSITION_STORE_KEY + ":d";
-    const all = JSON.parse(localStorage.getItem(rawKey)) || {};
+    const all = JSON.parse(siteStore.getItem(rawKey)) || {};
     let changed = false;
     Object.keys(all).forEach((key) => {
       if (/\.captionPos\.\d+$/.test(key) || /\.caption\.\d+$/.test(key)) {
@@ -920,8 +1230,8 @@ function clearDescriptionOverride(key) {
         changed = true;
       }
     });
-    if (changed) localStorage.setItem(rawKey, JSON.stringify(all));
-    localStorage.setItem(FLAG_KEY, "1");
+    if (changed) siteStore.setItem(rawKey, JSON.stringify(all));
+    siteStore.setItem(FLAG_KEY, "1");
   } catch (e) {
     /* storage non disponibile: non c'è nulla da migrare */
   }
@@ -930,11 +1240,11 @@ function clearDescriptionOverride(key) {
 (function resetStaleZoomPositionsOnce() {
   const FLAG_KEY = "site-zoom-rebuild-v2";
   try {
-    if (localStorage.getItem(FLAG_KEY)) return;
+    if (siteStore.getItem(FLAG_KEY)) return;
     
     // Clear size overrides for zoom
     const rawSizeKey = SIZE_STORE_KEY + ":d";
-    let sizeAll = JSON.parse(localStorage.getItem(rawSizeKey)) || {};
+    let sizeAll = JSON.parse(siteStore.getItem(rawSizeKey)) || {};
     let sizeChanged = false;
     Object.keys(sizeAll).forEach((key) => {
       if (key.endsWith(".descriptionZoomSize")) {
@@ -942,11 +1252,11 @@ function clearDescriptionOverride(key) {
         sizeChanged = true;
       }
     });
-    if (sizeChanged) localStorage.setItem(rawSizeKey, JSON.stringify(sizeAll));
+    if (sizeChanged) siteStore.setItem(rawSizeKey, JSON.stringify(sizeAll));
 
     // Clear position overrides for zoom
     const rawPosKey = POSITION_STORE_KEY + ":d";
-    let posAll = JSON.parse(localStorage.getItem(rawPosKey)) || {};
+    let posAll = JSON.parse(siteStore.getItem(rawPosKey)) || {};
     let posChanged = false;
     Object.keys(posAll).forEach((key) => {
       if (key.endsWith(".descriptionZoomPos")) {
@@ -954,9 +1264,9 @@ function clearDescriptionOverride(key) {
         posChanged = true;
       }
     });
-    if (posChanged) localStorage.setItem(rawPosKey, JSON.stringify(posAll));
+    if (posChanged) siteStore.setItem(rawPosKey, JSON.stringify(posAll));
 
-    localStorage.setItem(FLAG_KEY, "1");
+    siteStore.setItem(FLAG_KEY, "1");
   } catch (e) {}
 })();
 
@@ -1068,7 +1378,7 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
     if (src && propType) {
       const props = {};
       props[propType] = { x: pos.x, y: pos.y };
-      fetch('http://localhost:8000/api/save-image-props', {
+      fetch('/api/save-image-props', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ src, props })
@@ -1162,7 +1472,7 @@ const GUIDE_RULER_SIZE = 14; // px, spessore dei righelli — deve combaciare co
 
 function loadGuides() {
   try {
-    return JSON.parse(localStorage.getItem(GUIDES_STORE_KEY + layoutScopeSuffix())) || {};
+    return JSON.parse(siteStore.getItem(GUIDES_STORE_KEY + layoutScopeSuffix())) || {};
   } catch (e) {
     return {};
   }
@@ -1177,7 +1487,7 @@ function saveGuidesFor(galleryKey, guides) {
   if (guides.length) all[galleryKey] = guides;
   else delete all[galleryKey];
   try {
-    localStorage.setItem(GUIDES_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
+    siteStore.setItem(GUIDES_STORE_KEY + layoutScopeSuffix(), JSON.stringify(all));
   } catch (e) {
     /* storage non disponibile: le guide restano comunque applicate per questa sessione */
   }
@@ -1194,14 +1504,14 @@ function saveGuidesFor(galleryKey, guides) {
 (function migrateLayoutStoresToDesktopScopeOnce() {
   const FLAG_KEY = "site-layout-scope-migration-v1";
   try {
-    if (localStorage.getItem(FLAG_KEY)) return;
+    if (siteStore.getItem(FLAG_KEY)) return;
     [POSITION_STORE_KEY, SIZE_STORE_KEY, GUIDES_STORE_KEY].forEach((baseKey) => {
-      const legacy = localStorage.getItem(baseKey);
-      if (legacy != null && localStorage.getItem(baseKey + ":d") == null) {
-        localStorage.setItem(baseKey + ":d", legacy);
+      const legacy = siteStore.getItem(baseKey);
+      if (legacy != null && siteStore.getItem(baseKey + ":d") == null) {
+        siteStore.setItem(baseKey + ":d", legacy);
       }
     });
-    localStorage.setItem(FLAG_KEY, "1");
+    siteStore.setItem(FLAG_KEY, "1");
   } catch (e) {
     /* storage non disponibile: non c'è nulla da migrare */
   }
@@ -1423,7 +1733,7 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
       document.removeEventListener("pointerup", onPointerUp);
       saveSizeOverride(key, { width: node.style.width, height: node.style.height });
       if (src && propType === "size") {
-        fetch('http://localhost:8000/api/save-image-props', {
+        fetch('/api/save-image-props', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ src, props: { width: node.style.width, height: node.style.height } })
@@ -1492,7 +1802,7 @@ function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio
     document.removeEventListener("pointerup", onPointerUp);
     saveSizeOverride(key, { width: node.style.width, height: node.style.height });
     if (src && propType === "size") {
-      fetch('http://localhost:8000/api/save-image-props', {
+      fetch('/api/save-image-props', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ src, props: { width: node.style.width, height: node.style.height } })
@@ -1928,7 +2238,7 @@ function openExportPanel() {
     
     dictKeys.forEach(k => {
       try {
-        const str = localStorage.getItem(k);
+        const str = siteStore.getItem(k);
         if (!str) return;
         const obj = JSON.parse(str);
         let changed = false;
@@ -1939,7 +2249,7 @@ function openExportPanel() {
           }
         });
         if (changed) {
-          localStorage.setItem(k, JSON.stringify(obj));
+          siteStore.setItem(k, JSON.stringify(obj));
         }
       } catch (e) {}
     });
@@ -1954,22 +2264,22 @@ function openExportPanel() {
     
     bucketKeys.forEach(k => {
       try {
-        const str = localStorage.getItem(k);
+        const str = siteStore.getItem(k);
         if (!str) return;
         const obj = JSON.parse(str);
         if (obj[prefix]) {
           delete obj[prefix];
-          localStorage.setItem(k, JSON.stringify(obj));
+          siteStore.setItem(k, JSON.stringify(obj));
         }
       } catch (e) {}
     });
     
     // Azzeramento specifico per home (lista nascosta) e core archive (struttura pagine)
     if (prefix === "home") {
-      localStorage.removeItem(HOME_HIDDEN_STORE_KEY);
+      siteStore.removeItem(HOME_HIDDEN_STORE_KEY);
     }
     if (prefix === "archive") {
-      localStorage.removeItem("site-archive-pages-v2");
+      siteStore.removeItem("site-archive-pages-v2");
     }
 
     // AUTO-SAVE FIX: If we cleared localStorage, we must also clear content.js
@@ -1995,7 +2305,7 @@ const fetchPromises = [];
        const src = img._src || img.src;
        if (src) {
          fetchPromises.push(
-           fetch('http://localhost:8000/api/save-image-props', {
+           fetch('/api/save-image-props', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({ 
@@ -2007,7 +2317,8 @@ const fetchPromises = [];
        }
     });
 
-    Promise.all(fetchPromises).then(() => {
+    // Prima di ricaricare, anche la copia su disco deve aver registrato il ripristino
+    Promise.all([...fetchPromises, siteStore.flushNow()]).then(() => {
        setTimeout(() => location.reload(), 100);
     });
   });
@@ -2036,6 +2347,9 @@ const fetchPromises = [];
 // pagina e l'altra: si creano una volta sola, non li ricrea il router.
 let editModeUIReady = false;
 function ensureEditModeUI() {
+  // I pulsanti di modifica (⇲ modifica, ⇩ esporta, anteprima mobile) compaiono solo sul tuo
+  // computer: chi visita il sito pubblicato non li vede e non può cambiare nulla.
+  if (!IS_EDITOR) return;
   if (document.querySelector(".edit-toggle")) return;
 
   const toggle = el("button", { class: "edit-toggle", style: "z-index: 99999 !important;", "aria-label": "Modifica", title: "Modifica: angolo = ridimensiona, icona blu ⠿ = riordina, icona verde = sposta liberamente, × = elimina una foto, + = aggiungine una nuova, clicca su una didascalia per scriverla/correggerla" }, "⇲");
@@ -2055,7 +2369,7 @@ function ensureEditModeUI() {
         if (key === "core") slug = "core archive";
         
         try {
-          await fetch('http://localhost:8000/api/save-content', {
+          await fetch('/api/save-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ slug, text: textArray })
@@ -2068,14 +2382,14 @@ function ensureEditModeUI() {
       
       // Svuotiamo la cache locale per forzare la lettura dal file .txt al prossimo caricamento
       if (allTextsSaved && Object.keys(overrides).length > 0) {
-        localStorage.removeItem(DESCRIPTION_STORE_KEY);
+        siteStore.removeItem(DESCRIPTION_STORE_KEY);
       }
 
       // Save archive pages to server
       try {
-        const archivePagesLs = JSON.parse(localStorage.getItem("site-archive-pages-v2"));
+        const archivePagesLs = JSON.parse(siteStore.getItem("site-archive-pages-v2"));
         if (archivePagesLs && archivePagesLs.length > 0) {
-          await fetch('http://localhost:8000/api/save-archive-pages', {
+          await fetch('/api/save-archive-pages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pages: archivePagesLs })
@@ -2118,7 +2432,7 @@ function ensureEditModeUI() {
         
         if (src) {
           try {
-            await fetch('http://localhost:8000/api/save-image-props', {
+            await fetch('/api/save-image-props', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ src, props: { zoomBox: size } })
@@ -2329,9 +2643,9 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock, pageTitle = "", 
     document.body.classList.toggle("edit-mode");
     updateDebugPanel();
   });
-  panel.appendChild(editZoomBtn);
+  if (IS_EDITOR) panel.appendChild(editZoomBtn); // solo sul tuo computer, non per chi visita il sito
 
-  const debugPanel = el("div", { style: "position: absolute; top: 50px; right: 60px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-family: monospace; font-size: 12px; z-index: 1000; pointer-events: none; display: none; border-radius: 4px;" });
+  const debugPanel = el("div", { style: "position: absolute; top: 50px; right: 60px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-family: var(--mono); font-size: 12px; --sans-stroke: 0; z-index: 1000; pointer-events: none; display: none; border-radius: 4px;" });
   panel.appendChild(debugPanel);
 
   function updateDebugPanel() {
@@ -2455,7 +2769,7 @@ function makeZoomResizable(frame, img) {
     let hud = document.getElementById("zoom-resize-hud");
     if (!hud) {
       hud = el("div", { id: "zoom-resize-hud" });
-      hud.style.cssText = "position: absolute; bottom: -35px; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 6px 10px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 1000;";
+      hud.style.cssText = "position: absolute; bottom: -35px; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 6px 10px; border-radius: 4px; font-family: var(--mono); font-size: 12px; --sans-stroke: 0; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 1000;";
       frame.appendChild(hud);
     }
 
@@ -2521,7 +2835,7 @@ function makeZoomResizable(frame, img) {
       
       if (zoomActiveOriginalSrc) {
         hud.textContent = "Salvataggio...";
-        fetch('http://localhost:8000/api/save-image-props', {
+        fetch('/api/save-image-props', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ src: zoomActiveOriginalSrc, props: { zoomBox: { width: `${newMaxW}px`, height: `${newMaxH}px` } } })
@@ -2865,6 +3179,38 @@ function resolveImageSrc(seed, index, image) {
   return placeholderImg(`${seed}-${index}`, image.caption || `${seed} ${index + 1}`);
 }
 
+// Misure VERE (larghezza, altezza) delle foto del repository, lette in anticipo da images-data.js:
+// permettono di riservare lo spazio giusto PRIMA che il file arrivi dalla rete. Così la pagina non
+// "salta" quando la foto compare, e non dipende da quanto è veloce la connessione o dal fatto che
+// la foto sia già in memoria (il famoso "al primo ingresso sembra rotto, dopo 3-4 volte è a posto").
+const KNOWN_IMAGE_SIZES = (() => {
+  const index = new Map();
+  const sizes = window.IMAGE_SIZES || {};
+  Object.keys(sizes).forEach((path) => index.set(path.toLowerCase(), sizes[path]));
+  return index;
+})();
+
+function knownImageSize(src) {
+  if (!src) return null;
+  const size = KNOWN_IMAGE_SIZES.get(String(src).replace(/\?.*$/, "").toLowerCase());
+  return size && size[0] > 0 && size[1] > 0 ? size : null;
+}
+
+// Un pixel trasparente: occupa il posto della foto finché non è arrivata.
+const TINY_GIF = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
+// Numero "a caso" ma sempre lo stesso per lo stesso testo (0 incluso, 1 escluso): serve a disporre le foto
+// dell'archivio che non hai ancora spostato, uguale a ogni visita e su ogni browser.
+function stableUnit(text, salt) {
+  let h = 2166136261;
+  const s = `${text}:${salt}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967296;
+}
+
 /* -------------------------------------------------------------------------
    6. Render: HOME — lista statica, dimensioni da LAYOUT.home
    ------------------------------------------------------------------------- */
@@ -2899,7 +3245,7 @@ function renderHome() {
       input.addEventListener("input", () => {
         // Aggiorna visivamente e invia al server
         project.name = input.value.trim();
-        fetch('http://localhost:8000/api/rename-project', {
+        fetch('/api/rename-project', {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ slug: project.slug, newName: project.name })
@@ -3024,6 +3370,13 @@ function renderHome() {
   // al DOM, "getComputedStyle" non avrebbe ancora il font giusto da
   // misurare.
   list.querySelectorAll(".home-word-input").forEach((input) => syncWordInputWidth(input));
+  // Al primo caricamento il carattere può non essere ancora arrivato quando si misurano i nomi (si misurava
+  // con un carattere di ripiego, e il nome poteva restare troppo stretto o troppo largo): si rimisura appena è pronto.
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('600 16px "Strichpunkt Sans"').then(() => {
+      if (list.isConnected) list.querySelectorAll(".home-word-input").forEach((input) => syncWordInputWidth(input));
+    }).catch(() => {});
+  }
 
   const resizeObserver = makeResizable(list, "home.list", {
     width: desktopOnly(LAYOUT.home.listWidth),
@@ -3246,24 +3599,18 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const figures = images.map((image, i) => {
     const origIndex = image._index != null ? image._index : i;
-    let inlineStyle = "";
-    const imgAttrs = { src: "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=", alt: image.caption || "", decoding: "async" };
-    if (image.zoomBox && image.zoomBox.width && image.zoomBox.height) {
-      const w = parseFloat(image.zoomBox.width);
-      const h = parseFloat(image.zoomBox.height);
-      if (!isNaN(w) && !isNaN(h) && h > 0) {
-        inlineStyle = `aspect-ratio: ${w} / ${h};`;
-        imgAttrs.width = w;
-        imgAttrs.height = h;
-      }
-    }
-    if (inlineStyle) imgAttrs.style = inlineStyle + " transition: opacity 0.3s; opacity: 0;";
-    else imgAttrs.style = "transition: opacity 0.3s; opacity: 0;";
+    // Lo spazio della foto si riserva con le sue proporzioni VERE (vedi KNOWN_IMAGE_SIZES). Prima si usava
+    // la misura dell'ingrandimento (zoomBox), che non ha le stesse proporzioni della foto: la schiacciava,
+    // lasciando due bande vuote ai lati e la didascalia "a mezz'aria".
+    const known = knownImageSize(image.src);
+    const imgAttrs = { src: TINY_GIF, alt: image.caption || "", decoding: "async" };
+    imgAttrs.style = (known ? `aspect-ratio: ${known[0]} / ${known[1]}; ` : "") + "transition: opacity 0.3s; opacity: 0;";
     const img = el("img", imgAttrs);
-    
+
     const preloader = new Image();
     preloader.onload = () => {
       img.src = preloader.src;
+      img.dataset.ready = "1"; // da qui in poi naturalWidth/naturalHeight sono quelli della foto vera, non del pixel segnaposto
       img.style.opacity = "1";
       const p = img.closest(".photo-track");
       if (p) p.offsetHeight;
@@ -3272,6 +3619,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     preloader.onerror = () => {
       const fig = img.closest("figure.photo");
       if (fig) fig.style.display = "none";
+      if (i === 0) settleFirstLayout();
     };
     preloader.src = image._src;
     const frame = el("div", { class: "photo-frame" }, [img]);
@@ -3473,6 +3821,17 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const track = el("div", { class: "photo-track" }, figures);
   const viewport = el("div", { class: "photo-viewport" }, [track]);
+  // L'altezza del riquadro si anima in 6 secondi (serve al passaggio da una foto all'altra). Il PRIMO disegno
+  // della pagina però non deve mai "scivolare" lentamente verso la misura giusta: finché la prima foto non è
+  // arrivata (o per al massimo un secondo e mezzo) ogni aggiustamento è istantaneo.
+  viewport.style.transition = "none";
+  let firstLayoutSettled = false;
+  function settleFirstLayout() {
+    if (firstLayoutSettled) return;
+    firstLayoutSettled = true;
+    requestAnimationFrame(() => requestAnimationFrame(() => { viewport.style.transition = ""; }));
+  }
+  setTimeout(settleFirstLayout, 1500);
 
   const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
   const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
@@ -3931,14 +4290,21 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const contentDefault = pickLayout(images[i].width || images[i].height, mobileOverride, undefined);
     return !((saved && (saved.width || saved.height)) || contentDefault);
   }
+  // Misura (larghezza, altezza) della foto i: quella letta in anticipo da images-data.js se c'è,
+  // altrimenti quella del file vero quando è arrivato (mai quella del pixel segnaposto).
+  function photoSize(i) {
+    const known = knownImageSize(images[i].src);
+    if (known) return known;
+    const img = figures[i].querySelector("img");
+    if (img && img.dataset.ready && img.naturalWidth && img.naturalHeight) return [img.naturalWidth, img.naturalHeight];
+    return null;
+  }
   function widestUntouchedRatio() {
     let widest = 0;
     figures.forEach((figure, i) => {
       if (!isUntouched(i)) return;
-      const img = figure.querySelector("img");
-      if (img.naturalWidth && img.naturalHeight) {
-        widest = Math.max(widest, img.naturalWidth / img.naturalHeight);
-      }
+      const size = photoSize(i);
+      if (size) widest = Math.max(widest, size[0] / size[1]);
     });
     return widest;
   }
@@ -3955,28 +4321,54 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     figures.forEach((figure, i) => {
       if (!isUntouched(i)) return;
       const frame = figure.querySelector(".photo-frame");
-      frame.style.width = "auto";
-      frame.style.maxHeight = `${targetHeight}px`;
-      
-      // Assicuriamoci che l'immagine interna non sfori l'altezza massima 
-      // e scali proporzionalmente
       const img = frame.querySelector("img");
-      if (img) img.style.maxHeight = `${targetHeight}px`;
+      const size = photoSize(i);
+      if (size) {
+        // Misura nota in anticipo: la cornice combacia ESATTAMENTE con la foto (stessa altezza per tutte,
+        // mai oltre la larghezza disponibile né oltre la grandezza del file), senza bande vuote ai lati
+        // e senza aspettare che il file arrivi.
+        const width = Math.min(availableWidth, targetHeight * (size[0] / size[1]), size[0]);
+        frame.style.width = `${Math.round(width * 100) / 100}px`;
+        frame.style.maxHeight = "";
+        if (img) img.style.maxHeight = "";
+      } else {
+        frame.style.width = "auto";
+        frame.style.maxHeight = `${targetHeight}px`;
+
+        // Assicuriamoci che l'immagine interna non sfori l'altezza massima
+        // e scali proporzionalmente
+        if (img) img.style.maxHeight = `${targetHeight}px`;
+      }
     });
     updateViewportHeight();
   }
   applyDefaultPhotoHeights();
-  window.addEventListener("resize", applyDefaultPhotoHeights);
+  // Su iPhone/iPad la barra del browser che si nasconde mentre scorri cambia l'altezza della finestra di
+  // qualche decina di pixel: non è un vero ridimensionamento e non deve far "saltare" le foto.
+  const isTouchScreen = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  let lastWindowWidth = window.innerWidth;
+  let lastWindowHeight = window.innerHeight;
+  const onWindowResize = () => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (isTouchScreen && w === lastWindowWidth && Math.abs(h - lastWindowHeight) < 160) return;
+    lastWindowWidth = w;
+    lastWindowHeight = h;
+    applyDefaultPhotoHeights();
+  };
+  window.addEventListener("resize", onWindowResize);
 
-  // Le foto lazy non hanno ancora naturalWidth/Height al primo calcolo:
-  // ricalcoliamo (e aggiorniamo anche l'altezza del viewport se è quella
+  // Le foto senza misura nota in anticipo (es. caricate con "+") scoprono la propria misura solo quando
+  // arrivano: ricalcoliamo (e aggiorniamo anche l'altezza del viewport se è quella
   // corrente) man mano che arrivano, così il tetto in larghezza si
   // aggiorna quando si scopre una foto più orizzontale di quanto sapessimo.
   figures.forEach((figure, i) => {
     const img = figure.querySelector("img");
     img.addEventListener("load", () => {
+      if (!img.dataset.ready) return; // è solo il pixel segnaposto, non ancora la foto vera
       applyDefaultPhotoHeights();
       if (i === current) updateViewportHeight();
+      if (i === 0) settleFirstLayout();
     });
   });
 
@@ -4008,7 +4400,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     document.removeEventListener("pointermove", onMarqueeDragMove);
     document.removeEventListener("pointerup", onMarqueeDragEnd);
     window.removeEventListener("resize", updateViewportHeight);
-    window.removeEventListener("resize", applyDefaultPhotoHeights);
+    window.removeEventListener("resize", onWindowResize);
     resizeObservers.forEach((o) => o.disconnect());
   };
 }
@@ -4091,21 +4483,33 @@ async function renderProject(slug) {
     renderNotFound();
     return;
   }
+  const myRoute = routeCounter; // vedi renderRoute: serve a non disegnare una pagina ormai superata
   
+  // Il testo di ogni progetto sta in testi/<slug>.txt. L'indirizzo è RELATIVO (non "/testi/...": quello
+  // cerca la cartella in cima al dominio e, sul sito pubblicato dentro "/Website/", non la trova mai)
+  // e si scarica solo se il file esiste davvero (elenco in images-data.js): niente 404 a vuoto.
   let descText = "";
-  try {
-    const res = await fetch(`/testi/${project.slug}.txt?t=${Date.now()}`);
-    if (res.ok) {
-      descText = await res.text();
-      // Rimuovi eventuali spazi bianchi superflui all'inizio/fine
-      descText = descText.trim();
+  const knownTexts = window.DYNAMIC_TEXTS;
+  if (!Array.isArray(knownTexts) || knownTexts.includes(`${project.slug}.txt`)) {
+    try {
+      const res = await fetch(`testi/${encodeURIComponent(project.slug)}.txt?v=${IS_PUBLISHED_BUILD ? IMAGE_VERSION : Date.now()}`);
+      if (res.ok) {
+        descText = await res.text();
+        // Rimuovi eventuali spazi bianchi superflui all'inizio/fine
+        descText = descText.trim();
+      }
+    } catch (e) {
+      console.warn("Nessun file di testo trovato per", project.slug);
     }
-  } catch (e) {
-    console.warn("Nessun file di testo trovato per", project.slug);
   }
-  
-  // Avvia il check in background per nuove immagini caricate nella cartella
-  autoDetectImages(project, project.slug);
+
+  // Se nel frattempo hai già cambiato pagina (clic veloce, o primo caricamento lento), questa non va più disegnata:
+  // altrimenti comparirebbe sopra quella nuova, "rotta" o con le foto sbagliate.
+  if (myRoute !== routeCounter) return;
+
+  // Controllo "a tentativi" di nuove immagini nella cartella: serve solo se manca l'elenco
+  // generato (images-data.js), che le trova già tutte senza provare indirizzi a caso (e senza 404).
+  if (!Array.isArray(window.DYNAMIC_IMAGES)) autoDetectImages(project, project.slug);
 
   const galleryKey = `project.${project.slug}`;
   const orderKey = `${galleryKey}.imageOrder`;
@@ -4117,8 +4521,13 @@ async function renderProject(slug) {
   }).filter(Boolean);
   const images = applyImageOverrides(galleryKey, project.slug, baseImages);
 
-  const orderedProjects = getOrderedProjects();
-  const idx = orderedProjects.findIndex((p) => p.slug === project.slug);
+  let orderedProjects = getOrderedProjects();
+  let idx = orderedProjects.findIndex((p) => p.slug === project.slug);
+  if (idx === -1) {
+    // Pagina tolta dalla home (resta raggiungibile dall'indirizzo): le frecce usano l'ordine di content.js
+    orderedProjects = PROJECTS;
+    idx = orderedProjects.findIndex((p) => p.slug === project.slug);
+  }
   const prevSlug = orderedProjects[(idx - 1 + orderedProjects.length) % orderedProjects.length].slug;
   const nextSlug = orderedProjects[(idx + 1) % orderedProjects.length].slug;
 
@@ -4386,7 +4795,7 @@ function showFatalError(error) {
   app.classList.remove("has-fixed-bars");
   app.innerHTML = "";
   app.appendChild(
-    el("div", { style: "padding:40px;font-family:ui-monospace,monospace;font-size:0.85rem;line-height:1.6;white-space:pre-wrap;" }, [
+    el("div", { style: "padding:40px;font-family:var(--mono);--sans-stroke:0;font-size:0.85rem;line-height:1.6;white-space:pre-wrap;" }, [
       el("p", {}, "C'è un errore in content.js e la pagina non riesce a caricarsi del tutto:"),
       el("p", { style: "color:#a33;" }, String(error && error.message ? error.message : error)),
       el("p", {}, "Causa più comune: hai incollato un testo che contiene virgolette dritte (\" o ') dentro una stringa delimitata dagli stessi apici, oppure manca una virgola tra due righe. Se hai appena incollato un testo, prova a racchiuderlo tra backtick ` invece che tra virgolette \" \" — tollerano meglio apici e virgolette dentro il testo."),
@@ -4394,7 +4803,12 @@ function showFatalError(error) {
   );
 }
 
+// Conta i cambi di pagina: una pagina che aspetta qualcosa dalla rete (es. il testo del progetto) controlla
+// di essere ancora quella richiesta prima di disegnarsi.
+let routeCounter = 0;
+
 async function renderRoute() {
+  routeCounter++;
   teardownCurrentView();
   app.classList.remove("is-archive");
   try {
@@ -4433,8 +4847,19 @@ async function renderRoute() {
   window.scrollTo(0, 0);
 }
 
+// La prima pagina si disegna quando il carattere è pronto (al massimo 1,2 secondi di attesa): così tutte le
+// misure del testo partono già da quelle giuste, invece di essere rifatte dopo — con la pagina che "salta".
+// Con la precarica in index.html di solito sono pochi millesimi.
+function whenFontReady() {
+  if (!document.fonts || !document.fonts.load) return Promise.resolve();
+  return Promise.race([
+    document.fonts.load('600 16px "Strichpunkt Sans"').catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, 1200)),
+  ]);
+}
+
 window.addEventListener("hashchange", renderRoute);
-window.addEventListener("DOMContentLoaded", renderRoute);
+window.addEventListener("DOMContentLoaded", () => { whenFontReady().then(renderRoute); });
 
 function openGalleryIndex(images, track, viewport, galleryKey) {
   const originalBodyOverflow = document.body.style.overflow;
@@ -4651,7 +5076,7 @@ const ARCHIVE_PAGES_STORE_KEY = "site-archive-pages-v2";
 
 function loadArchivePages() {
   try {
-    const ls = JSON.parse(localStorage.getItem(ARCHIVE_PAGES_STORE_KEY));
+    const ls = JSON.parse(siteStore.getItem(ARCHIVE_PAGES_STORE_KEY));
     if (ls && ls.length > 0) {
       return ls;
     }
@@ -4676,10 +5101,10 @@ function loadArchivePages() {
 }
 
 function saveArchivePages(pages) {
-  localStorage.setItem(ARCHIVE_PAGES_STORE_KEY, JSON.stringify(pages));
+  siteStore.setItem(ARCHIVE_PAGES_STORE_KEY, JSON.stringify(pages));
   
   // Auto-save to content.js
-  fetch('http://localhost:8000/api/save-archive-pages', {
+  fetch('/api/save-archive-pages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pages })
@@ -4716,7 +5141,7 @@ function renderArchivePagesMode(param) {
   // Render images/words on this page
   page.images.forEach((item) => {
     if (item.type === "word") {
-      const wordEl = el("div", { class: "archive-word", style: "font-family: ui-monospace, SFMono-Regular, 'Courier New', monospace; font-weight: normal; line-height: 1; position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; outline: none; white-space: nowrap;" }, item.text);
+      const wordEl = el("div", { class: "archive-word", style: "font-family: var(--mono); font-weight: normal; line-height: 1; position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; outline: none; white-space: nowrap;" }, item.text);
       
       if (isEditMode()) {
         wordEl.contentEditable = "true";
@@ -4821,19 +5246,10 @@ function renderArchivePagesMode(param) {
         if (!poolImg) return;
         src = resolveImageSrc("archive", item.poolIndex, poolImg);
     }
-    let inlineStyle = "";
-    const imgAttrs = { src: "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=", class: "photo-img", draggable: false };
-    if (poolImg.zoomBox && poolImg.zoomBox.width && poolImg.zoomBox.height) {
-      const w = parseFloat(poolImg.zoomBox.width);
-      const h = parseFloat(poolImg.zoomBox.height);
-      if (!isNaN(w) && !isNaN(h) && h > 0) {
-        inlineStyle = `aspect-ratio: ${w} / ${h};`;
-        imgAttrs.width = w;
-        imgAttrs.height = h;
-      }
-    }
-    if (inlineStyle) imgAttrs.style = inlineStyle + " transition: opacity 0.3s; opacity: 0;";
-    else imgAttrs.style = "transition: opacity 0.3s; opacity: 0;";
+    // Proporzioni VERE della foto (vedi KNOWN_IMAGE_SIZES), non quelle dell'ingrandimento: altrimenti la schiaccia
+    const known = knownImageSize(item.poolSrc || poolImg.src);
+    const imgAttrs = { src: TINY_GIF, class: "photo-img", draggable: false };
+    imgAttrs.style = (known ? `aspect-ratio: ${known[0]} / ${known[1]}; ` : "") + "transition: opacity 0.3s; opacity: 0;";
     const imgEl = el("img", imgAttrs);
     
     const preloader = new Image();
@@ -4864,9 +5280,10 @@ function renderArchivePagesMode(param) {
       )
     );
     
-    // Scatter default offsets so they don't perfectly overlap if they have no saved position
-    const scatterX = (Math.random() - 0.5) * 400; // -200 to 200
-    const scatterY = (Math.random() - 0.5) * 300; // -150 to 150
+    // Posizione di partenza sparsa, così le foto non si sovrappongono del tutto finché non le sposti:
+    // diversa per ogni foto ma SEMPRE la stessa a ogni visita e su ogni browser (prima era a caso a ogni caricamento)
+    const scatterX = (stableUnit(item.uid, "x") - 0.5) * 400; // da -200 a 200
+    const scatterY = (stableUnit(item.uid, "y") - 0.5) * 300; // da -150 a 150
 
     // Move
     makeMovableFree(frame, `${sizeKeyPrefix}.pos.${item.uid}`, "Trascina per spostare la foto", {
@@ -4912,7 +5329,7 @@ function renderArchivePagesMode(param) {
           const allCaps = loadCaptionOverrides();
           if (txt === (poolImg.caption || "")) delete allCaps[`${galleryKey}.captionText.${item.uid}`];
           else allCaps[`${galleryKey}.captionText.${item.uid}`] = txt;
-          localStorage.setItem(CAPTION_STORE_KEY, JSON.stringify(allCaps));
+          siteStore.setItem(CAPTION_STORE_KEY, JSON.stringify(allCaps));
         });
       }
       figcaption.appendChild(captionP);
@@ -5059,17 +5476,17 @@ function showArchivePoolModal(page, pages, mode = "add", onSelect = null) {
 
 // Migration: Reset zoom panel positions to force new defaults matching main page
 const MIGRATION_ZOOM_RESET_V3 = "zoom_reset_v3";
-if (!localStorage.getItem(MIGRATION_ZOOM_RESET_V3)) {
-  Object.keys(localStorage).forEach(key => {
+if (!siteStore.getItem(MIGRATION_ZOOM_RESET_V3)) {
+  siteStore.keys().forEach(key => {
     if (key.startsWith("site-pos-v1-")) {
       if (key.includes(".zoom.descriptionPos") || 
           key.includes(".zoom.topbarTitlePos") || 
           key.includes(".descriptionZoomSize") || 
           key.includes(".descriptionZoomPos")) {
-        localStorage.removeItem(key);
+        siteStore.removeItem(key);
       }
     }
   });
-  localStorage.setItem(MIGRATION_ZOOM_RESET_V3, "true");
+  siteStore.setItem(MIGRATION_ZOOM_RESET_V3, "true");
 }
 
