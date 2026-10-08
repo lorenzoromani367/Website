@@ -1,1 +1,4 @@
 .DS_Store
+
+# Copie di sicurezza locali dello stato salvato (le crea il server, non vanno pubblicate)
+.state-backups/

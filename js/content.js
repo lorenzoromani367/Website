@@ -219,7 +219,7 @@ images: [
   {
     slug: "paper-tape",
     name: "Paper tape",
-    images: [{ caption: "", src: "images/paper-tape/rock.jpg", align: "left", offset: { x: 0, y: 52 }, width: "455.569px", zoomBox: { width: "714.016px", height: "916.76px" } }]
+    images: [{ caption: "", src: "images/paper-tape/rock.JPG", align: "left", offset: { x: 0, y: 52 }, width: "455.569px", zoomBox: { width: "714.016px", height: "916.76px" } }]
   },
   {
     slug: "cement",
@@ -402,8 +402,8 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "hill",
                   "uid": "uid_1791300840051_1654",
-                  "linkedImageSrc": "images/lines/2 hill.JPG",
-                  "linkedImageLinkTo": "project/lines"
+                  "linkedImageSrc": "images/boudaries/2 hill.JPG",
+                  "linkedImageLinkTo": "project/boudaries"
               },
               {
                   "type": "word",
@@ -430,7 +430,7 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "upper middle-class",
                   "uid": "uid_1791304250928_133",
-                  "linkedImageSrc": "images/home/2 family.jpg"
+                  "linkedImageSrc": "images/homes/2 family.jpg"
               },
               {
                   "type": "word",

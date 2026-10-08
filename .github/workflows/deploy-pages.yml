@@ -27,10 +27,26 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare site
+        run: |
+          # Elenco foto, misure delle foto ed elenco testi: rigenerati qui, così non dipendono
+          # da quanto era aggiornato il file salvato nel repository.
+          node watch_images.js --once
+
+          # Si pubblica solo quello che serve al sito (non node_modules, script di lavoro, ecc.)
+          mkdir _site
+          cp -r index.html css js fonts images testi _site/
+          touch _site/.nojekyll
+
+          # Versione di questa pubblicazione: i browser riscaricano file/foto solo quando cambia
+          V="${GITHUB_SHA::8}"
+          sed -i "s/?v=dev/?v=${V}/g; s/SITE_VERSION = \"dev\"/SITE_VERSION = \"${V}\"/" _site/index.html
+          grep -q "SITE_VERSION = \"${V}\"" _site/index.html
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "."
+          path: "_site"
 
       - name: Deploy to GitHub Pages
         id: deployment
