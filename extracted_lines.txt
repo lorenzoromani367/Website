@@ -1,0 +1,28 @@
+122:     images: [
+123:       {
+124:         caption: "wire",
+125:         src: "images/lines/1 wire.JPG",
+126:         width: "480px",
+127:         height: "673px",
+128:         captionOffset: { x: 100, y: 360 },
+129:         mobile: { width: "280px", height: "393px" },
+130:       },
+131:       {
+132:         caption: "hill",
+133:         src: "images/lines/2 hill.JPG",
+134:         captionOffset: { x: 80, y: 380 },
+135:         mobile: { width: "320px", height: "258px" },
+136:       },
+137:       { caption: "field", src: "images/lines/3 field.jpg", width: "440px", height: "622px", mobile: { width: "280px", height: "396px" } },
+138:       { caption: "sky", src: "images/lines/4 sky.jpg", width: "520px", height: "599px", captionOffset: { x: 100, y: 360 }, mobile: { width: "320px", height: "369px" } },
+139:       { caption: "olympus", src: "images/lines/5 olympus.jpg", width: "520px", height: "590px", mobile: { width: "300px", height: "340px" } },
+140:       { caption: "stage", src: "images/lines/6 stage.JPG", mobile: { width: "300px", height: "350px" } },
+141:       { caption: "tapestry", src: "images/lines/7 tapestry.JPG", width: "480px", height: "568px", mobile: { width: "300px", height: "355px" } },
+142:       { caption: "decay", src: "images/lines/8 decay.jpg", width: "420px", height: "663px", offset: { x: 120, y: 300 }, captionOffset: { x: -120, y: 400 }, mobile: { width: "260px", height: "411px" } },
+143:       { caption: "emst", src: "images/lines/lines-13.jpg", width: "460px", height: "575px", captionOffset: { x: 100, y: 360 }, mobile: { width: "300px", height: "375px" } },
+144:       {
+145:         caption: "construction",
+146:         src: "images/lines/lines-7.jpg",
+147:         mobile: { width: "320px", height: "363px" },
+148:       }
+149:     ],

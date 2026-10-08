@@ -1,0 +1,18 @@
+{
+slug: "homes",
+name: "Homes",
+description: [`The shape of a house is one of the most recognizable things we know, usually obscured by the noise of daily use.
+
+I wait for that routine to clear, looking for the window when the structure stands suspended. These photographs exist in that suspension—caught on the threshold between what has just passed and what is about to happen.
+
+A family returning at dusk, a routine sale of wine, or the chaos before a demolition. In that pause, the building doesn’t explain its history; it only carries the light and the silence of an exact moment.`],
+images: [
+{ caption: "wine", src: "images/homes/1 wine.jpg" },
+{ caption: "family", src: "images/homes/2 family.jpg" },
+{ caption: "left", src: "images/homes/3 left.jpg" },
+{ caption: "squatting", src: "images/homes/4 squatting.jpg" },
+{ caption: "church", src: "images/homes/5 church.jpg" },
+{ caption: "huts", src: "images/homes/6 huts.jpg" },
+{ caption: "ongoing", src: "images/homes/7 ongoing.jpg" },
+],
+},

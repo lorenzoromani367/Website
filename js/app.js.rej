@@ -1,0 +1,10 @@
+@@ -2603,7 +2603,8 @@
+   let marqueeLastTs = null;
+   const marqueeTick = (ts) => {
+     if (!marqueeLastTs) marqueeLastTs = ts;
+-    const dt = (ts - marqueeLastTs) / 1000;
++    let dt = (ts - marqueeLastTs) / 1000;
++    if (dt > 0.1) dt = 0.1; // Evita scatti in avanti se il tab finisce in background
+     marqueeLastTs = ts;
+     if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
+       marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
