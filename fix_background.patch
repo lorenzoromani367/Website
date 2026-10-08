@@ -1,0 +1,38 @@
+--- js/app.js
++++ js/app.js
+@@ -2603,7 +2603,8 @@
+   let marqueeLastTs = null;
+   const marqueeTick = (ts) => {
+     if (!marqueeLastTs) marqueeLastTs = ts;
+-    const dt = (ts - marqueeLastTs) / 1000;
++    let dt = (ts - marqueeLastTs) / 1000;
++    if (dt > 0.1) dt = 0.1; // Evita scatti in avanti se il tab finisce in background
+     marqueeLastTs = ts;
+     if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
+       marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
+@@ -2829,7 +2830,7 @@
+ 
+   function scheduleNext() {
+     clearTimeout(autoplayTimer);
+-    if (paused || figures.length < 2) return;
++    if (paused || figures.length < 2 || document.hidden) return;
+     // Se una transizione è appena partita (autoplay, click dell'utente, o
+     // swipe touch), la prossima non deve scattare dopo AUTOPLAY_DELAY
+     // dall'INIZIO di questa, ma dopo che questa è FINITA di arrivare
+@@ -2858,6 +2859,16 @@
+     }, wait);
+   }
+ 
++  // Blocca l'autoplay quando il tab del browser non è visibile, 
++  // per evitare che continui ad avanzare in background.
++  document.addEventListener("visibilitychange", () => {
++    if (document.hidden) {
++      clearTimeout(autoplayTimer);
++    } else {
++      if (!paused) scheduleNext();
++    }
++  });
++
+   function restartAutoplay() {
+     scheduleNext();
+   }

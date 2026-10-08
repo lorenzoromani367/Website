@@ -1,0 +1,153 @@
+Created At: 2026-10-03T17:55:45+03:00
+Completed At: 2026-10-03T17:55:45+03:00
+
+				The command exited with code 0.
+				Output:
+				commit 31aecfa07bd89ac4dac256125566174df4efb2b5 (HEAD -> main, origin/main, origin/HEAD)
+Author: lorenzoromani367 <74915061+lorenzoromani367@users.noreply.github.com>
+Date:   Mon Sep 21 22:38:48 2026 +0300
+
+    Update galleryMobile defaults to 180/240 and apply new mobile dimensions to lines project
+
+diff --git a/js/content.js b/js/content.js
+index fd5c4c9..2d9d283 100644
+--- a/js/content.js
++++ b/js/content.js
+@@ -88,8 +88,8 @@ const LAYOUT = {
+     descriptionWidth: "340px",
+     descriptionHeight: "340px",
+     descriptionOffset: { x: 0, y: 100 },
+-    imageOffset: { x: 0, y: 160 },
+-    captionOffset: { x: 0, y: 220 },
++    imageOffset: { x: 0, y: 180 },
++    captionOffset: { x: 0, y: 240 },
+     topbarTitleOffset: { x: 60, y: 40 },
+     topbarIndexOffset: { x: 60, y: 0 },
+     bottomIndexOffset: { x: 0, y: 0 },
+@@ -123,24 +123,27 @@ const PROJECTS = [
+         width: "480px",
+         height: "673px",
+         captionOffset: { x: 100, y: 360 },
++        mobile: { width: "280px", height: "393px" },
+       },
+       {
+         caption: "winery, sicily",
+         src: "images/lines/lines-4.jpg",
+         captionOffset: { x: 80, y: 380 },
++        mobile: { width: "320px", height: "258px" },
+       },
+-      { caption: "church", src: "images/lines/lines-5.jpg", width: "440px", height: "622px" },
+-      { caption: "olympus", src: "images/lines/lines-6.jpg", width: "520px", height: "599px", captionOffset: { x: 100, y: 360 } },
+-      { caption: "construction", src: "images/lines/lines-7.jpg", width: "520px", height: "590px" },
+-      { caption: "unfinished", src: "images/lines/lines-8.jpg" },
+-      { caption: "mountain pasture", src: "images/lines/lines-9.jpg", width: "480px", height: "568px" },
+-      { caption: "home", src: "images/lines/lines-10.jpg", width: "420px", height: "663px", offset: { x: 120, y: 300 }, captionOffset: { x: -120, y: 400 } },
+-      { caption: "field", src: "images/lines/lines-11.jpg", width: "460px", height: "575px", captionOffset: { x: 100, y: 360 } },
++      { caption: "church", src: "images/lines/lines-5.jpg", width: "440px", height: "622px", mobile: { width: "280px", height: "396px" } },
++      { caption: "olympus", src: "images/lines/lines-6.jpg", width: "520px", height: "599px", captionOffset: { x: 100, y: 360 }, mobile: { width: "320px", height: "369px" } },
++      { caption: "construction", src: "images/lines/lines-7.jpg", width: "520px", height: "590px", mobile: { width: "300px", height: "340px" } },
++      { caption: "unfinished", src: "images/lines/lines-8.jpg", mobile: { width: "300px", height: "350px" } },
++      { caption: "mountain pasture", src: "images/lines/lines-9.jpg", width: "480px", height: "568px", mobile: { width: "300px", height: "355px" } },
++      { caption: "home", src: "images/lines/lines-10.jpg", width: "420px", height: "663px", offset: { x: 120, y: 300 }, captionOffset: { x: -120, y: 400 }, mobile: { width: "260px", height: "411px" } },
++      { caption: "field", src: "images/lines/lines-11.jpg", width: "460px", height: "575px", captionOffset: { x: 100, y: 360 }, mobile: { width: "300px", height: "375px" } },
+       {
+         caption: "ignored column",
+         src: "images/lines/lines-12.jpg",
++        mobile: { width: "320px", height: "363px" },
+       },
+-      { caption: "emst", src: "images/lines/lines-13.jpg", width: "480px", height: "640px" },
++      { caption: "emst", src: "images/lines/lines-13.jpg", width: "480px", height: "640px", mobile: { width: "280px", height: "373px" } },
+     ],
+   },
+   {
+
+commit e59886dff135744fca55a3db30ca4e7ab917b039
+Author: lorenzoromani367 <74915061+lorenzoromani367@users.noreply.github.com>
+Date:   Mon Sep 21 22:06:21 2026 +0300
+
+    Remove explicit mobile overrides from lines to use global defaults and force ignore saved zoom size on mobile
+
+diff --git a/js/content.js b/js/content.js
+index 2d60039..fd5c4c9 100644
+--- a/js/content.js
++++ b/js/content.js
+@@ -123,7 +123,6 @@ const PROJECTS = [
+         width: "480px",
+         height: "673px",
+         captionOffset: { x: 100, y: 360 },
+-        mobile: { offset: { x: 0, y: 100 } },
+       },
+       {
+         caption: "winery, sicily",
+@@ -140,12 +139,6 @@ const PROJECTS = [
+       {
+         caption: "ignored column",
+         src: "images/lines/lines-12.jpg",
+-        mobile: {
+-          width: "340px",
+-          height: "385px",
+-          offset: { x: 0, y: 180 },
+-          captionOffset: { x: 0, y: 240 },
+-        },
+       },
+       { caption: "emst", src: "images/lines/lines-13.jpg", width: "480px", height: "640px" },
+     ],
+
+commit 993461fa063a326b538e51ea83b38436f247ebf8
+Author: lorenzoromani367 <74915061+lorenzoromani367@users.noreply.github.com>
+Date:   Mon Sep 21 21:57:30 2026 +0300
+
+    Set mobile layout defaults from lines and fix mobile zoom padding
+
+diff --git a/js/content.js b/js/content.js
+index 97c4987..2d60039 100644
+--- a/js/content.js
++++ b/js/content.js
+@@ -85,9 +85,16 @@ const LAYOUT = {
+   // presente qui vuol dire "nessun offset" su mobile (parte da zero/auto),
+   // non "usa il valore desktop qui sopra".
+   galleryMobile: {
+-    topbarTitleOffset: { x: 0, y: 40 },
++    descriptionWidth: "340px",
++    descriptionHeight: "340px",
++    descriptionOffset: { x: 0, y: 100 },
++    imageOffset: { x: 0, y: 160 },
++    captionOffset: { x: 0, y: 220 },
++    topbarTitleOffset: { x: 60, y: 40 },
++    topbarIndexOffset: { x: 60, y: 0 },
+     bottomIndexOffset: { x: 0, y: 0 },
+     hamburgerOffset: { x: 0, y: -20 },
++    spacerBeforeBarHeight: "100px",
+     spacerBottomHeight: "60px",
+   },
+ };
+@@ -101,12 +108,8 @@ const PROJECTS = [
+       "I shoot on film, which slows the process down and changes what I notice. Light and grain do work that description can't.",
+       "Each image is a single encounter with a specific place and a specific quality of light. As for my stills, they form a growing archive, i will endlessly keep returning to.",
+     ],
+-    // Nessuna "descriptionBox" desktop qui: la dimensione/posizione di
+-    // quel blocco resta quella di default in LAYOUT.gallery. Solo su
+-    // mobile ha una misura sua (vedi pickLayout() in app.js).
+-    descriptionBox: {
+-      mobile: { width: "360px", height: "340px", offset: { x: 0, y: 100 } },
+-    },
++    // Nessuna "descriptionBox" qui: la dimensione/posizione di
++    // quel blocco resta quella di default in LAYOUT sia per desktop che per mobile.
+     // Ordine, didascalie e "mobile: {...}" aggiornati dall'export panel
+     // (foto #N = indice N-1, sempre quello ORIGINALE: vedi photoLabel in
+     // app.js — non cambia se riordini). "mobile" è un override letto
+@@ -127,13 +130,6 @@ const PROJECTS = [
+         src: "images/lines/lines-4.jpg",
+         captionOffset: { x: 80, y: 380 },
+       },
+-      {
+-        caption: "sky",
+-        src: "images/lines/lines-2.jpg",
+-        width: "440px",
+-        height: "630px",
+-        mobile: { offset: { x: 0, y: 120 }, captionOffset: { x: 0, y: 100 } },
+-      },
+       { caption: "church", src: "images/lines/lines-5.jpg", width: "440px", height: "622px" },
+       { caption: "olympus", src: "images/lines/lines-6.jpg", width: "520px", height: "599px", captionOffset: { x: 100, y: 360 } },
+       { caption: "construction", src: "images/lines/lines-7.jpg", width: "520px", height: "590px" },
+

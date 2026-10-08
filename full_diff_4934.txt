@@ -1,0 +1,159 @@
+Created At: 2026-10-06T18:46:08+03:00
+Completed At: 2026-10-06T18:46:08+03:00
+
+				The command exited with code 0.
+				Output:
+				<truncated 847 lines>
+       { caption: "", src: "images/maniac/maniac-4.jpg" },
+       { caption: "", src: "images/maniac/maniac-5.jpg" },
++      { caption: "", src: "images/maniac/maniac-6.jpg" },
+     ],
+   },
+-  { slug: "eating", name: "Eating", description: ["Descrizione da definire per il progetto “Eating”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
++  { slug: "eating", name: "Eating", description: ["Descrizione da definire per il progetto “Eating”."], images: [{ caption: "", src: "images/eating/dreams.jpg" }] },
+   { slug: "vacation", name: "Vacation", description: ["Descrizione da definire per il progetto “Vacation”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
+-  { slug: "toy", name: "Toy", description: ["Descrizione da definire per il progetto “Toy”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
++  { slug: "toy", name: "Toy", description: ["Descrizione da definire per il progetto “Toy”."], images: [{ caption: "", src: "images/toy/toy-1.jpg" }] },
+   { slug: "perfume", name: "Perfume", description: ["Descrizione da definire per il progetto “Perfume”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
+-  { slug: "whitening", name: "Whitening", description: ["Descrizione da definire per il progetto “Whitening”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
++  { slug: "whitening", name: "Whitening", description: ["Descrizione da definire per il progetto “Whitening”."], images: [{ caption: "", src: "images/whitening/whitening-1.jpg" }] },
++  { slug: "paper-tape", name: "Paper tape", description: ["Descrizione da definire per il progetto “Paper tape”."], images: [{ caption: "", src: "images/paper-tape/paper-tape-1.jpg" }] },
++  {
++    slug: "beach",
++    name: "Beach",
++    description: ["Descrizione da definire per il progetto “Beach”."],
++    images: [{ caption: "", src: "images/beach/beach-1.jpg" }],
++  },
++  {
++    slug: "solo",
++    name: "Solo",
++    description: ["Descrizione da definire per il progetto “Solo”."],
++    images: [
++      { caption: "", src: "images/solo/solo-1.jpg" },
++      { caption: "", src: "images/solo/solo-2.jpg" },
++      { caption: "", src: "images/solo/solo-3.jpg" },
++      { caption: "", src: "images/solo/solo-4.jpg" },
++      { caption: "", src: "images/solo/solo-5.jpg" },
++      { caption: "", src: "images/solo/solo-6.jpg" },
++      { caption: "", src: "images/solo/solo-7.jpg" },
++      { caption: "", src: "images/solo/solo-8.jpg" },
++      { caption: "", src: "images/solo/solo-9.jpg" },
++    ],
++  },
+ ];
+ 
+ // Link del footer, sotto alla lista in home e nella pagina di ogni galleria.
+
+commit 39c97b6e2f2c5a53a9c0cefb43ad2ea44f222dae
+Author: Claude <noreply@anthropic.com>
+Date:   Thu Sep 17 12:33:52 2026 +0000
+
+    Wire up bar/fluoxetine/licking/moon/plastic/tower/compression as real projects
+    
+    Adds six new projects (Bar, Fluoxetine, Licking, Moon, Compression) and
+    replaces the Tower/Plastic placeholders with real photos, using the
+    files pushed directly to their images/ subfolders. Renamed files to the
+    site's existing convention (lowercase, hyphenated, no spaces) and
+    re-encoded the oversized ones (several were 5-8MB, camera-native
+    resolution) to match every other project's images: max 2200px on the
+    long edge, JPEG quality 85, EXIF-orientation baked in then stripped —
+    sizes dropped by 80-95% with no visible quality loss (e.g. bar-1.jpg:
+    8.0MB -> 625KB).
+    
+    These were previously "words" added via the home-page +/free-text
+    feature, which only exists in the browser that created them — not
+    something I can wire real files into from the repository. Promoting
+    them to actual PROJECTS entries is what makes them permanent and
+    visible to every visitor. Added a one-time migration that removes any
+    locally-saved home word whose text matches one of these seven names
+    (case-insensitive), so anyone who already had it as a word doesn't end
+    up with a duplicate entry pointing at the old, now-empty word page.
+    
+    Also fixed a real bug behind the "Compression" home-word text getting
+    clipped (e.g. showing "Comp" instead of "Compression"): the input had a
+    fixed/min-width that never grew with its content, unlike a plain link.
+    It's now sized in JS from the exact rendered width of its own text
+    (measured via a hidden mirror span), synced on every keystroke, so no
+    word can ever be cut off regardless of length.
+    
+    Bumped the asset cache-busting version to v=6.
+    
+    Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01BDecM7zMhjsjQfFe44upxd
+
+diff --git a/js/content.js b/js/content.js
+index 55e706b..5ce727f 100644
+--- a/js/content.js
++++ b/js/content.js
+@@ -134,7 +134,55 @@ const PROJECTS = [
+       { caption: "", src: "images/stills/stills-16.jpg" },
+     ],
+   },
+-  { slug: "tower", name: "Tower", description: ["Descrizione da definire per il progetto “Tower”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
++  {
++    slug: "tower",
++    name: "Tower",
++    description: ["Descrizione da definire per il progetto “Tower”."],
++    images: [
++      { caption: "", src: "images/tower/tower-1.jpg" },
++      { caption: "", src: "images/tower/tower-2.jpg" },
++    ],
++  },
++  {
++    slug: "bar",
++    name: "Bar",
++    description: ["Descrizione da definire per il progetto “Bar”."],
++    images: [
++      { caption: "", src: "images/bar/bar-1.jpg" },
++      { caption: "", src: "images/bar/bar-2.jpg" },
++    ],
++  },
++  {
++    slug: "fluoxetine",
++    name: "Fluoxetine",
++    description: ["Descrizione da definire per il progetto “Fluoxetine”."],
++    images: [{ caption: "", src: "images/fluoxetine/fluoxetine-1.jpg" }],
++  },
++  {
++    slug: "licking",
++    name: "Licking",
++    description: ["Descrizione da definire per il progetto “Licking”."],
++    images: [{ caption: "", src: "images/licking/licking-1.jpg" }],
++  },
++  {
++    slug: "moon",
++    name: "Moon",
++    description: ["Descrizione da definire per il progetto “Moon”."],
++    images: [{ caption: "", src: "images/moon/moon-1.jpg" }],
++  },
++  {
++    slug: "compression",
++    name: "Compression",
++    description: ["Descrizione da definire per il progetto “Compression”."],
++    images: [
++      { caption: "", src: "images/compression/compression-1.jpg" },
++      { caption: "", src: "images/compression/compression-2.jpg" },
++      { caption: "", src: "images/compression/compression-3.jpg" },
++      { caption: "", src: "images/compression/compression-4.jpg" },
++      { caption: "", src: "images/compression/compression-5.jpg" },
++      { caption: "", src: "images/compression/compression-6.jpg" },
++    ],
++  },
+   {
+     slug: "recognition",
+     name: "Recognition",
+@@ -223,7 +271,12 @@ const PROJECTS = [
+       { caption: "", src: "images/estrangement/estrangement-6.jpg" },
+     ],
+   },
+-  { slug: "plastic", name: "Plastic", description: ["Descrizione da definire per il progetto “Plastic”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
++  {
++    slug: "plastic",
++    name: "Plastic",
++    description: ["Descrizione da definire per il progetto “Plastic”."],
++    images: [{ caption: "", src: "images/plastic/plastic-1.jpg" }],
++  },
+   { slug: "tech", name: "Tech", description: ["Descrizione da definire per il progetto “Tech”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
+   { slug: "pink", name: "Pink", description: ["Descrizione da definire per il progetto “Pink”."], images: [{ caption: "placeholder 01", src: null }, { caption: "placeholder 02", src: null }] },
+   {
+
