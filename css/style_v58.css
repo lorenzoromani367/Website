@@ -595,7 +595,10 @@ body.edit-mode .description-editable {
    diventa un vero rettangolo con bordo, per essere inequivocabile. */
 .caption-box {
   position: absolute;
-  top: 100%;
+  /* "auto", non "100%": il codice rende la didascalia "relative" (sta nel flusso, 160px sotto la foto) e una
+     percentuale come "top: 100%" Safari la applica (spostando la didascalia di un'intera altezza della foto,
+     fuori dalla pagina), Chrome/Vivaldi no — per questo su Safari le didascalie sparivano. */
+  top: auto;
   left: 0;
   right: 0;
   width: 240px;
