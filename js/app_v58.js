@@ -411,6 +411,10 @@ const siteStore = (() => {
 const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
 const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const MARQUEE_PX_PER_SEC = 6;  // velocità dello scorrimento del testo
+// Spazio minimo (px) tra la FINE del testo scorrevole e il suo ricominciare: è quello del testo "recognition".
+// Con meno spazio, appena si apre la pagina si vedeva la coda del testo sopra il suo inizio, come se partisse
+// da un punto a caso (succedeva in "homes", "stills"...).
+const MARQUEE_MIN_GAP = 129;
 const GRID_SIZE = 20;          // px: passo della griglia di allineamento in modalità modifica (resize/spostamenti si agganciano a questo)
 const MOBILE_BREAKPOINT = 700; // px: stessa soglia del media query in style.css — sopra/sotto cambia lo "scope" di posizioni/dimensioni salvate
 // Le foto vere (src in content.js) restano in cache nel browser di chi
@@ -2361,28 +2365,38 @@ function ensureEditModeUI() {
       toggle.textContent = "Salvataggio...";
       toggle.disabled = true;
       // Save texts to server
+      // Il testo di un progetto sta in testi/<nome>.txt. La chiave salvata è "project.<nome>" (core archive:
+      // "archive"): prima si mandava la chiave intera ("project.stills"), quindi il testo finiva in un file
+      // sbagliato (testi/project.stills.txt) e il testo vero non cambiava — la modifica andava persa.
+      const textFileFor = (key) => {
+        if (key.startsWith("project.")) return key.slice("project.".length);
+        if (key.startsWith("project:")) return key.slice("project:".length);
+        if (key === "core" || key === "archive") return "core archive";
+        return null; // le pagine-parola non hanno un file di testo: la modifica resta nello stato salvato
+      };
       const overrides = loadDescriptionOverrides();
-      let allTextsSaved = true;
+      const savedKeys = [];
       for (const [key, textArray] of Object.entries(overrides)) {
-        let slug = key;
-        if (key.startsWith("project:")) slug = key.replace("project:", "");
-        if (key === "core") slug = "core archive";
-        
+        const slug = textFileFor(key);
+        if (!slug) continue;
         try {
-          await fetch('/api/save-content', {
+          const res = await fetch('/api/save-content', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ slug, text: textArray })
           });
+          if (res.ok) savedKeys.push(key);
         } catch (e) {
           console.error("Failed to save", slug, e);
-          allTextsSaved = false;
         }
       }
-      
-      // Svuotiamo la cache locale per forzare la lettura dal file .txt al prossimo caricamento
-      if (allTextsSaved && Object.keys(overrides).length > 0) {
-        siteStore.removeItem(DESCRIPTION_STORE_KEY);
+
+      // Si tolgono dalla memoria locale SOLO i testi davvero salvati nel file .txt (verranno riletti da lì)
+      if (savedKeys.length > 0) {
+        const remaining = loadDescriptionOverrides();
+        savedKeys.forEach((key) => delete remaining[key]);
+        if (Object.keys(remaining).length) siteStore.setItem(DESCRIPTION_STORE_KEY, JSON.stringify(remaining));
+        else siteStore.removeItem(DESCRIPTION_STORE_KEY);
       }
 
       // Save archive pages to server
@@ -3529,7 +3543,15 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     if (!text.trim()) {
       clearDescriptionOverride(galleryKey);
     } else {
-      const newArray = text.split(/\n/).map(s => s.trim()).filter(s => s !== "");
+      // Una riga per paragrafo. Le righe vuote (gli spazi tra un gruppo di paragrafi e l'altro) restano:
+      // prima venivano cancellate alla prima modifica, e il testo perdeva la sua impaginazione. Mai due righe vuote
+      // di fila, né una all'inizio o alla fine.
+      const lines = [];
+      descContent.childNodes.forEach((node) => {
+        const chunk = (node.nodeType === 1 ? node.innerText : node.textContent) || "";
+        chunk.split(/\n/).forEach((line) => lines.push(line.trim()));
+      });
+      const newArray = lines.filter((line, i) => line !== "" || (i > 0 && lines[i - 1] !== "" && lines.slice(i + 1).some((l) => l !== "")));
       saveDescriptionOverride(galleryKey, newArray);
       
       // Aggiorna silenziosamente il clone in background così è pronto quando si esce da Edit Mode
@@ -3900,11 +3922,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const measureMarqueeDistance = () => {
     const textHeight = descContent.offsetHeight;
-    let gapHeight = 80; // Spazio minimo tra fine e inizio loop
+    let gapHeight = MARQUEE_MIN_GAP; // Spazio minimo tra fine e inizio loop
     if (hasExplicitDescHeight) {
       const boxHeight = descBlock.getBoundingClientRect().height;
       if (textHeight < boxHeight) {
-        gapHeight = boxHeight - textHeight;
+        gapHeight = Math.max(MARQUEE_MIN_GAP, boxHeight - textHeight);
       }
     } else {
       descBlock.style.height = `${textHeight}px`;
@@ -4662,10 +4684,10 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
 
     const measureMarqueeDistance = () => {
       const textHeight = descContent.offsetHeight;
-      let gapHeight = 80;
+      let gapHeight = MARQUEE_MIN_GAP;
       if (hasExplicitDescHeight) {
         const boxHeight = descBlock.getBoundingClientRect().height;
-        if (textHeight < boxHeight) gapHeight = boxHeight - textHeight;
+        if (textHeight < boxHeight) gapHeight = Math.max(MARQUEE_MIN_GAP, boxHeight - textHeight);
       } else {
         descBlock.style.height = `${textHeight}px`;
       }
@@ -5074,16 +5096,52 @@ function openAllPhotosIndex() {
 
 const ARCHIVE_PAGES_STORE_KEY = "site-archive-pages-v2";
 
+// Le parole/foto dell'archivio ricordano il percorso del file a cui sono legate. Se il file nel frattempo ha cambiato
+// cartella o maiuscole (es. "images/lines/2 hill.JPG" → "images/boudaries/2 hill.JPG"), il collegamento si rompeva e
+// la foto non si apriva più. Qui si ritrova il file con lo stesso nome nell'elenco delle foto (se ce n'è uno solo) e,
+// se il collegamento puntava a un progetto che non esiste più, lo si sposta sul progetto della nuova cartella.
+function healArchivePaths(pages) {
+  const list = window.DYNAMIC_IMAGES;
+  if (!Array.isArray(list) || !pages) return pages;
+  const actual = new Map(list.map((path) => [path.toLowerCase(), path]));
+  const byName = new Map();
+  list.forEach((path) => {
+    const name = path.split("/").pop().toLowerCase();
+    byName.set(name, (byName.get(name) || []).concat(path));
+  });
+  const find = (src) => {
+    const key = String(src).toLowerCase();
+    if (actual.has(key)) return actual.get(key) !== src ? actual.get(key) : null; // solo le maiuscole erano diverse (o già a posto)
+    const sameName = byName.get(key.split("/").pop()) || [];
+    return sameName.length === 1 ? sameName[0] : null;
+  };
+  pages.forEach((page) => (page.images || []).forEach((item) => {
+    [["linkedImageSrc", "linkedImageLinkTo"], ["poolSrc", "linkTo"]].forEach(([srcField, linkField]) => {
+      if (!item[srcField]) return;
+      const fixed = find(item[srcField]);
+      if (!fixed) return;
+      item[srcField] = fixed;
+      const target = item[linkField];
+      if (target && /^project\//.test(target) && !PROJECTS.some((project) => `project/${project.slug}` === target)) {
+        const folder = fixed.split("/")[1];
+        if (PROJECTS.some((project) => project.slug === folder)) item[linkField] = `project/${folder}`;
+        else delete item[linkField];
+      }
+    });
+  }));
+  return pages;
+}
+
 function loadArchivePages() {
   try {
     const ls = JSON.parse(siteStore.getItem(ARCHIVE_PAGES_STORE_KEY));
     if (ls && ls.length > 0) {
-      return ls;
+      return healArchivePaths(ls);
     }
   } catch (e) {}
   
   if (ARCHIVE.pages && ARCHIVE.pages.length > 0) {
-    return JSON.parse(JSON.stringify(ARCHIVE.pages));
+    return healArchivePaths(JSON.parse(JSON.stringify(ARCHIVE.pages)));
   }
 
   if (ARCHIVE.images && ARCHIVE.images.length > 0) {
