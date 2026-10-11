@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 29,
-  "updatedAt": "2026-10-11T20:06:04.390Z",
+  "version": 37,
+  "updatedAt": "2026-10-11T20:21:45.309Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -223,7 +223,10 @@ window.SITE_STATE = {
           {
             "type": "word",
             "text": "murano",
-            "uid": "uid_1791305668347_6899"
+            "uid": "uid_1791305668347_6899",
+            "linkedImageSrc": "images/stills/murano.JPG",
+            "linkedImageLinkTo": "project/stills",
+            "linkedImageProject": "stills"
           },
           {
             "type": "word",
@@ -255,7 +258,7 @@ window.SITE_STATE = {
           },
           {
             "type": "word",
-            "text": "still",
+            "text": "tourette",
             "uid": "uid_1791600000002_4002"
           },
           {
@@ -280,13 +283,18 @@ window.SITE_STATE = {
           {
             "type": "word",
             "text": "delta",
-            "uid": "uid_1791600000003_4003"
+            "uid": "uid_1791600000003_4003",
+            "linkedImageSrc": "images/core archive/michelin-5.jpg",
+            "linkedImageLinkTo": "archive",
+            "linkedImageProject": "michelin"
           }
         ]
       }
     ],
     "site-caption-overrides-v1": {
-      "project.homes.captionText.1": "upper-middle class"
+      "project.homes.captionText.1": "upper-middle class",
+      "project.stills.captionText.0": "J. Kronester Bavaria Tea Set",
+      "project.stills.captionText.2": "furla messenger bag"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
