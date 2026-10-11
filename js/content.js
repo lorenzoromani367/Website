@@ -236,7 +236,7 @@ images: [
   {
     slug: "beach",
     name: "Beach",
-        images: [{ caption: "back", src: "images/beach/beach-1.jpg" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "665.341px" } }],
+        images: [{ caption: "back", src: "images/beach/beach-1.jpg" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "513.58px" } }],
   },
 
   {
