@@ -107,7 +107,15 @@ Totale realistico: **circa 10–20 €/anno**, solo per il rinnovo del dominio �
 ## Core Archive
 
 - La pagina è un **elenco verticale di parole** (`ARCHIVE.pages[0].images` in `content.js`), allineato al bordo sinistro del titolo "core archive". Ogni voce è `{ type: "word", text, uid, linkedImageSrc, linkedImageProject }` oppure `{ type: "break", uid }` (una riga vuota tra due gruppi). L'ordine dell'array è l'ordine in pagina.
-- Le parole hanno **la stessa scrittura delle didascalie** delle foto (regola unica in `style_v58.css`, insieme a `.caption-input` e al nome del progetto accanto alla foto ingrandita).
+- Le parole hanno **la stessa scrittura delle didascalie** delle foto (regola unica in `style_v58.css`, insieme a `.caption-input`).
 - Cliccando una parola si apre la foto collegata; accanto compare il **progetto a cui la foto appartiene** (`archiveImageProject` in `app_v58.js`: progetto salvato nella parola, cartella della foto, copia identica in un progetto — vedi `IMAGE_TWINS` in `images-data.js` —, stesso nome di file, prefisso del nome file). Cliccando quel nome si apre il progetto.
+- Quel nome (`.lightbox-project-label`) **non è una didascalia**: ha il carattere dei nomi della home (stessa famiglia, grandezza, peso e spessore; il colore è tenue perché lo sfondo è scuro). Distanza dalla foto: `LIGHTBOX_LABEL_GAP` (di lato su computer, `LIGHTBOX_LABEL_GAP_MOBILE` sotto la foto su telefono).
+- La foto ingrandita (`makeZoomable`, chiavi `archive.…`) su computer sta nei **tre quarti di sinistra** dello schermo: è grande quanto può in quello spazio, alta al massimo come ogni altro ingrandimento (82% dello schermo), con le sue proporzioni vere, e il nome del progetto sta a destra. Non si usa lo `zoomBox` salvato per la pagina del progetto (per alcune foto è molto più piccolo e le schiacciava). L'animazione di ingrandimento (FLIP) è la stessa di tutto il sito: cambia solo il punto di arrivo.
 - In modalità modifica: 🔗 collega a una foto, × toglie, ⠿ riordina, "+ Parola" / "+ Spazio" aggiungono in fondo. Si salva da solo (`site-state.js` e `content.js`).
+
+## Testo scorrevole
+
+- Ogni pagina con testo scorrevole (progetti con un file in `testi/`, About) ha il testo **due volte in una striscia** che scende in loop dentro il suo riquadro (`.description`). All'apertura la **prima riga del testo parte esattamente dal bordo alto del riquadro**; `measureMarqueeLoop` in `app_v58.js` misura il giro (differenze tra rettangoli, non `offsetTop`) e il punto di partenza, ed è usata sia da `renderGallery` sia da `renderSimplePage`: la partenza è identica ovunque.
+- Uscendo dalla modifica (la seconda copia era nascosta e il testo può essere cambiato) lo scorrimento si rimisura e riparte da capo.
+- Lo spazio tra la fine e il ricominciare del testo è almeno `MARQUEE_MIN_GAP`.
 

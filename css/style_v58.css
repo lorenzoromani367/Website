@@ -73,7 +73,6 @@ button,
 .export-panel textarea,
 .photo-caption-text,
 .archive-word,
-.lightbox-project-label,
 body.edit-mode .home-word-input::placeholder {
   --sans-stroke: 0;
   -webkit-text-stroke-width: 0;
@@ -620,11 +619,11 @@ body.edit-mode .description-editable {
   left: -30px;
 }
 
-/* La scrittura delle didascalie delle foto: la STESSA identica per le parole del Core Archive (che sono didascalie
-   di foto del sito) e per il nome del progetto accanto alla foto ingrandita. Un solo posto da cambiare. */
+/* La scrittura delle didascalie delle foto: la STESSA identica per le parole del Core Archive, che sono
+   didascalie di foto del sito. Un solo posto da cambiare. (Il nome del progetto accanto alla foto ingrandita
+   NON è una didascalia: ha il carattere dei nomi della home, vedi ".lightbox-project-label" più sotto.) */
 .caption-input,
-.archive-word,
-.lightbox-project-label {
+.archive-word {
   font-family: var(--mono);
   font-size: 0.8rem;
   font-weight: 550;
@@ -828,6 +827,25 @@ body.edit-mode .grid-btn {
   height: 100%;
   object-fit: contain;
   cursor: zoom-out;
+}
+
+/* Il nome del progetto accanto alla foto ingrandita (es. "beach"): lo STESSO carattere dei nomi nella lista della
+   home — stessa famiglia, grandezza, peso, interlinea e spessore (lo spessore arriva da body, vedi --sans-stroke).
+   Cambia solo il colore, tenue, perché qui lo sfondo è scuro. Posizione e distanza dalla foto: vedi makeZoomable. */
+.lightbox-project-label {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: normal;
+  color: var(--muted);
+}
+
+/* Su telefono i nomi della home sono 2pt più piccoli (vedi sopra): anche questo. */
+@media (max-width: 700px) {
+  .lightbox-project-label {
+    font-size: calc(0.95rem - 2pt);
+  }
 }
 
 /* Zoom sul testo: stesso identico rettangolo beige di ".page" (stessa
