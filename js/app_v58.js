@@ -5176,16 +5176,28 @@ function healArchivePaths(pages) {
     const name = path.split("/").pop().toLowerCase();
     byName.set(name, (byName.get(name) || []).concat(path));
   });
-  const find = (src) => {
+  // Ultima risorsa: la foto è stata RINOMINATA dentro la sua cartella (es. "lines-11.jpg" → "fields.jpg" in "core archive",
+  // dando alle foto il nome della parola). Se in quella cartella c'è un solo file che si chiama come la parola (anche al
+  // singolare/plurale), è quello. Vale solo per un collegamento già rotto: non cambia mai uno che funziona.
+  const plainName = (text) => String(text || "").toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "");
+  const renamedAsWord = (src, word) => {
+    const target = plainName(word);
+    if (!target) return null;
+    const folder = String(src).toLowerCase().split("/").slice(0, -1).join("/");
+    const names = [target, `${target}s`, target.replace(/s$/, "")];
+    const found = list.filter((path) => path.toLowerCase().split("/").slice(0, -1).join("/") === folder && names.includes(plainName(path.split("/").pop())));
+    return found.length === 1 ? found[0] : null;
+  };
+  const find = (src, word) => {
     const key = String(src).toLowerCase();
     if (actual.has(key)) return actual.get(key) !== src ? actual.get(key) : null; // solo le maiuscole erano diverse (o già a posto)
     const sameName = byName.get(key.split("/").pop()) || [];
-    return sameName.length === 1 ? sameName[0] : null;
+    return sameName.length === 1 ? sameName[0] : renamedAsWord(src, word);
   };
   pages.forEach((page) => (page.images || []).forEach((item) => {
     [["linkedImageSrc", "linkedImageLinkTo"], ["poolSrc", "linkTo"]].forEach(([srcField, linkField]) => {
       if (!item[srcField]) return;
-      const fixed = find(item[srcField]);
+      const fixed = find(item[srcField], item.text);
       if (!fixed) return;
       item[srcField] = fixed;
       const target = item[linkField];
