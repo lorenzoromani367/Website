@@ -104,3 +104,10 @@ Totale realistico: **circa 10–20 €/anno**, solo per il rinnovo del dominio �
 - **La misura di una foto in pagina viene dalle sue proporzioni vere** (`IMAGE_SIZES`), mai da `zoomBox`, che è solo la misura dell'ingrandimento.
 - **Pubblicazione** (`.github/workflows/deploy-pages.yml`): prepara la cartella `_site` (solo i file del sito) e scrive il codice della versione dentro `index.html` (`?v=` e `SITE_VERSION`), così i browser riscaricano i file solo quando c'è qualcosa di nuovo.
 
+## Core Archive
+
+- La pagina è un **elenco verticale di parole** (`ARCHIVE.pages[0].images` in `content.js`), allineato al bordo sinistro del titolo "core archive". Ogni voce è `{ type: "word", text, uid, linkedImageSrc, linkedImageProject }` oppure `{ type: "break", uid }` (una riga vuota tra due gruppi). L'ordine dell'array è l'ordine in pagina.
+- Le parole hanno **la stessa scrittura delle didascalie** delle foto (regola unica in `style_v58.css`, insieme a `.caption-input` e al nome del progetto accanto alla foto ingrandita).
+- Cliccando una parola si apre la foto collegata; accanto compare il **progetto a cui la foto appartiene** (`archiveImageProject` in `app_v58.js`: progetto salvato nella parola, cartella della foto, copia identica in un progetto — vedi `IMAGE_TWINS` in `images-data.js` —, stesso nome di file, prefisso del nome file). Cliccando quel nome si apre il progetto.
+- In modalità modifica: 🔗 collega a una foto, × toglie, ⠿ riordina, "+ Parola" / "+ Spazio" aggiungono in fondo. Si salva da solo (`site-state.js` e `content.js`).
+

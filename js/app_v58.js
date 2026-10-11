@@ -2283,7 +2283,7 @@ function openExportPanel() {
       siteStore.removeItem(HOME_HIDDEN_STORE_KEY);
     }
     if (prefix === "archive") {
-      siteStore.removeItem("site-archive-pages-v2");
+      siteStore.removeItem(ARCHIVE_PAGES_STORE_KEY);
     }
 
     // AUTO-SAVE FIX: If we cleared localStorage, we must also clear content.js
@@ -2401,7 +2401,7 @@ function ensureEditModeUI() {
 
       // Save archive pages to server
       try {
-        const archivePagesLs = JSON.parse(siteStore.getItem("site-archive-pages-v2"));
+        const archivePagesLs = JSON.parse(siteStore.getItem(ARCHIVE_PAGES_STORE_KEY));
         if (archivePagesLs && archivePagesLs.length > 0) {
           await fetch('/api/save-archive-pages', {
             method: 'POST',
@@ -2921,7 +2921,7 @@ function ensureZoomElements() {
   zoomActiveFrame.id = "lightboxActiveFrame";
   zoomActiveImg = el("img", { class: "lightbox-active-img" });
   zoomActiveImg.id = "lightboxActiveImg";
-  zoomProjectLabel = el("div", { class: "lightbox-project-label", style: "display: none; position: absolute; left: calc(100% + 80px); top: 50%; transform: translateY(-50%); font-family: 'Strichpunkt Sans', Helvetica, Arial, sans-serif; font-size: 0.9rem; font-weight: 550; color: var(--paper); cursor: pointer; white-space: nowrap; pointer-events: auto; padding: 10px;" });
+  zoomProjectLabel = el("div", { class: "lightbox-project-label", style: "display: none; position: absolute; left: calc(100% + 80px); top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.8rem; font-weight: 550; line-height: 1.4; color: var(--muted); cursor: pointer; white-space: nowrap; pointer-events: auto; padding: 10px;" });
   zoomActiveFrame.appendChild(zoomActiveImg);
   zoomActiveFrame.appendChild(zoomProjectLabel);
   makeZoomResizable(zoomActiveFrame, zoomActiveImg);
@@ -2965,6 +2965,16 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       }
       zoomProjectLabel.innerText = labelName;
       zoomProjectLabel.style.display = "block";
+      // Di fianco alla foto (a destra); su telefono non c'è spazio di lato, quindi sotto la foto
+      if (window.innerWidth <= MOBILE_BREAKPOINT) {
+        zoomProjectLabel.style.left = "0";
+        zoomProjectLabel.style.top = "calc(100% + 4px)";
+        zoomProjectLabel.style.transform = "none";
+      } else {
+        zoomProjectLabel.style.left = "calc(100% + 80px)";
+        zoomProjectLabel.style.top = "50%";
+        zoomProjectLabel.style.transform = "translateY(-50%)";
+      }
       
       // Simula hover css via js perché è l'unico punto in cui lo gestiamo
       zoomProjectLabel.onmouseenter = () => zoomProjectLabel.style.opacity = "0.7";
@@ -5094,7 +5104,9 @@ function openAllPhotosIndex() {
   closeBtn.addEventListener("click", closeIndex);
 }
 
-const ARCHIVE_PAGES_STORE_KEY = "site-archive-pages-v2";
+// "v3": l'archivio è ora un elenco verticale di parole (prima erano sparse in pagina con una posizione ciascuna).
+// Un vecchio elenco "v2" rimasto salvato in qualche browser non deve coprire quello nuovo.
+const ARCHIVE_PAGES_STORE_KEY = "site-archive-pages-v3";
 
 // Le parole/foto dell'archivio ricordano il percorso del file a cui sono legate. Se il file nel frattempo ha cambiato
 // cartella o maiuscole (es. "images/lines/2 hill.JPG" → "images/boudaries/2 hill.JPG"), il collegamento si rompeva e
@@ -5191,106 +5203,108 @@ function renderArchivePagesMode(param) {
   app.classList.add("has-fixed-bars");
   app.classList.add("is-archive");
   
-  const figure = el("figure", { class: "photo", style: "position: relative; width: 100%; height: 100vh; display: block;" });
-  
+  // Le parole sono un elenco verticale (come la lista della home), allineato al bordo sinistro del titolo "core archive".
+  // Se esistono anche foto sparse (vecchio modo di usare l'archivio) restano come prima, sopra l'elenco.
+  const hasLooseImages = page.images.some((i) => i.type !== "word" && i.type !== "break");
+  const figure = el("figure", { class: "photo archive-figure", style: `position: relative; width: 100%; display: block; padding: 0; text-align: left;${hasLooseImages ? " min-height: 100vh;" : ""}` });
+  const list = el("ul", { class: "archive-list" });
+  figure.appendChild(list);
+  const listRows = []; // { item } nell'ordine in cui compaiono: serve a riordinare
+
   const mappedArchiveImages = ARCHIVE.images.map((img, i) => ({ ...img, _index: i }));
   const poolImages = applyImageOverrides("archive", "archive", mappedArchiveImages);
-  
-  // Render images/words on this page
-  page.images.forEach((item) => {
-    if (item.type === "word") {
-      const wordEl = el("div", { class: "archive-word", style: "font-family: var(--mono); font-weight: normal; line-height: 1; position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; outline: none; white-space: nowrap;" }, item.text);
-      
+
+  // Una riga dell'elenco: una parola (didascalia di una foto) oppure uno spazio vuoto tra un gruppo e l'altro
+  const buildRow = (item) => {
+    const isBreak = item.type === "break";
+    const li = el("li", { class: isBreak ? "archive-row archive-break" : "archive-row" });
+    listRows.push({ item });
+
+    if (isBreak) {
+      li.appendChild(el("span", { class: "archive-break-label" }, "spazio"));
+    } else {
+      const wordEl = el("span", { class: "archive-word" }, item.text);
+      const frame = el("div", { class: "archive-word-frame" }, [wordEl]);
+      li.appendChild(frame);
+
       if (isEditMode()) {
         wordEl.contentEditable = "true";
+        wordEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); wordEl.blur(); } });
         wordEl.addEventListener("blur", () => {
-           item.text = wordEl.innerText.trim() || "Parola";
-           wordEl.innerText = item.text;
-           saveArchivePages(pages);
+          item.text = wordEl.innerText.replace(/\s+/g, " ").trim() || "Parola";
+          wordEl.innerText = item.text;
+          saveArchivePages(pages);
         });
-        wordEl.addEventListener("pointerdown", (e) => e.stopPropagation());
       }
-      
-      const frame = el("div", { class: "photo-frame is-word", style: "pointer-events: auto; position: relative;" }, [wordEl]);
-      const frameWrapper = el("div", { class: "photo-wrapper", style: "position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none;" }, [frame]);
-      
-      const updateFontSize = () => {
-         if (frame.style.width === "auto" || frame.style.width === "") {
-            wordEl.style.fontSize = "16px";
-            return;
-         }
-         const rect = frame.getBoundingClientRect();
-         if (rect.width === 0) return;
-         const textLen = Math.max(1, wordEl.innerText.trim().length);
-         wordEl.style.fontSize = `${rect.width / (textLen * 0.6)}px`;
-      };
-      
-      if (isEditMode()) {
-        wordEl.addEventListener("input", updateFontSize);
-      }
-      
-      const sizeKeyPrefix = galleryKey;
-      
-      const ro = new ResizeObserver(() => {
-         updateFontSize();
-      });
-      ro.observe(frame);
-      resizeObservers.push(ro);
 
-      resizeObservers.push(
-        makeResizable(
-          frame,
-          `${sizeKeyPrefix}.size.${item.uid}`,
-          { width: "auto", height: "auto" }
-        )
-      );
-      
-      makeMovableFree(frame, `${sizeKeyPrefix}.pos.${item.uid}`, "Trascina per spostare la parola", {
-        defaultOffset: { x: 0, y: 0 }
-      });
-      
-      const linkBtn = el("button", { type: "button", class: "photo-link-btn", title: "Collega a un'immagine dell'archivio" }, "🔗");
+      // Foto collegata: invisibile, serve solo come punto di partenza dell'ingrandimento (la foto "esce" dalla parola)
+      let poolImg = null;
+      let src = null;
+      if (item.linkedImageSrc) {
+        src = item.linkedImageSrc;
+        poolImg = { linkTo: item.linkedImageLinkTo };
+      } else if (item.linkedImageIndex != null) {
+        poolImg = poolImages[item.linkedImageIndex];
+        if (poolImg) src = resolveImageSrc("archive", item.linkedImageIndex, poolImg);
+      }
+      if (src) {
+        const hiddenImg = el("img", { class: "hidden-link-img", src: src, style: "position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: -1;" });
+        frame.appendChild(hiddenImg);
+        // Accanto alla foto ingrandita compare il progetto a cui appartiene (cliccandolo si apre quel progetto)
+        const project = archiveImageProject(src, poolImg && poolImg.linkTo, item.linkedImageProject);
+        makeZoomable(frame, hiddenImg, project ? `project/${project.slug}` : null, `${galleryKey}.zoom.${item.uid}`, poolImg && poolImg.zoomBox);
+        frame.classList.add("is-linked");
+      }
+
+      const linkBtn = el("button", { type: "button", class: "archive-link-btn", title: "Collega a una foto" }, "🔗");
       linkBtn.addEventListener("click", (e) => {
         e.preventDefault(); e.stopPropagation();
         if (!isEditMode()) return;
         showArchivePoolModal(page, pages, "link", (selectedImg) => {
           item.linkedImageSrc = selectedImg.src;
           item.linkedImageLinkTo = selectedImg.linkTo;
+          const chosen = archiveImageProject(selectedImg.src, selectedImg.linkTo);
+          if (chosen) item.linkedImageProject = chosen.slug;
+          else delete item.linkedImageProject;
           saveArchivePages(pages);
           renderRoute();
         });
       });
-      
-      const deleteBtn = el("button", { type: "button", class: "photo-delete-btn", title: "Rimuovi parola" }, "×");
-      deleteBtn.addEventListener("click", (e) => {
-        e.preventDefault(); e.stopPropagation();
-        if (!isEditMode()) return;
-        if (!confirm("Rimuovere questa parola?")) return;
-        page.images = page.images.filter(i => i.uid !== item.uid);
+      li.appendChild(linkBtn);
+    }
+
+    const deleteBtn = el("button", { type: "button", class: "home-word-delete-btn", title: isBreak ? "Togli questo spazio" : "Togli questa parola" }, "×");
+    deleteBtn.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!isEditMode()) return;
+      if (!isBreak && !confirm("Togliere questa parola dalla pagina?")) return;
+      page.images = page.images.filter((i) => i.uid !== item.uid);
+      saveArchivePages(pages);
+      renderRoute();
+    });
+    li.appendChild(deleteBtn);
+    list.appendChild(li);
+
+    // Si riordina con la stessa maniglia blu ⠿ della lista in home
+    makeReorderable(li, {
+      container: list,
+      axis: "y",
+      onReorder: (from, to) => {
+        const order = listRows.map((row) => row.item);
+        const [moved] = order.splice(from, 1);
+        order.splice(to, 0, moved);
+        const others = page.images.filter((i) => i.type !== "word" && i.type !== "break");
+        page.images = order.concat(others);
         saveArchivePages(pages);
-        frameWrapper.remove();
-      });
-      
-      frame.appendChild(deleteBtn);
-      frame.appendChild(linkBtn);
-      figure.appendChild(frameWrapper);
-      
-      if (item.linkedImageSrc != null || item.linkedImageIndex != null) {
-          let poolImg, src;
-          if (item.linkedImageSrc) {
-              src = item.linkedImageSrc;
-              poolImg = { linkTo: item.linkedImageLinkTo };
-          } else {
-              poolImg = poolImages[item.linkedImageIndex];
-              if (poolImg) src = resolveImageSrc("archive", item.linkedImageIndex, poolImg);
-          }
-          if (src) {
-              const hiddenImg = el("img", { class: "hidden-link-img", src: src, style: "position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: -1;" });
-              frame.appendChild(hiddenImg);
-              makeZoomable(frame, hiddenImg, poolImg.linkTo, `${galleryKey}.zoom.${item.uid}`, poolImg.zoomBox);
-              frame.style.cursor = "pointer";
-          }
-      }
+        renderRoute();
+      },
+    });
+  };
+
+  // Render images/words on this page
+  page.images.forEach((item) => {
+    if (item.type === "word" || item.type === "break") {
+      buildRow(item);
       return;
     }
 
@@ -5399,20 +5413,24 @@ function renderArchivePagesMode(param) {
   
   const pageControls = el("div", { class: "archive-page-controls", style: "position: fixed; bottom: 20px; left: 20px; z-index: 1000; display: " + (isEditMode() ? "flex" : "none") + "; gap: 8px; flex-direction: column;" });
   
-  const addPhotoBtn = el("button", { style: "padding: 8px; background: #2b7a4b; color: #f4f0e6; border-radius: 4px; border: none; cursor: pointer; font-family: monospace;" }, "+ Foto da Archivio");
-  addPhotoBtn.addEventListener("click", () => showArchivePoolModal(page, pages));
-
   const addWordBtn = el("button", { style: "padding: 8px; background: #7a5d2b; color: #f4f0e6; border-radius: 4px; border: none; cursor: pointer; font-family: monospace;" }, "+ Parola");
   addWordBtn.addEventListener("click", () => {
     page.images.push({ type: "word", text: "Nuova parola", uid: `uid_${Date.now()}_${Math.floor(Math.random()*10000)}` });
     saveArchivePages(pages);
     renderRoute();
   });
+
+  const addBreakBtn = el("button", { style: "padding: 8px; background: #2b547a; color: #f4f0e6; border-radius: 4px; border: none; cursor: pointer; font-family: monospace;" }, "+ Spazio");
+  addBreakBtn.addEventListener("click", () => {
+    page.images.push({ type: "break", uid: `uid_${Date.now()}_${Math.floor(Math.random()*10000)}` });
+    saveArchivePages(pages);
+    renderRoute();
+  });
   
   const oldArchiveBtn = el("a", { href: "#/old-archive", target: "_blank", style: "padding: 8px; background: #9c6e26; color: #f4f0e6; border-radius: 4px; border: none; cursor: pointer; font-family: monospace; text-decoration: none; text-align: center;" }, "Guarda Vecchio Archivio");
   
-  pageControls.appendChild(addPhotoBtn);
   pageControls.appendChild(addWordBtn);
+  pageControls.appendChild(addBreakBtn);
   pageControls.appendChild(oldArchiveBtn);
   
   const toggleControls = () => {
@@ -5442,12 +5460,57 @@ function renderArchivePagesMode(param) {
   app.appendChild(spacerBottom);
   
   const alignmentGuides = setupAlignmentGuides(app, galleryKey);
-  
+
+  // L'elenco parte esattamente sotto il titolo "core archive" e il suo bordo sinistro coincide con quello del titolo
+  // (misurato sul titolo vero, dovunque sia: cambia con lo schermo e se lo sposti in modalità modifica).
+  // Il distacco dal titolo è quello della home tra l'intestazione e la lista.
+  const titleEl = topbar.querySelector(".topbar-title");
+  const alignList = () => {
+    if (!titleEl || !titleEl.isConnected) return;
+    list.style.marginLeft = "0px";
+    list.style.marginTop = "0px";
+    const t = titleEl.getBoundingClientRect();
+    const l = list.getBoundingClientRect();
+    list.style.marginLeft = `${Math.round((t.left - l.left) * 100) / 100}px`;
+    list.style.marginTop = `${Math.max(0, Math.round((t.bottom + 68 - l.top) * 100) / 100)}px`;
+  };
+  alignList();
+  window.addEventListener("resize", alignList);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignList);
+
   currentTeardown = () => {
     window.removeEventListener("edit-mode-toggled", toggleControls);
+    window.removeEventListener("resize", alignList);
     alignmentGuides.teardown();
     resizeObservers.forEach(o => o.disconnect());
   };
+}
+
+// A quale progetto appartiene la foto collegata a una parola (è il nome che compare accanto alla foto ingrandita).
+// In ordine: il progetto salvato insieme alla parola; la cartella della foto (images/<progetto>/...); una copia
+// identica della foto dentro un progetto (le foto della cartella "core archive" sono quasi tutte copie); lo stesso nome
+// di file in un progetto; il nome del file che comincia col nome del progetto (stills-10.jpg); infine il collegamento
+// "project/..." scelto a mano. Restituisce il progetto (da PROJECTS) oppure null.
+function archiveImageProject(src, linkTo, savedSlug) {
+  const bySlug = (slug) => PROJECTS.find((project) => project.slug === slug) || null;
+  if (savedSlug && bySlug(savedSlug)) return bySlug(savedSlug);
+  const clean = String(src || "").replace(/\?.*$/, "");
+  const lower = clean.toLowerCase();
+  const folder = clean.split("/")[1];
+  if (bySlug(folder)) return bySlug(folder);
+  const twins = window.IMAGE_TWINS || {};
+  const twinKey = Object.keys(twins).find((key) => key.toLowerCase() === lower);
+  if (twinKey) {
+    const twinProject = bySlug(String(twins[twinKey]).split("/")[1]);
+    if (twinProject) return twinProject;
+  }
+  const fileName = lower.split("/").pop();
+  const sameName = PROJECTS.filter((project) => (project.images || []).some((img) => img.src && img.src.toLowerCase().split("/").pop() === fileName));
+  if (sameName.length === 1) return sameName[0];
+  const prefix = fileName.replace(/\.[a-z0-9]+$/, "").replace(/-\d+(-\d+)?$/, "");
+  if (bySlug(prefix)) return bySlug(prefix);
+  if (linkTo && /^project\//.test(linkTo)) return bySlug(linkTo.split("/")[1]);
+  return null;
 }
 
 function showArchivePoolModal(page, pages, mode = "add", onSelect = null) {
