@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 38,
-  "updatedAt": "2026-10-11T20:23:32.427Z",
+  "version": 61,
+  "updatedAt": "2026-10-11T20:31:26.281Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -296,7 +296,13 @@ window.SITE_STATE = {
     "site-caption-overrides-v1": {
       "project.homes.captionText.1": "upper-middle class",
       "project.stills.captionText.0": "J. Kronester Bavaria Tea Set",
-      "project.stills.captionText.2": "furla messenger bag"
+      "project.stills.captionText.2": "furla messenger bag",
+      "project.mediality.captionText.0": "holiday",
+      "project.mediality.captionText.1": "folds, morocco",
+      "project.mediality.captionText.2": "bristol",
+      "project.mediality.captionText.3": "leather arm",
+      "project.mediality.captionText.4": "pp",
+      "project.mediality.captionText.5": "tourette"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -385,6 +391,22 @@ window.SITE_STATE = {
       "archive.page.page_1.size.uid_1791301098682_8677": {
         "width": "50.8828px",
         "height": ""
+      },
+      "project.mediality.image.2": {
+        "width": "614.141px",
+        "height": ""
+      },
+      "project.mediality.zoom.3": {
+        "width": "1519.8px",
+        "height": "986.157px"
+      },
+      "project.mediality.image.5": {
+        "width": "557.624px",
+        "height": ""
+      },
+      "archive.page.page_1.zoom.uid_1791286888502_1417": {
+        "width": "1519.8px",
+        "height": "665.341px"
       }
     },
     "site-size-overrides-v1:m": {},
