@@ -261,14 +261,36 @@ async function handleRenameProject(req, res) {
   }
 }
 
+// Dove, in "code" (content.js), si trova la foto con questo "src": cerca la voce "src: ..." di un progetto, senza
+// badare a maiuscole/minuscole, e NON scambia per foto i collegamenti delle parole del Core Archive ("linkedImageSrc")
+// né un'altra riga che contiene lo stesso percorso (prima si prendeva la prima riga qualsiasi che lo conteneva, e le
+// misure finivano dentro una parola dell'archivio, dove nessuno le legge). Restituisce -1 se la foto non c'è.
+function findImageSrcIndex(code, src) {
+  const wanted = String(src || '');
+  if (!wanted) return -1;
+  const lowerCode = code.toLowerCase();
+  const needle = wanted.toLowerCase();
+  if (lowerCode.length !== code.length) return -1; // (maiuscole speciali che cambiano lunghezza: non si rischia)
+  let from = 0;
+  for (;;) {
+    const at = lowerCode.indexOf(needle, from);
+    if (at < 0) return -1;
+    const before = code.slice(Math.max(0, at - 24), at);
+    const after = code.charAt(at + needle.length);
+    if (/(^|[^A-Za-z0-9_])src["']?\s*:\s*["']$/.test(before) && (after === '"' || after === "'")) return at;
+    from = at + 1;
+  }
+}
+
 // Salvataggio automatico delle proprietà delle immagini (es. zoomBox, width, offset)
 async function handleSaveImageProps(req, res) {
   try {
     const { src, props } = JSON.parse(await readBody(req));
     const contentPath = path.join(ROOT, 'js', 'content.js');
     let code = fs.readFileSync(contentPath, 'utf8');
+    let updated = false; // vero solo se la foto è stata trovata in content.js e la sua voce riscritta
 
-    const srcIndex = code.indexOf(`"${src}"`) !== -1 ? code.indexOf(`"${src}"`) : code.indexOf(`'${src}'`);
+    const srcIndex = findImageSrcIndex(code, src);
     if (srcIndex !== -1) {
       let startIdx = srcIndex;
       let braceCount = 0;
@@ -328,9 +350,17 @@ async function handleSaveImageProps(req, res) {
         }
 
         code = code.substring(0, startIdx) + objStr + code.substring(endIdx + 1);
+        updated = true;
       }
     }
 
+    // Se la foto non sta in content.js non si scrive niente e NON si risponde "salvato" (senza "timestamp" il sito non
+    // mostra il segno verde): prima rispondeva sempre di sì, anche quando non aveva scritto nulla.
+    if (!updated) {
+      console.log(`[--] ${String(src).split('/').pop()}: non c'è in content.js, nessuna modifica`);
+      sendJson(res, 200, { success: true, updated: false });
+      return;
+    }
     fs.writeFileSync(contentPath, code);
 
     if (props.zoomBox && props.zoomBox.width) {
@@ -338,7 +368,7 @@ async function handleSaveImageProps(req, res) {
     } else {
       console.log(`[OK] content.js aggiornato su disco alle ${timeLabel()}`);
     }
-    sendJson(res, 200, { success: true, timestamp: timeLabel() });
+    sendJson(res, 200, { success: true, updated: true, timestamp: timeLabel() });
   } catch (err) {
     console.error('Errore salvataggio image props:', err);
     sendJson(res, 500, { success: false, error: err.message });

@@ -829,16 +829,18 @@ body.edit-mode .grid-btn {
   cursor: zoom-out;
 }
 
-/* Il nome del progetto accanto alla foto ingrandita (es. "beach"): lo STESSO carattere dei nomi nella lista della
-   home — stessa famiglia, grandezza, peso, interlinea e spessore (lo spessore arriva da body, vedi --sans-stroke).
-   Cambia solo il colore, tenue, perché qui lo sfondo è scuro. Posizione e distanza dalla foto: vedi makeZoomable. */
+/* Il nome del progetto accanto alla foto ingrandita (es. "Beach"): lo STESSO carattere dei nomi nella lista della
+   home — stessa famiglia, grandezza, peso, interlinea e spessore (lo spessore arriva da body, vedi --sans-stroke) —
+   e scritto come in home (maiuscola compresa). Colore: quello del "foglio" beige della pagina (--paper), l'unico
+   che qui, sullo sfondo scuro, sta al posto dell'inchiostro scuro dei nomi della home.
+   Posizione e distanza dalla foto: vedi makeZoomable. */
 .lightbox-project-label {
   font-family: inherit;
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.5;
   letter-spacing: normal;
-  color: var(--muted);
+  color: var(--paper);
 }
 
 /* Su telefono i nomi della home sono 2pt più piccoli (vedi sopra): anche questo. */
