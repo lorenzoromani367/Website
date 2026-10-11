@@ -620,14 +620,23 @@ body.edit-mode .description-editable {
   left: -30px;
 }
 
+/* La scrittura delle didascalie delle foto: la STESSA identica per le parole del Core Archive (che sono didascalie
+   di foto del sito) e per il nome del progetto accanto alla foto ingrandita. Un solo posto da cambiare. */
+.caption-input,
+.archive-word,
+.lightbox-project-label {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 550;
+  line-height: 1.4;
+  letter-spacing: normal;
+  color: var(--muted);
+}
+
 .caption-input {
   display: block;
   width: 100%;
   padding: 8px 12px;
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  font-weight: 550;
-  color: var(--muted);
   text-align: center;
   background: transparent;
   border: 1px solid transparent;
@@ -636,7 +645,6 @@ body.edit-mode .description-editable {
   pointer-events: none;
   resize: none;
   overflow: hidden;
-  line-height: 1.4;
   /* fuori da edit mode non è cliccabile/selezionabile */
 }
 
@@ -1772,4 +1780,113 @@ body.edit-mode .photo-caption-text {
 @keyframes marquee-horizontal-scroll {
   0%   { transform: translate3d(0, 0, 0); }
   100% { transform: translate3d(-100%, 0, 0); }
+}
+
+/* -------------------------------------------------------------------------
+   CORE ARCHIVE — elenco verticale di parole (ognuna è la didascalia di una foto del sito).
+   Il bordo sinistro dell'elenco coincide con quello del titolo "core archive" (lo mette JS, vedi
+   alignList in app.js); righe alla stessa distanza della lista in home; gruppi separati da una riga vuota.
+   ------------------------------------------------------------------------- */
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  max-width: 100%;
+}
+
+.archive-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+}
+
+.archive-word-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.archive-word {
+  display: inline-block;
+  white-space: nowrap;
+  text-align: left;
+  outline: none;
+  /* niente spazio prima della prima lettera: deve cominciare esattamente dove comincia il titolo */
+  padding: 0;
+}
+
+/* Una parola collegata a una foto si apre con un clic: stesso gesto e stessa reazione dei nomi nella home */
+.archive-word-frame.is-linked {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.archive-word-frame.is-linked:hover {
+  opacity: 0.55;
+}
+
+body.edit-mode .archive-word-frame.is-linked {
+  cursor: text;
+}
+
+body.edit-mode .archive-word-frame.is-linked:hover {
+  opacity: 1;
+}
+
+body.edit-mode .archive-word {
+  cursor: text;
+  color: var(--ink);
+  background: rgba(138, 135, 124, 0.1);
+  box-shadow: 0 0 0 1px var(--muted);
+  border-radius: 3px;
+}
+
+body.edit-mode .archive-word:focus {
+  background: rgba(138, 59, 43, 0.08);
+  box-shadow: 0 0 0 1px #8a3b2b;
+}
+
+.archive-link-btn {
+  display: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid var(--paper);
+  background: #2b547a;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+body.edit-mode .archive-link-btn {
+  display: block;
+}
+
+body.edit-mode .archive-link-btn:hover {
+  background: #386f99;
+}
+
+/* Riga vuota tra due gruppi: invisibile per i visitatori, in modalità modifica si vede e si può togliere o spostare */
+.archive-break-label {
+  display: none;
+}
+
+body.edit-mode .archive-break-label {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  border: 1px dashed var(--muted);
+  border-radius: 3px;
+  padding: 0 8px;
+  line-height: 1.6;
+}
+
+body.edit-mode .archive-row {
+  gap: 8px;
 }

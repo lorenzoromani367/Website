@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = __dirname;
 const IMAGES_DIR = path.join(ROOT, 'images');
@@ -93,22 +94,27 @@ function readImageSize(buf) {
   return null;
 }
 
-const sizeCache = new Map(); // percorso -> { mtimeMs, size, dims } (così il controllo ogni secondo non rilegge le foto)
+const sizeCache = new Map(); // percorso -> { mtimeMs, size, dims, hash } (così il controllo ogni secondo non rilegge le foto)
 
-function sizeOf(relPath) {
+// Misure della foto + "impronta" del contenuto (due file con la stessa impronta sono la stessa foto, copiata)
+function infoOf(relPath) {
   const abs = path.join(ROOT, relPath);
   const stat = fs.statSync(abs);
   const cached = sizeCache.get(relPath);
-  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.dims;
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached;
   let dims = null;
+  let hash = null;
   try {
-    dims = readImageSize(fs.readFileSync(abs));
+    const buf = fs.readFileSync(abs);
+    hash = crypto.createHash('sha1').update(buf).digest('hex');
+    dims = readImageSize(buf);
   } catch (e) {
     dims = null;
   }
   if (dims && !(dims[0] > 0 && dims[1] > 0)) dims = null;
-  sizeCache.set(relPath, { mtimeMs: stat.mtimeMs, size: stat.size, dims });
-  return dims;
+  const entry = { mtimeMs: stat.mtimeMs, size: stat.size, dims, hash };
+  sizeCache.set(relPath, entry);
+  return entry;
 }
 
 function listTexts() {
@@ -120,9 +126,20 @@ function render() {
   // sort() semplice: stesso ordine su Mac, Windows e sul server di pubblicazione
   const images = scanDirectory(IMAGES_DIR).sort();
   const sizeLines = [];
+  const byHash = new Map();
   images.forEach((rel) => {
-    const dims = sizeOf(rel);
-    if (dims) sizeLines.push(`  ${JSON.stringify(rel)}: [${dims[0]}, ${dims[1]}]`);
+    const info = infoOf(rel);
+    if (info.dims) sizeLines.push(`  ${JSON.stringify(rel)}: [${info.dims[0]}, ${info.dims[1]}]`);
+    if (info.hash) byHash.set(info.hash, (byHash.get(info.hash) || []).concat(rel));
+  });
+  // Le foto della cartella "core archive" sono quasi sempre copie di foto di un progetto: per ognuna, dov'è la copia
+  // (serve a sapere a quale progetto appartiene una foto dell'archivio).
+  const twinLines = [];
+  images.forEach((rel) => {
+    if (rel.split('/')[1] !== 'core archive') return;
+    const info = infoOf(rel);
+    const other = (byHash.get(info.hash) || []).find((candidate) => candidate.split('/')[1] !== 'core archive');
+    if (other) twinLines.push(`  ${JSON.stringify(rel)}: ${JSON.stringify(other)}`);
   });
   const texts = listTexts();
   return {
@@ -131,6 +148,7 @@ function render() {
       '// Generato automaticamente da watch_images.js (o dal server locale) — non modificare a mano.\n' +
       `window.DYNAMIC_IMAGES = ${JSON.stringify(images, null, 2)};\n` +
       `window.IMAGE_SIZES = {\n${sizeLines.join(',\n')}\n};\n` +
+      `window.IMAGE_TWINS = {\n${twinLines.join(',\n')}\n};\n` +
       `window.DYNAMIC_TEXTS = ${JSON.stringify(texts)};\n`,
   };
 }

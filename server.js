@@ -345,20 +345,51 @@ async function handleSaveImageProps(req, res) {
   }
 }
 
+// Dentro "codice", sostituisce il blocco "pages: [...]" di ARCHIVE con le pagine nuove (se manca, lo aggiunge alla fine
+// di ARCHIVE). Scorre le parentesi tenendo conto dei testi tra virgolette, così non si confonde con "[" o "]" scritti nei testi.
+// (Prima si cercava con un'espressione che pretendeva una "description" dentro ARCHIVE: non c'è, quindi non trovava mai nulla
+// e content.js non veniva mai aggiornato.)
+function replaceArchivePages(code, pages) {
+  const archiveAt = code.indexOf('const ARCHIVE');
+  if (archiveAt < 0) throw new Error('ARCHIVE non trovato in content.js');
+  const pagesString = JSON.stringify(pages, null, 4).replace(/^/gm, '  ').trim();
+
+  const closingOf = (from, open, close) => {
+    let depth = 0;
+    let inString = null;
+    for (let i = from; i < code.length; i++) {
+      const c = code[i];
+      if (inString) {
+        if (c === '\\') i++;
+        else if (c === inString) inString = null;
+        continue;
+      }
+      if (c === '"' || c === "'" || c === '`') { inString = c; continue; }
+      if (c === open) depth++;
+      if (c === close) { depth--; if (depth === 0) return i; }
+    }
+    throw new Error('parentesi non bilanciate in content.js');
+  };
+
+  const pagesAt = code.indexOf('pages:', archiveAt);
+  if (pagesAt >= 0) {
+    const arrayEnd = closingOf(code.indexOf('[', pagesAt), '[', ']');
+    return code.slice(0, pagesAt) + 'pages: ' + pagesString + code.slice(arrayEnd + 1);
+  }
+  const objectEnd = closingOf(code.indexOf('{', archiveAt), '{', '}');
+  const before = code.slice(0, objectEnd).replace(/,?\s*$/, ',');
+  return before + '\n  pages: ' + pagesString + '\n' + code.slice(objectEnd);
+}
+
 // Salvataggio completo della struttura a pagine dell'archivio (ARCHIVE.pages)
 async function handleSaveArchivePages(req, res) {
   try {
     const { pages } = JSON.parse(await readBody(req));
+    if (!Array.isArray(pages)) throw new Error('Pagine non valide');
     const contentPath = path.join(ROOT, 'js', 'content.js');
-    let contentCode = fs.readFileSync(contentPath, 'utf8');
-
-    const pagesString = JSON.stringify(pages, null, 4).replace(/^/gm, '  ');
-    // Trova l'oggetto ARCHIVE e sostituisce il blocco pages (o le immagini, se non ha pages)
-    const regex = /(const\s+ARCHIVE\s*=\s*\{[\s\S]*?title:\s*["']core archive["'][\s\S]*?description:\s*\[[\s\S]*?\]\s*,?)([\s\S]*?)(\};)/;
-    if (regex.test(contentCode)) {
-      contentCode = contentCode.replace(regex, (m, head, rest, tail) => `${head}\n  pages: ${pagesString.trim()}\n${tail}`);
-      fs.writeFileSync(contentPath, contentCode);
-    }
+    const updated = replaceArchivePages(fs.readFileSync(contentPath, 'utf8'), pages);
+    new Function(updated); // content.js deve restare un file valido: se no, non si scrive nulla
+    fs.writeFileSync(contentPath, updated);
 
     console.log(`[OK] content.js aggiornato su disco alle ${timeLabel()}`);
     sendJson(res, 200, { success: true, timestamp: timeLabel() });
