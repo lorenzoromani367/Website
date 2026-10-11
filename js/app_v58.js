@@ -2307,6 +2307,11 @@ function openExportPanel() {
 const fetchPromises = [];
     imagesToReset.forEach(img => {
        const src = img._src || img.src;
+       // Pagina di un progetto: anche la misura dell'ingrandimento salvata per ciascuna foto (vale in tutto il sito) torna quella di partenza
+       if (src && !isArchive && !isSimple) {
+         const photo = zoomPhoto(src);
+         if (photo) clearSizeOverride(photo.key);
+       }
        if (src) {
          fetchPromises.push(
            fetch('/api/save-image-props', {
@@ -2413,50 +2418,29 @@ function ensureEditModeUI() {
         console.error("Failed to save archive pages", e);
       }
 
-      // Save image properties (like zoomBox) to server
+      // Le misure degli ingrandimenti finiscono anche in content.js ("zoomBox" di ogni foto di un progetto). Per ogni
+      // foto vale la misura salvata PER LA FOTO (la più recente, ovunque l'hai regolata: pagina del progetto o Core
+      // Archive); se non c'è, quella salvata per la pagina del progetto.
       const sizeOverrides = loadSizeOverrides();
-      for (const [key, size] of Object.entries(sizeOverrides)) {
-        let src = null;
-        
-        const zoomMatch = key.match(/^project\.(.+)\.zoom\.(\d+)$/);
-        if (zoomMatch) {
-          const slug = zoomMatch[1];
-          const idx = parseInt(zoomMatch[2], 10);
-          const proj = PROJECTS.find(p => p.slug === slug);
-          if (proj && proj.images && proj.images[idx]) {
-            src = proj.images[idx]._src || proj.images[idx].src;
-          }
-        }
-        
-        const archiveMatch = key.match(/^archive\.zoom\.(\d+)$/);
-        if (archiveMatch) {
-          const idx = parseInt(archiveMatch[1], 10);
-          if (typeof ARCHIVE !== "undefined" && ARCHIVE.images && ARCHIVE.images[idx]) {
-            src = ARCHIVE.images[idx]._src || ARCHIVE.images[idx].src;
-          }
-        }
-        
-        const simpleMatch = key.match(/^simple\.(.+)\.zoom\.(\d+)$/);
-        if (simpleMatch) {
-          // Non c'è un posto centralizzato globale per cercare facilmente la galleria simple,
-          // ma tipicamente il src in app.js per simple galleries è disponibile da getLinkOverride o simili.
-          // Se servisse, si aggiungerà in futuro: per ora logghiamo.
-          console.warn("Auto-save for simple gallery zoomBox not yet implemented, please use manual export");
-        }
-        
-        if (src) {
-          try {
-            await fetch('/api/save-image-props', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ src, props: { zoomBox: size } })
-            });
-          } catch (e) {
-            console.error("Failed to save image props for", src, e);
-          }
+      const zoomBoxesToWrite = [];
+      PROJECTS.forEach((project) => (project.images || []).forEach((image, idx) => {
+        if (!image.src) return;
+        const photo = zoomPhoto(image.src);
+        const size = (photo && sizeOverrides[photo.key]) || sizeOverrides[`project.${project.slug}.zoom.${idx}`];
+        if (size) zoomBoxesToWrite.push({ src: image.src, size });
+      }));
+      for (const { src, size } of zoomBoxesToWrite) {
+        try {
+          await fetch('/api/save-image-props', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ src, props: { zoomBox: size } })
+          });
+        } catch (e) {
+          console.error("Failed to save image props for", src, e);
         }
       }
-      
+
       toggle.disabled = false;
       toggle.textContent = "⇲";
     } else {
@@ -2748,6 +2732,54 @@ const LIGHTBOX_SIZE_KEY = "lightbox.image";
 const LIGHTBOX_LABEL_GAP = 120;
 const LIGHTBOX_LABEL_GAP_MOBILE = 14;
 
+/* ---- La misura dell'ingrandimento è UNA PER FOTO, uguale in tutto il sito ----
+   La decidi tu trascinando le maniglie sulla foto ingrandita (in modalità modifica). Si salva sotto il nome della
+   FOTO e non della pagina da cui l'hai ingrandita: la stessa foto si apre quindi uguale nella pagina del progetto e
+   nel Core Archive. Una copia della foto nella cartella "core archive" conta come la foto del progetto (vedi
+   IMAGE_TWINS in images-data.js). */
+
+// "images/beach/beach-1.jpg" a partire da un indirizzo qualsiasi (assoluto, con "?v=...", con "%20" per gli spazi)
+function photoPathOf(src) {
+  if (!src || /^data:/i.test(String(src))) return null;
+  let path = String(src).replace(/[?#].*$/, "");
+  try { path = decodeURIComponent(path); } catch (e) { /* resta com'è */ }
+  const at = path.toLowerCase().indexOf("images/");
+  return at >= 0 ? path.slice(at) : null;
+}
+
+let imageTwinsByLowerPath = null;
+// La foto "vera" dietro un indirizzo: { src: percorso com'è in content.js, key: nome con cui si salva la sua misura,
+// ownKey: lo stesso nome ma per il file così com'è (se è una copia nel "core archive", non quello del progetto) }.
+// ownKey serve solo a non perdere una misura salvata quando l'elenco delle copie non c'era ancora (computer non
+// riavviato dopo l'aggiornamento): si cerca sotto "key", poi sotto "ownKey".
+function zoomPhoto(src) {
+  const path = photoPathOf(src);
+  if (!path) return null;
+  if (!imageTwinsByLowerPath) {
+    imageTwinsByLowerPath = new Map(Object.entries(window.IMAGE_TWINS || {}).map(([copy, original]) => [copy.toLowerCase(), original]));
+  }
+  const original = imageTwinsByLowerPath.get(path.toLowerCase()) || path;
+  return { src: original, key: `zoom:${original.toLowerCase()}`, ownKey: `zoom:${path.toLowerCase()}` };
+}
+
+// Dove sta il bordo sinistro di una foto ingrandita larga "width": al centro dello schermo, oppure (Core Archive) al
+// centro dei tre quarti di sinistra — e mai più a sinistra del margine, se la foto è più larga di quello spazio.
+function zoomLeftFor(width) {
+  const area = zoomActiveArea;
+  return area ? Math.max(area.left, area.left + (area.width - width) / 2) : (window.innerWidth - width) / 2;
+}
+
+// La voce di content.js (un progetto) che ha quella foto, se c'è: ha la misura salvata nel file ("zoomBox")
+function contentImageOf(photo) {
+  if (!photo || typeof PROJECTS === "undefined") return null;
+  const wanted = photo.src.toLowerCase();
+  for (const project of PROJECTS) {
+    const found = (project.images || []).find((image) => image.src && String(image.src).toLowerCase() === wanted);
+    if (found) return found;
+  }
+  return null;
+}
+
 let zoomBackdrop = null;
 // Il riquadro che vola (posizione/dimensione/transform) è un <div> a parte
 // dall'<img> vero e proprio: un <img> è un elemento "replaced" e non può
@@ -2758,6 +2790,9 @@ let zoomActiveImg = null;
 let zoomProjectLabel = null;
 let zoomActiveSizeKey = null;
 let zoomActiveOriginalSrc = null;
+let zoomActivePhoto = null;   // la foto aperta ora: { src, key, ownKey } (vedi zoomPhoto), o null se non è una foto del sito
+let zoomActiveArea = null;    // Core Archive: { left, width, maxWidth } = lo spazio in cui sta la foto; null = centrata nello schermo
+let zoomActiveBaseBox = null; // la misura salvata con cui si è aperta: da qui si ricalcola quella nuova
 
 // La funzione di chiusura dell'apertura IN CORSO: il click su sfondo/
 // immagine (agganciato una volta sola, vedi ensureZoomElements) deve
@@ -2792,12 +2827,27 @@ function makeZoomResizable(frame, img) {
       frame.appendChild(hud);
     }
 
+    // Il riquadro in basso a destra della foto: la misura mentre trascini, poi l'esito del salvataggio
+    const showHud = (text, background, hideAfterMs) => {
+      hud.textContent = text;
+      hud.style.background = background;
+      // Sotto l'angolo in basso a destra della foto; se la foto arriva quasi al bordo dello schermo (foto alte), lì
+      // sotto non si vedrebbe: allora dentro la foto, sempre nell'angolo in basso a destra.
+      const noRoomBelow = frame.getBoundingClientRect().bottom + 45 > window.innerHeight;
+      hud.style.bottom = noRoomBelow ? "8px" : "-35px";
+      hud.style.right = noRoomBelow ? "8px" : "0";
+      hud.style.opacity = "1";
+      if (hideAfterMs) setTimeout(() => { hud.style.opacity = "0"; }, hideAfterMs);
+    };
+
     function onPointerMove(e) {
       if (!dragStart || e.pointerId !== dragStart.pointerId) return;
       const dx = e.clientX - dragStart.startX;
       const isLeft = extraClass && extraClass.includes("resize-handle-top");
       const effectiveDx = isLeft ? -dx : dx;
-      const maxW = window.innerWidth - 96;
+      // Core Archive: la foto può crescere finché a destra resta posto per il nome del progetto
+      const area = zoomActiveArea;
+      const maxW = area ? area.maxWidth : window.innerWidth - 96;
       const maxH = window.innerHeight - 96;
       let newWidth = Math.max(120, Math.min(maxW, dragStart.startWidth + effectiveDx));
       let newHeight = newWidth / dragStart.aspectRatio;
@@ -2807,40 +2857,40 @@ function makeZoomResizable(frame, img) {
       }
       frame.style.width = `${newWidth}px`;
       frame.style.height = `${newHeight}px`;
-      // Ricentrata sullo schermo a ogni trascinamento: il riquadro ingrandito
-      // è sempre centrato, quindi cambiarne solo larghezza/altezza senza
-      // aggiornare anche left/top lo farebbe "scivolare" verso l'angolo in
-      // basso a destra a ogni resize.
-      frame.style.left = `${(window.innerWidth - newWidth) / 2}px`;
+      // Ricentrata a ogni trascinamento nello STESSO punto in cui si è aperta: al centro dello schermo, oppure (Core
+      // Archive) al centro del suo spazio. Cambiare solo larghezza/altezza senza aggiornare anche left/top la farebbe
+      // "scivolare" verso l'angolo in basso a destra a ogni resize.
+      frame.style.left = `${zoomLeftFor(newWidth)}px`;
       frame.style.top = `${(window.innerHeight - newHeight) / 2}px`;
-      
-      hud.textContent = `${Math.round(newWidth)}px`;
-      hud.style.opacity = "1";
-      hud.style.background = "rgba(0,0,0,0.8)";
+
+      showHud(`${Math.round(newWidth)} × ${Math.round(newHeight)} px`, "rgba(0,0,0,0.8)");
     }
 
-    function onPointerUp(e) {
+    async function onPointerUp(e) {
       if (!dragStart || e.pointerId !== dragStart.pointerId) return;
       handle.classList.remove("is-dragging");
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
+      const drag = dragStart;
+      dragStart = null;
 
-      // Aggiorniamo la "scatola" globale salvata in modo intelligente:
-      // se l'utente restringe una foto verticale (cambiandone l'altezza come vincolo principale),
-      // aggiorniamo l'altezza massima (maxH) ma non distruggiamo la larghezza massima (maxW),
-      // altrimenti la prossima foto orizzontale apparirebbe piccolissima.
+      // Quello che si salva è un INGOMBRO MASSIMO (la foto ci sta dentro con le sue proporzioni, mai stirata):
+      // se si cambia una foto verticale (l'altezza è il vincolo principale) si aggiorna l'altezza massima ma non si
+      // distrugge la larghezza massima, altrimenti la prossima foto orizzontale apparirebbe piccolissima. Si parte
+      // dalla misura con cui la foto si è aperta (la sua, quella salvata per lei in tutto il sito).
       const activeKey = zoomActiveSizeKey || LIGHTBOX_SIZE_KEY;
-      const currentSaved = loadSizeOverrides()[activeKey] || {};
+      const photo = zoomActivePhoto;
+      const base = zoomActiveBaseBox || {};
       const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
       const defaultMaxW = isMobile ? window.innerWidth - 16 : window.innerWidth * 0.85;
       const defaultMaxH = isMobile ? window.innerHeight - 16 : window.innerHeight * 0.82;
-      
-      let newMaxW = currentSaved.width ? parseFloat(currentSaved.width) : defaultMaxW;
-      let newMaxH = currentSaved.height ? parseFloat(currentSaved.height) : defaultMaxH;
+
+      let newMaxW = base.width ? parseFloat(base.width) : defaultMaxW;
+      let newMaxH = base.height ? parseFloat(base.height) : defaultMaxH;
 
       const w = parseFloat(frame.style.width);
       const h = parseFloat(frame.style.height);
-      const ratio = dragStart.aspectRatio;
+      const ratio = drag.aspectRatio;
 
       if (ratio >= 1) {
         newMaxW = w;
@@ -2849,35 +2899,34 @@ function makeZoomResizable(frame, img) {
         newMaxH = h;
         if (w > newMaxW) newMaxW = w;
       }
+      const size = { width: `${newMaxW}px`, height: `${newMaxH}px` };
 
-      saveSizeOverride(activeKey, { width: `${newMaxW}px`, height: `${newMaxH}px` });
-      
-      if (zoomActiveOriginalSrc) {
-        hud.textContent = "Salvataggio...";
-        fetch('/api/save-image-props', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ src: zoomActiveOriginalSrc, props: { zoomBox: { width: `${newMaxW}px`, height: `${newMaxH}px` } } })
-        }).then(async res => {
-          const data = await res.json();
-          if (data.success) {
-            hud.style.background = "#2b7a4b";
-            hud.textContent = `[OK] Salvato su content.js (${Math.round(newMaxW)}px)`;
-            console.log(`[OK] Zoom foto aggiornato a ${Math.round(newMaxW)}px su disco`);
-            setTimeout(() => { hud.style.opacity = "0"; }, 1500);
-          } else {
-            throw new Error("Success false");
-          }
-        }).catch(e => {
-          console.error("Auto-save failed", e);
-          hud.style.background = "#dc2626";
-          hud.textContent = "Errore salvataggio";
-          setTimeout(() => { hud.style.opacity = "0"; }, 1500);
-        });
-      } else {
-        setTimeout(() => { hud.style.opacity = "0"; }, 1500);
+      // 1) Nello stato del sito, sotto il nome della FOTO (vale in tutto il sito) e, come prima, sotto quello di questo punto.
+      saveSizeOverride(activeKey, size);
+      if (photo) {
+        saveSizeOverride(photo.key, size);
+        if (photo.ownKey !== photo.key) saveSizeOverride(photo.ownKey, size);
       }
-      dragStart = null;
+      zoomActiveBaseBox = size;
+      showHud("Salvataggio...", "rgba(0,0,0,0.8)");
+
+      // 2) Su disco: lo stato (js/site-state.js) e, se la foto sta in content.js, anche la sua misura lì ("zoomBox").
+      const contentImage = photo ? contentImageOf(photo) : null;
+      const writeContent = contentImage
+        ? fetch("/api/save-image-props", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ src: contentImage.src, props: { zoomBox: size } }),
+          }).then((res) => res.ok).catch((err) => { console.error("Salvataggio in content.js non riuscito", err); return false; })
+        : Promise.resolve(true);
+      const [stateOnDisk, contentOk] = await Promise.all([siteStore.flushNow(), writeContent]);
+
+      // Il segno verde compare SOLO se la misura è davvero finita su disco
+      if (stateOnDisk && contentOk) {
+        showHud(`✓ Salvato (${Math.round(w)} × ${Math.round(h)} px)`, "#2b7a4b", 2500);
+      } else {
+        showHud("✗ NON salvato su disco", "#dc2626", 6000);
+      }
     }
 
     handle.addEventListener("pointerdown", (e) => {
@@ -2947,6 +2996,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     
     zoomActiveSizeKey = sizeKey;
     zoomActiveOriginalSrc = img.getAttribute("src") || img.src;
+    zoomActivePhoto = zoomPhoto(zoomActiveOriginalSrc);
 
     // 1. FIRST: coordinate della miniatura nello slider.
     const firstRect = img.getBoundingClientRect();
@@ -2965,7 +3015,8 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       let labelName = linkTo;
       if (parts[0] === "project" && parts[1]) {
         const proj = PROJECTS.find(p => p.slug === parts[1]);
-        if (proj) labelName = proj.name.toLowerCase();
+        // Il nome com'è scritto nella home (con la maiuscola)
+        if (proj) labelName = proj.name;
       } else if (linkTo === "archive") {
         labelName = ARCHIVE.title.toLowerCase();
       }
@@ -3015,40 +3066,47 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     // automatico (impossibile riaprire una foto in quella posizione).
     activeFrame.classList.add("is-active");
 
-    // 2. LAST: dimensione finale, centrata sullo schermo. Se in precedenza
-    // hai già trascinato le maniglie di resize (su QUALSIASI foto — la
-    // misura è unica e condivisa, vedi LIGHTBOX_SIZE_KEY), quella misura
-    // sostituisce il solito 85%/82% dello schermo come INGOMBRO MASSIMO:
-    // le proporzioni restano comunque quelle NATURALI di QUESTA foto (mai
-    // deformata), semplicemente adattata (in scala, non stirata) dentro
-    // l'ingombro scelto — così una foto orizzontale e una verticale
-    // condividono la stessa misura "sentita" senza mai apparire distorte,
-    // e soprattutto lo scaleX/scaleY del volo FLIP restano sempre uguali
-    // fra loro (nessuno "schiacciamento" a metà animazione, lo stesso bug
-    // già risolto per il testo).
+    // 2. LAST: dimensione finale, centrata sullo schermo. La misura che hai
+    // scelto TU per questa foto trascinando le maniglie (una per foto, uguale
+    // in tutto il sito: vedi zoomPhoto) sostituisce il solito 85%/82% dello
+    // schermo come INGOMBRO MASSIMO: le proporzioni restano comunque quelle
+    // NATURALI della foto (mai deformata), semplicemente adattata (in scala,
+    // non stirata) dentro l'ingombro scelto — e lo scaleX/scaleY del volo
+    // FLIP restano sempre uguali fra loro (nessuno "schiacciamento" a metà
+    // animazione, lo stesso bug già risolto per il testo).
+    // Ordine di ricerca della misura: quella salvata per la foto (ovunque la
+    // si sia regolata) → quella salvata per questo punto del sito → quella
+    // scritta in content.js per questa foto.
     const activeKey = sizeKey || LIGHTBOX_SIZE_KEY;
     const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
-    // Core Archive su computer: la foto sta nei TRE QUARTI di sinistra dello schermo (con il margine di lato e
-    // lo spazio per il nome del progetto che le sta accanto, a destra) e, dentro quello spazio, è grande quanto
-    // può, sempre con le sue proporzioni vere. Non si usa l'ingrandimento salvato per la pagina del progetto
-    // (zoomBox): era pensato per quella pagina e per alcune foto è molto più piccolo dello schermo, quindi
-    // nell'archivio le schiacciava.
-    const isArchiveZoom = Boolean(sizeKey && sizeKey.startsWith("archive.")) && !isMobile;
-    const savedSize = isArchiveZoom ? null : (loadSizeOverrides()[activeKey] || zoomBox);
+    const sizeOverrides = loadSizeOverrides();
+    const contentImage = zoomActivePhoto ? contentImageOf(zoomActivePhoto) : null;
+    const photoSize = zoomActivePhoto && (sizeOverrides[zoomActivePhoto.key] || sizeOverrides[zoomActivePhoto.ownKey]);
+    const savedSize = photoSize || sizeOverrides[activeKey] || zoomBox || (contentImage && contentImage.zoomBox) || null;
+    zoomActiveBaseBox = savedSize;
     const defaultMaxW = isMobile ? window.innerWidth - 16 : window.innerWidth * 0.85;
     const defaultMaxH = isMobile ? window.innerHeight - 16 : window.innerHeight * 0.82;
     // Su mobile ignora del tutto eventuali ridimensionamenti salvati (che
     // impedirebbero di andare a filo), forzando il default 100% - 16px.
     let maxW = savedSize && savedSize.width && !isMobile ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : defaultMaxW;
     const maxH = savedSize && savedSize.height && !isMobile ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : defaultMaxH;
-    let archiveArea = null; // { left, width }: lo spazio in cui sta la foto dell'archivio
+    // Core Archive su computer: la foto sta nei TRE QUARTI di sinistra dello schermo (con il margine di lato), centrata
+    // lì dentro, e il nome del progetto le sta accanto, a destra. La SUA misura (quella che hai scelto tu) vale anche
+    // se è più grande dei tre quarti: la foto può allargarsi finché a destra c'è ancora posto per il nome (in quel
+    // caso parte dal margine sinistro); oltre si riduce quanto basta, sempre con le sue proporzioni. Senza una misura
+    // scelta da te, la foto sta nei tre quarti.
+    const isArchiveZoom = Boolean(sizeKey && sizeKey.startsWith("archive.")) && !isMobile;
+    let archiveArea = null; // { left, width, maxWidth }: lo spazio ideale e il massimo in cui sta la foto dell'archivio
     if (isArchiveZoom) {
       const edge = Math.max(24, window.innerWidth * 0.03);
       const labelRoom = linkTo ? LIGHTBOX_LABEL_GAP + zoomProjectLabel.offsetWidth : 0; // quanto serve alla scritta, a destra della foto
-      const areaRight = Math.min(window.innerWidth * 0.75, window.innerWidth - edge - labelRoom);
-      archiveArea = { left: edge, width: Math.max(160, areaRight - edge) };
-      maxW = archiveArea.width;
+      const hardRight = window.innerWidth - edge - labelRoom;               // fin qui può arrivare il bordo destro della foto
+      const areaRight = Math.min(window.innerWidth * 0.75, hardRight);      // lo spazio ideale: i tre quarti di sinistra
+      archiveArea = { left: edge, width: Math.max(160, areaRight - edge), maxWidth: Math.max(160, hardRight - edge) };
+      const hasChosenSize = Boolean(savedSize && savedSize.width && savedSize.height);
+      maxW = Math.min(maxW, hasChosenSize ? archiveArea.maxWidth : archiveArea.width);
     }
+    zoomActiveArea = archiveArea;
     // Le proporzioni vere della foto si conoscono anche prima che sia arrivata (misure lette in images-data.js):
     // senza questo, un clic su una foto ancora in arrivo usava la forma della parola (larga e bassa) e la schiacciava.
     const knownSize = knownImageSize(img.getAttribute("src") || img.src);
@@ -3062,8 +3120,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       targetH = maxH;
       targetW = targetH * ratio;
     }
-    let targetX = (window.innerWidth - targetW) / 2;
-    if (archiveArea) targetX = archiveArea.left + (archiveArea.width - targetW) / 2;
+    const targetX = zoomLeftFor(targetW);
     const targetY = (window.innerHeight - targetH) / 2;
 
     activeImg.src = img.src;
