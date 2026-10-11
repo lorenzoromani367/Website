@@ -2831,6 +2831,11 @@ function makeZoomResizable(frame, img) {
     const showHud = (text, background, hideAfterMs) => {
       hud.textContent = text;
       hud.style.background = background;
+      // Sotto l'angolo in basso a destra della foto; se la foto arriva quasi al bordo dello schermo (foto alte), lì
+      // sotto non si vedrebbe: allora dentro la foto, sempre nell'angolo in basso a destra.
+      const noRoomBelow = frame.getBoundingClientRect().bottom + 45 > window.innerHeight;
+      hud.style.bottom = noRoomBelow ? "8px" : "-35px";
+      hud.style.right = noRoomBelow ? "8px" : "0";
       hud.style.opacity = "1";
       if (hideAfterMs) setTimeout(() => { hud.style.opacity = "0"; }, hideAfterMs);
     };
