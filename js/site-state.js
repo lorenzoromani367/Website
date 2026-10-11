@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 37,
-  "updatedAt": "2026-10-11T20:21:45.309Z",
+  "version": 38,
+  "updatedAt": "2026-10-11T20:23:32.427Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -169,7 +169,7 @@ window.SITE_STATE = {
             "type": "word",
             "text": "jewelry, rabat",
             "uid": "uid_1791300744404_2431",
-            "linkedImageSrc": "images/core archive/stills-10.jpg",
+            "linkedImageSrc": "images/stills/stills-10.jpg",
             "linkedImageLinkTo": "archive",
             "linkedImageProject": "stills"
           },
@@ -252,14 +252,16 @@ window.SITE_STATE = {
             "type": "word",
             "text": "porcelain",
             "uid": "uid_1791304323352_9307",
-            "linkedImageSrc": "images/core archive/stills-5.jpg",
+            "linkedImageSrc": "images/stills/stills-5.jpg",
             "linkedImageLinkTo": "archive",
             "linkedImageProject": "stills"
           },
           {
             "type": "word",
             "text": "tourette",
-            "uid": "uid_1791600000002_4002"
+            "uid": "uid_1791600000002_4002",
+            "linkedImageSrc": "images/core archive/tourette.JPG",
+            "linkedImageLinkTo": "archive"
           },
           {
             "type": "break",
