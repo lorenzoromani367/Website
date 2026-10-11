@@ -2743,6 +2743,11 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock, pageTitle = "", 
 // ingrandisco".
 const LIGHTBOX_SIZE_KEY = "lightbox.image";
 
+// Distanza (px) tra la foto ingrandita e il nome del progetto che le sta accanto: di lato su computer, sotto su
+// telefono. (La scritta ha anche un margine interno di 10px, che si somma.)
+const LIGHTBOX_LABEL_GAP = 120;
+const LIGHTBOX_LABEL_GAP_MOBILE = 14;
+
 let zoomBackdrop = null;
 // Il riquadro che vola (posizione/dimensione/transform) è un <div> a parte
 // dall'<img> vero e proprio: un <img> è un elemento "replaced" e non può
@@ -2921,7 +2926,8 @@ function ensureZoomElements() {
   zoomActiveFrame.id = "lightboxActiveFrame";
   zoomActiveImg = el("img", { class: "lightbox-active-img" });
   zoomActiveImg.id = "lightboxActiveImg";
-  zoomProjectLabel = el("div", { class: "lightbox-project-label", style: "display: none; position: absolute; left: calc(100% + 80px); top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.8rem; font-weight: 550; line-height: 1.4; color: var(--muted); cursor: pointer; white-space: nowrap; pointer-events: auto; padding: 10px;" });
+  // Il carattere della scritta (come i nomi della home) sta nel foglio di stile: ".lightbox-project-label"
+  zoomProjectLabel = el("div", { class: "lightbox-project-label", style: `display: none; position: absolute; left: calc(100% + ${LIGHTBOX_LABEL_GAP}px); top: 50%; transform: translateY(-50%); cursor: pointer; white-space: nowrap; pointer-events: auto; padding: 10px;` });
   zoomActiveFrame.appendChild(zoomActiveImg);
   zoomActiveFrame.appendChild(zoomProjectLabel);
   makeZoomResizable(zoomActiveFrame, zoomActiveImg);
@@ -2968,10 +2974,10 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       // Di fianco alla foto (a destra); su telefono non c'è spazio di lato, quindi sotto la foto
       if (window.innerWidth <= MOBILE_BREAKPOINT) {
         zoomProjectLabel.style.left = "0";
-        zoomProjectLabel.style.top = "calc(100% + 4px)";
+        zoomProjectLabel.style.top = `calc(100% + ${LIGHTBOX_LABEL_GAP_MOBILE}px)`;
         zoomProjectLabel.style.transform = "none";
       } else {
-        zoomProjectLabel.style.left = "calc(100% + 80px)";
+        zoomProjectLabel.style.left = `calc(100% + ${LIGHTBOX_LABEL_GAP}px)`;
         zoomProjectLabel.style.top = "50%";
         zoomProjectLabel.style.transform = "translateY(-50%)";
       }
@@ -3021,15 +3027,34 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     // fra loro (nessuno "schiacciamento" a metà animazione, lo stesso bug
     // già risolto per il testo).
     const activeKey = sizeKey || LIGHTBOX_SIZE_KEY;
-    const savedSize = loadSizeOverrides()[activeKey] || zoomBox;
     const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+    // Core Archive su computer: la foto sta nei TRE QUARTI di sinistra dello schermo (con il margine di lato e
+    // lo spazio per il nome del progetto che le sta accanto, a destra) e, dentro quello spazio, è grande quanto
+    // può, sempre con le sue proporzioni vere. Non si usa l'ingrandimento salvato per la pagina del progetto
+    // (zoomBox): era pensato per quella pagina e per alcune foto è molto più piccolo dello schermo, quindi
+    // nell'archivio le schiacciava.
+    const isArchiveZoom = Boolean(sizeKey && sizeKey.startsWith("archive.")) && !isMobile;
+    const savedSize = isArchiveZoom ? null : (loadSizeOverrides()[activeKey] || zoomBox);
     const defaultMaxW = isMobile ? window.innerWidth - 16 : window.innerWidth * 0.85;
     const defaultMaxH = isMobile ? window.innerHeight - 16 : window.innerHeight * 0.82;
     // Su mobile ignora del tutto eventuali ridimensionamenti salvati (che
     // impedirebbero di andare a filo), forzando il default 100% - 16px.
-    const maxW = savedSize && savedSize.width && !isMobile ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : defaultMaxW;
+    let maxW = savedSize && savedSize.width && !isMobile ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : defaultMaxW;
     const maxH = savedSize && savedSize.height && !isMobile ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : defaultMaxH;
-    const ratio = (img.naturalWidth && img.naturalHeight) ? (img.naturalWidth / img.naturalHeight) : (firstRect.width / firstRect.height);
+    let archiveArea = null; // { left, width }: lo spazio in cui sta la foto dell'archivio
+    if (isArchiveZoom) {
+      const edge = Math.max(24, window.innerWidth * 0.03);
+      const labelRoom = linkTo ? LIGHTBOX_LABEL_GAP + zoomProjectLabel.offsetWidth : 0; // quanto serve alla scritta, a destra della foto
+      const areaRight = Math.min(window.innerWidth * 0.75, window.innerWidth - edge - labelRoom);
+      archiveArea = { left: edge, width: Math.max(160, areaRight - edge) };
+      maxW = archiveArea.width;
+    }
+    // Le proporzioni vere della foto si conoscono anche prima che sia arrivata (misure lette in images-data.js):
+    // senza questo, un clic su una foto ancora in arrivo usava la forma della parola (larga e bassa) e la schiacciava.
+    const knownSize = knownImageSize(img.getAttribute("src") || img.src);
+    const ratio = (img.naturalWidth && img.naturalHeight)
+      ? (img.naturalWidth / img.naturalHeight)
+      : (knownSize ? knownSize[0] / knownSize[1] : (firstRect.width / firstRect.height));
 
     let targetW = maxW;
     let targetH = targetW / ratio;
@@ -3038,10 +3063,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       targetW = targetH * ratio;
     }
     let targetX = (window.innerWidth - targetW) / 2;
-    if (sizeKey && sizeKey.startsWith("archive.") && !isMobile) {
-      targetX = (window.innerWidth / 2 - targetW) / 2;
-      if (targetX < 16) targetX = 16; // non incollato al bordo
-    }
+    if (archiveArea) targetX = archiveArea.left + (archiveArea.width - targetW) / 2;
     const targetY = (window.innerHeight - targetH) / 2;
 
     activeImg.src = img.src;
@@ -3471,6 +3493,26 @@ function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange, hideIndex
   return { topbar, resolvedIndexText };
 }
 
+// Il testo scorrevole è una striscia con due copie del testo una sotto l'altra, che scende in loop dentro il suo
+// riquadro (.description). Qui si misura, sulla pagina vera e a striscia ferma:
+//  - distance: di quanto deve scendere prima di ripetersi (dalla prima riga di una copia alla prima riga dell'altra);
+//  - startPos: il punto di partenza di OGNI testo scorrevole del sito: la prima riga del testo esattamente sul
+//    bordo alto del riquadro in cui scorre (prima partiva più in basso, dopo il margine interno del riquadro).
+// Si usano differenze tra rettangoli e non "offsetTop": quest'ultimo cambia da un browser all'altro e arrotonda ai pixel interi.
+function measureMarqueeLoop(box, track, content, clone) {
+  if (!clone.offsetHeight) return { distance: 0, startPos: 0 }; // seconda copia nascosta (modalità modifica): nessuno scorrimento
+  const savedTransform = track.style.transform;
+  track.style.transform = "none";
+  const firstLineTop = (node) => (node.firstElementChild || node).getBoundingClientRect().top;
+  const boxTop = box.getBoundingClientRect().top + box.clientTop;
+  const textOffset = firstLineTop(content) - boxTop; // dove si trova il testo quando la striscia è ferma
+  const distance = firstLineTop(clone) - firstLineTop(content);
+  track.style.transform = savedTransform;
+  if (!(distance > 0)) return { distance: 0, startPos: 0 };
+  // La striscia è spostata di (pos - distance): con pos = distance - textOffset la prima riga arriva a 0, cioè in cima.
+  return { distance, startPos: (((distance - textOffset) % distance) + distance) % distance };
+}
+
 function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav, galleryKey }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
@@ -3524,6 +3566,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const descBlock = el("div", { class: "description" }, [descTrack]);
 
   // Gestione Edit Mode dinamica
+  let restartMarquee = null; // assegnata più sotto, quando lo scorrimento esiste
   const updateDescEditable = () => {
     if (isEditMode()) {
       descContent.contentEditable = "true";
@@ -3538,7 +3581,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       descContent.style.cursor = "";
       secondCopyWrapper.style.display = "block";
       marqueeGap.style.display = "block";
-      // Il marquee riparte automaticamente al prossimo frame di requestAnimationFrame (perché updateMarquee è sempre in loop)
+      // Uscendo dalla modifica il testo può essere cambiato (e la seconda copia era nascosta): si rimisura e lo
+      // scorrimento riparte da capo, come quando si apre la pagina.
+      if (restartMarquee) restartMarquee();
     }
   };
   
@@ -3929,8 +3974,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let marqueeRafId = null;
   let marqueeHoverPaused = false;
   let marqueeJustDragged = false;
+  const marqueeBornAt = performance.now();
 
-  const measureMarqueeDistance = () => {
+  // "fromStart": il testo riparte dal suo punto di partenza (prima riga sul bordo alto del riquadro) invece di
+  // restare dov'era. Serve all'apertura della pagina e quando una misura cambia subito dopo (arriva il carattere).
+  const measureMarqueeDistance = (fromStart = false) => {
     const textHeight = descContent.offsetHeight;
     let gapHeight = MARQUEE_MIN_GAP; // Spazio minimo tra fine e inizio loop
     if (hasExplicitDescHeight) {
@@ -3943,9 +3991,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     }
     marqueeGap.style.height = `${gapHeight}px`;
 
-    // Calcoliamo la distanza sul wrapper della seconda copia
-    marqueeDistance = secondCopyWrapper.offsetTop;
-    marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
+    const loop = measureMarqueeLoop(descBlock, descTrack, descContent, secondCopyWrapper);
+    marqueeDistance = loop.distance;
+    marqueePos = fromStart || !marqueeDistance ? loop.startPos : marqueePos % marqueeDistance;
   };
   const applyMarqueeTransform = () => {
     if (isEditMode()) {
@@ -3965,16 +4013,22 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     }
     marqueeRafId = requestAnimationFrame(marqueeTick);
   };
-  measureMarqueeDistance();
+  measureMarqueeDistance(true);
   applyMarqueeTransform();
   marqueeRafId = requestAnimationFrame(marqueeTick);
+  restartMarquee = () => {
+    measureMarqueeDistance(true);
+    applyMarqueeTransform();
+  };
 
   descBlock.addEventListener("mouseenter", () => { marqueeHoverPaused = true; });
   descBlock.addEventListener("mouseleave", () => { marqueeHoverPaused = false; });
 
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(() => {
-      measureMarqueeDistance();
+      // Nei primi istanti la pagina non è ancora stata letta da nessuno: se il carattere arriva solo ora e le misure
+      // cambiano, si riparte dal punto giusto invece di restare a metà.
+      measureMarqueeDistance(performance.now() - marqueeBornAt < 3000 && !marqueeDragState);
       applyMarqueeTransform();
     });
   }
@@ -4425,6 +4479,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   currentTeardown = () => {
     alignmentGuides.teardown();
     window.removeEventListener("edit-mode-toggled", onEditModeToggled);
+    window.removeEventListener("edit-mode-toggled", updateDescEditable);
     document.removeEventListener("keydown", onKeyDown);
     clearTimeout(autoplayTimer);
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
@@ -4692,7 +4747,9 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
     let marqueeHoverPaused = false;
     let marqueeJustDragged = false;
 
-    const measureMarqueeDistance = () => {
+    const marqueeBornAt = performance.now();
+    // Stessa partenza di ogni altro testo scorrevole: prima riga sul bordo alto del riquadro (vedi measureMarqueeLoop).
+    const measureMarqueeDistance = (fromStart = false) => {
       const textHeight = descContent.offsetHeight;
       let gapHeight = MARQUEE_MIN_GAP;
       if (hasExplicitDescHeight) {
@@ -4703,8 +4760,9 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
       }
       marqueeGap.style.height = `${gapHeight}px`;
 
-      marqueeDistance = secondCopyWrapper.offsetTop;
-      marqueePos = marqueeDistance ? marqueePos % marqueeDistance : 0;
+      const loop = measureMarqueeLoop(descBlock, descTrack, descContent, secondCopyWrapper);
+      marqueeDistance = loop.distance;
+      marqueePos = fromStart || !marqueeDistance ? loop.startPos : marqueePos % marqueeDistance;
     };
     const applyMarqueeTransform = () => {
       descTrack.style.transform = `translate3d(0, ${marqueePos - marqueeDistance}px, 0)`;
@@ -4720,7 +4778,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
       }
       marqueeRafId = requestAnimationFrame(marqueeTick);
     };
-    measureMarqueeDistance();
+    measureMarqueeDistance(true);
     applyMarqueeTransform();
     marqueeRafId = requestAnimationFrame(marqueeTick);
 
@@ -4729,7 +4787,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
 
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(() => {
-        measureMarqueeDistance();
+        measureMarqueeDistance(performance.now() - marqueeBornAt < 3000 && !marqueeDragState);
         applyMarqueeTransform();
       });
     }
@@ -4740,16 +4798,16 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
       e.preventDefault();
       marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos, moved: false };
       descTrack.classList.add("is-dragging");
-      document.addEventListener("pointermove", onMarqueeDragMove);
-      document.addEventListener("pointerup", onMarqueeDragEnd);
+      document.addEventListener("pointermove", onMarqueeDragMoveHandler);
+      document.addEventListener("pointerup", onMarqueeDragEndHandler);
     });
-    
+
     // Assegnamo al volo le variabili così possono essere rimosse nel teardown
     var onMarqueeDragMoveHandler = function(e) {
       if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
       const dy = e.clientY - marqueeDragState.startY;
       if (Math.abs(dy) > 5) marqueeDragState.moved = true;
-      let next = (marqueeDragState.startPos - dy) % marqueeDistance;
+      let next = (marqueeDragState.startPos + dy) % marqueeDistance;
       if (next < 0) next += marqueeDistance;
       marqueePos = next;
       applyMarqueeTransform();
@@ -4763,9 +4821,6 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
       document.removeEventListener("pointermove", onMarqueeDragMoveHandler);
       document.removeEventListener("pointerup", onMarqueeDragEndHandler);
     };
-
-    document.addEventListener("pointermove", onMarqueeDragMoveHandler);
-    document.addEventListener("pointerup", onMarqueeDragEndHandler);
 
     if (allText && allText.length) {
       descBlock.addEventListener("click", () => {
@@ -5121,16 +5176,28 @@ function healArchivePaths(pages) {
     const name = path.split("/").pop().toLowerCase();
     byName.set(name, (byName.get(name) || []).concat(path));
   });
-  const find = (src) => {
+  // Ultima risorsa: la foto è stata RINOMINATA dentro la sua cartella (es. "lines-11.jpg" → "fields.jpg" in "core archive",
+  // dando alle foto il nome della parola). Se in quella cartella c'è un solo file che si chiama come la parola (anche al
+  // singolare/plurale), è quello. Vale solo per un collegamento già rotto: non cambia mai uno che funziona.
+  const plainName = (text) => String(text || "").toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "");
+  const renamedAsWord = (src, word) => {
+    const target = plainName(word);
+    if (!target) return null;
+    const folder = String(src).toLowerCase().split("/").slice(0, -1).join("/");
+    const names = [target, `${target}s`, target.replace(/s$/, "")];
+    const found = list.filter((path) => path.toLowerCase().split("/").slice(0, -1).join("/") === folder && names.includes(plainName(path.split("/").pop())));
+    return found.length === 1 ? found[0] : null;
+  };
+  const find = (src, word) => {
     const key = String(src).toLowerCase();
     if (actual.has(key)) return actual.get(key) !== src ? actual.get(key) : null; // solo le maiuscole erano diverse (o già a posto)
     const sameName = byName.get(key.split("/").pop()) || [];
-    return sameName.length === 1 ? sameName[0] : null;
+    return sameName.length === 1 ? sameName[0] : renamedAsWord(src, word);
   };
   pages.forEach((page) => (page.images || []).forEach((item) => {
     [["linkedImageSrc", "linkedImageLinkTo"], ["poolSrc", "linkTo"]].forEach(([srcField, linkField]) => {
       if (!item[srcField]) return;
-      const fixed = find(item[srcField]);
+      const fixed = find(item[srcField], item.text);
       if (!fixed) return;
       item[srcField] = fixed;
       const target = item[linkField];
