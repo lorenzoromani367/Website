@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { generate: generateImageList } = require('./watch_images.js');
+const { mergeState, sameState } = require('./js/state-merge.js');
 
 const PORT = Number(process.env.PORT) || 8000;
 const ROOT = __dirname;
@@ -105,19 +106,24 @@ function escapeRegExp(text) {
    tolte dalla home, parole dell'archivio...). Così lo vedono TUTTI i browser.
    --------------------------------------------------------------------------- */
 function readStateFile() {
+  let text;
   try {
-    const text = fs.readFileSync(STATE_FILE, 'utf8');
+    text = fs.readFileSync(STATE_FILE, 'utf8');
+  } catch (e) {
+    return { exists: false, corrupt: false, version: 0, data: {} }; // file assente: si riparte da uno stato vuoto
+  }
+  try {
     const match = text.match(/window\.SITE_STATE\s*=\s*([\s\S]*?);?\s*$/);
     if (match) {
       const parsed = JSON.parse(match[1]);
       if (parsed && typeof parsed === 'object') {
-        return { version: Number(parsed.version) || 0, data: parsed.data && typeof parsed.data === 'object' ? parsed.data : {} };
+        return { exists: true, corrupt: false, version: Number(parsed.version) || 0, data: parsed.data && typeof parsed.data === 'object' ? parsed.data : {} };
       }
     }
   } catch (e) {
-    /* file assente o illeggibile: si riparte da uno stato vuoto */
+    /* illeggibile (es. righe "<<<<<<<" lasciate da un conflitto in GitHub Desktop): vedi sotto */
   }
-  return { version: 0, data: {} };
+  return { exists: true, corrupt: true, version: 0, data: {} };
 }
 
 // Il browser salva ogni voce come testo; qui la si scrive come JSON leggibile
@@ -132,18 +138,27 @@ function encodeStateValue(raw) {
   return { __raw: raw };
 }
 
-// Stesso contenuto = stesso testo, qualunque sia l'ordine delle chiavi
-function canonicalJson(value) {
-  const sorted = (v) => {
-    if (Array.isArray(v)) return v.map(sorted);
-    if (v && typeof v === 'object') {
-      const out = {};
-      Object.keys(v).sort().forEach((k) => { out[k] = sorted(v[k]); });
-      return out;
+// L'inverso: il file su disco -> { chiave: "testo" }, come la memoria del browser
+function decodeStateValue(value) {
+  return value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.__raw === 'string' ? value.__raw : JSON.stringify(value);
+}
+function stateToStrings(data) {
+  const out = {};
+  Object.keys(data).forEach((key) => { out[key] = decodeStateValue(data[key]); });
+  return out;
+}
+
+// "Quante cose" ci sono nello stato (una posizione, una misura, una didascalia, una riga tolta...): serve solo
+// ad accorgersi se un salvataggio ne toglie molte tutte insieme.
+function countStateEntries(strings) {
+  return Object.keys(strings).reduce((sum, key) => {
+    try {
+      const value = JSON.parse(strings[key]);
+      return sum + (Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : 1);
+    } catch (e) {
+      return sum + 1;
     }
-    return v;
-  };
-  return JSON.stringify(sorted(value));
+  }, 0);
 }
 
 function writeStateFile(version, data) {
@@ -158,55 +173,119 @@ function writeStateFile(version, data) {
     '// Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica\n' +
     '// (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.\n' +
     `window.SITE_STATE = ${JSON.stringify(body, null, 2)};\n`;
-  backupStateFile();
   const tmp = STATE_FILE + '.tmp';
   fs.writeFileSync(tmp, text);
   fs.renameSync(tmp, STATE_FILE);
 }
 
-// Prima di ogni salvataggio, la versione precedente va in .state-backups/ (non viene pubblicata):
-// se un giorno una modifica sbagliata cancella qualcosa, si può recuperare. Si tengono le ultime 40.
-function backupStateFile() {
+// Copie di sicurezza in .state-backups/ (non viene pubblicata). Tre livelli, perché le sole "ultime 40" si
+// riempiono in pochi minuti di lavoro e non bastano se ci si accorge di un problema il giorno dopo:
+//   - ad ogni salvataggio, la versione precedente (si tengono le ultime 40);
+//   - una per giorno, nella cartella "giornaliere" (si tengono 90 giorni);
+//   - quando un salvataggio toglie molte voci tutte insieme, la versione di prima nella cartella
+//     "prima-di-togliere-molto" (si tengono le ultime 30), senza mai ruotare via insieme alle altre.
+function backupStateFile(kind) {
   try {
-    if (!fs.existsSync(STATE_FILE)) return;
+    if (!fs.existsSync(STATE_FILE)) return null;
     const dir = path.join(ROOT, '.state-backups');
-    fs.mkdirSync(dir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const prune = (folder, prefix, keep) => {
+      const names = fs.readdirSync(folder).filter((f) => f.startsWith(prefix)).sort();
+      names.slice(0, Math.max(0, names.length - keep)).forEach((f) => fs.unlinkSync(path.join(folder, f)));
+    };
+    if (kind === 'shrink' || kind === 'corrupt') {
+      const sub = path.join(dir, kind === 'shrink' ? 'prima-di-togliere-molto' : 'file-illeggibili');
+      fs.mkdirSync(sub, { recursive: true });
+      const target = path.join(sub, `site-state.${stamp}.js`);
+      fs.copyFileSync(STATE_FILE, target);
+      prune(sub, 'site-state.', 30);
+      return target;
+    }
+    fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(STATE_FILE, path.join(dir, `site-state.${stamp}.js`));
-    const old = fs.readdirSync(dir).filter((f) => f.startsWith('site-state.')).sort();
-    old.slice(0, Math.max(0, old.length - 40)).forEach((f) => fs.unlinkSync(path.join(dir, f)));
+    prune(dir, 'site-state.', 40);
+    const daily = path.join(dir, 'giornaliere');
+    fs.mkdirSync(daily, { recursive: true });
+    const todays = path.join(daily, `site-state.${new Date().toISOString().slice(0, 10)}.js`);
+    if (!fs.existsSync(todays)) {
+      fs.copyFileSync(STATE_FILE, todays);
+      prune(daily, 'site-state.', 90);
+    }
+    return null;
   } catch (e) {
     /* la copia di sicurezza non deve mai impedire il salvataggio vero */
+    return null;
   }
 }
 
 const STATE_KEY_RE = /^[A-Za-z0-9_.:\-]{1,200}$/;
 
+// Salva lo stato mandato da un browser FONDENDOLO con quello che c'è già su disco (vedi js/state-merge.js):
+// mai più "chi salva per ultimo cancella tutto il resto". Il browser manda
+//   state       = quello che ha ora,
+//   changes     = le voci cambiate QUI dall'ultima volta che ha letto/salvato il file, com'erano prima (null = non c'era):
+//                 tutte le altre voci sono rimaste uguali. Assente = il browser non lo sa: allora non si toglie nulla,
+//   baseVersion = la versione di quel file.
+// Risponde con lo stato fuso: il browser lo adotta, così tutti i browser convergono.
 async function handleSyncState(req, res) {
   try {
-    const { baseVersion, state } = JSON.parse(await readBody(req));
+    const { baseVersion, changes, base, state } = JSON.parse(await readBody(req));
     if (!state || typeof state !== 'object' || Array.isArray(state)) throw new Error('Stato non valido');
 
-    const incoming = {};
+    const local = {};
     for (const [key, value] of Object.entries(state)) {
       if (!STATE_KEY_RE.test(key) || typeof value !== 'string') throw new Error(`Voce non valida: ${key}`);
-      incoming[key] = encodeStateValue(value);
+      local[key] = value;
     }
+    // Com'era il file quando questo browser lo ha letto l'ultima volta ("base"), ricostruito da "changes"
+    // (oppure mandato per intero in "base")
+    let baseStrings = null;
+    if (changes && typeof changes === 'object' && !Array.isArray(changes)) {
+      baseStrings = {};
+      Object.keys(local).forEach((key) => { if (!Object.prototype.hasOwnProperty.call(changes, key)) baseStrings[key] = local[key]; });
+      Object.keys(changes).forEach((key) => { if (STATE_KEY_RE.test(key) && typeof changes[key] === 'string') baseStrings[key] = changes[key]; });
+    } else if (base && typeof base === 'object' && !Array.isArray(base)) {
+      baseStrings = {};
+      Object.keys(base).forEach((key) => { if (STATE_KEY_RE.test(key) && typeof base[key] === 'string') baseStrings[key] = base[key]; });
+    }
+    const clientVersion = Number(baseVersion) || 0;
 
     const current = readStateFile();
-    if ((Number(baseVersion) || 0) < current.version) {
-      // Un altro browser (o un'altra finestra) ha salvato più di recente: non lo sovrascriviamo.
-      sendJson(res, 409, { success: false, conflict: true, version: current.version });
-      return;
+    const remote = stateToStrings(current.data);
+    let merged;
+    let conflicts = [];
+    if (current.corrupt) {
+      // Il file su disco non si legge più: se lo si trattasse da vuoto, e poi lo si "fondesse", si perderebbe tutto.
+      // Si tiene una copia del file rovinato e si riparte dallo stato completo di questo browser.
+      const copy = backupStateFile('corrupt');
+      console.log(`[!] js/site-state.js non era leggibile (forse un conflitto in GitHub Desktop): lo ricreo da questo browser.${copy ? ' Copia del file rovinato: ' + path.relative(ROOT, copy) : ''}`);
+      merged = local;
+    } else if (clientVersion > current.version) {
+      // Il file su disco è PIÙ VECCHIO di quello che questo browser aveva già salvato (es. in GitHub Desktop è stato rimesso
+      // all'ultima versione pubblicata, o si sta usando un'altra copia della cartella): il browser ha il lavoro più recente,
+      // quindi vale quello (le voci che il file ha in più sono quelle che il browser aveva già tolto dopo quella versione).
+      merged = local;
+    } else {
+      ({ merged, conflicts } = mergeState(baseStrings || {}, local, remote, { prefer: 'local' }));
     }
 
-    const unchanged = canonicalJson(current.data) === canonicalJson(incoming);
-    const version = unchanged ? current.version : Math.max(current.version, Number(baseVersion) || 0) + 1;
+    const unchanged = !current.corrupt && sameState(merged, remote);
+    const version = unchanged ? current.version : Math.max(current.version, clientVersion) + 1;
     if (!unchanged) {
-      writeStateFile(version, incoming);
-      console.log(`[OK] modifiche salvate su disco alle ${timeLabel()} (js/site-state.js)`);
+      // Se questo salvataggio toglie molte voci tutte insieme, la versione di prima si conserva a parte
+      const before = countStateEntries(remote);
+      const after = countStateEntries(merged);
+      if (!current.corrupt && before - after >= 8 && after < before * 0.85) {
+        const copy = backupStateFile('shrink');
+        console.log(`[!] questo salvataggio toglie ${before - after} voci (da ${before} a ${after}). Se non era voluto, la versione di prima è in ${copy ? path.relative(ROOT, copy) : '.state-backups'}`);
+      }
+      if (!current.corrupt) backupStateFile();
+      const encoded = {};
+      Object.keys(merged).forEach((key) => { encoded[key] = encodeStateValue(merged[key]); });
+      writeStateFile(version, encoded);
+      console.log(`[OK] modifiche salvate su disco alle ${timeLabel()} (js/site-state.js)${conflicts.length ? ` — ${conflicts.length} voci cambiate in due posti insieme: tenuta l'ultima` : ''}`);
     }
-    sendJson(res, 200, { success: true, version, timestamp: timeLabel() });
+    sendJson(res, 200, { success: true, version, timestamp: timeLabel(), state: merged, conflicts: conflicts.length });
   } catch (err) {
     console.error('Errore salvataggio stato:', err.message);
     sendJson(res, 500, { success: false, error: err.message });
