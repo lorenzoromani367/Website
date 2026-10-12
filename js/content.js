@@ -363,14 +363,14 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "field",
                   "uid": "uid_1791300174629_6130",
-                  "linkedImageSrc": "images/core archive/lines-11.jpg",
+                  "linkedImageSrc": "images/core archive/fields.jpg",
                   "linkedImageProject": "boudaries"
               },
               {
                   "type": "word",
                   "text": "church",
                   "uid": "uid_1791300315480_7880",
-                  "linkedImageSrc": "images/core archive/lines-5.jpg",
+                  "linkedImageSrc": "images/core archive/church.jpg",
                   "linkedImageProject": "homes"
               },
               {
@@ -422,7 +422,7 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "tie, saint laurent",
+                  "text": "tie saint laurent",
                   "uid": "uid_1791300788906_8601",
                   "linkedImageSrc": "images/stills/stills-13.jpg",
                   "linkedImageLinkTo": "project/stills",
@@ -517,6 +517,42 @@ const ARCHIVE = {
                   "linkedImageSrc": "images/core archive/michelin-5.jpg",
                   "linkedImageLinkTo": "archive",
                   "linkedImageProject": "michelin"
+              },
+              {
+                  "type": "break",
+                  "uid": "uid_added_break_1"
+              },
+              {
+                  "type": "word",
+                  "text": "wine sales negotiations",
+                  "uid": "uid_added_wine",
+                  "linkedImageSrc": "images/homes/1 wine.jpg",
+                  "linkedImageLinkTo": "project/homes",
+                  "linkedImageProject": "homes"
+              },
+              {
+                  "type": "word",
+                  "text": "barns",
+                  "uid": "uid_added_barns",
+                  "linkedImageSrc": "images/homes/6 huts.jpg",
+                  "linkedImageLinkTo": "project/homes",
+                  "linkedImageProject": "homes"
+              },
+              {
+                  "type": "word",
+                  "text": "cigarettes",
+                  "uid": "uid_added_cigarettes",
+                  "linkedImageSrc": "images/recognition/recognition-5.jpg",
+                  "linkedImageLinkTo": "project/recognition",
+                  "linkedImageProject": "recognition"
+              },
+              {
+                  "type": "word",
+                  "text": "perfume bottle",
+                  "uid": "uid_added_perfume",
+                  "linkedImageSrc": "images/stills/stills-7.jpg",
+                  "linkedImageLinkTo": "project/stills",
+                  "linkedImageProject": "stills"
               }
           ]
       }
