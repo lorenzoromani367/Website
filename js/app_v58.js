@@ -3000,6 +3000,9 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
 
     // 1. FIRST: coordinate della miniatura nello slider.
     const firstRect = img.getBoundingClientRect();
+    // La galleria dietro si ferma dov'è (anche a metà di uno scorrimento) finché la foto è ingrandita e non è
+    // tornata al suo posto: vedi holdGallery in renderGallery.
+    window.dispatchEvent(new Event("zoom-opened"));
 
     // Nasconde temporaneamente l'originale (niente "doppione" per l'istante
     // in cui il clone appare esattamente sopra di lei).
@@ -3237,6 +3240,8 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
           img.style.opacity = "1";
         }
         zoomCurrentClose = null;
+        // La foto è tornata sulla miniatura: la galleria può riprendere
+        window.dispatchEvent(new Event("zoom-closed"));
       }, 550);
     };
   });
@@ -4152,6 +4157,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // presto dopo una transizione avviata mentre l'autoplay era in pausa).
   let lastTransitionStart = -Infinity;
   let isAnimating = false;
+  // Finché una foto è ingrandita la galleria dietro sta FERMA (vedi holdGallery più sotto): così, chiudendo,
+  // la foto torna esattamente sulla miniatura da cui è partita.
+  let lightboxHold = false;
+  let heldAnimations = [];
+  let heldAt = 0;
 
   function updateViewportHeight() {
     const activeFigure = figures[current];
@@ -4232,7 +4242,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function goTo(i, { user = false } = {}) {
     if (isAnimating) return;
     if (!figures.length) return;
-    
+    if (lightboxHold) return; // una foto è ingrandita: la galleria dietro sta ferma (vedi holdGallery)
+
     lastTransitionStart = performance.now();
     isAnimating = true;
     setTimeout(() => { isAnimating = false; }, 500); // 500ms di debounce per evitare doppi clic veloci, ma senza bloccare i 6s di transizione
@@ -4257,13 +4268,16 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       const clone = makePhotoClone(0);
       track.appendChild(clone);
       applyPosition({ position: n }); // un passo avanti normale, verso il clone appena aggiunto in coda
-      const timer = setTimeout(() => {
+      // "finish" è quello che si fa a transizione finita: lo tiene a parte anche holdGallery/releaseGallery, per
+      // poterlo rimandare se la galleria viene fermata a metà (una foto ingrandita).
+      const finish = () => {
         clone.remove();
         applyPosition({ instant: true, position: current }); // current = 0, identico al clone: nessun cambiamento visibile
         pendingWrapCleanup = null;
-      }, TRANSITION_MS);
+      };
       pendingWrapCleanup = {
-        timer,
+        finish,
+        timer: setTimeout(finish, TRANSITION_MS),
         cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
       };
     } else if (wrapBackward) {
@@ -4274,13 +4288,14 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       // senza transizione, così finora non è cambiato nulla di visibile.
       applyPosition({ instant: true, position: 1 });
       applyPosition({ position: 0 }); // un passo indietro normale, verso il clone appena aggiunto in testa
-      const timer = setTimeout(() => {
+      const finish = () => {
         clone.remove();
         applyPosition({ instant: true, position: current }); // current = n-1, identico al clone: nessun cambiamento visibile
         pendingWrapCleanup = null;
-      }, TRANSITION_MS);
+      };
       pendingWrapCleanup = {
-        timer,
+        finish,
+        timer: setTimeout(finish, TRANSITION_MS),
         cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
       };
     } else {
@@ -4292,7 +4307,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   function scheduleNext() {
     clearTimeout(autoplayTimer);
-    if (paused || figures.length < 2 || document.hidden || isEditMode()) return;
+    if (paused || lightboxHold || figures.length < 2 || document.hidden || isEditMode()) return;
     // Se una transizione è appena partita (autoplay, click dell'utente, o
     // swipe touch), la prossima non deve scattare dopo AUTOPLAY_DELAY
     // dall'INIZIO di questa, ma dopo che questa è FINITA di arrivare
@@ -4348,6 +4363,45 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     scheduleNext();
   }
 
+  // Una foto della galleria viene ingrandita (evento "zoom-opened", vedi makeZoomable): la galleria si ferma
+  // ESATTAMENTE dov'è — anche a metà di uno scorrimento — e non ne parte nessun altro. Prima continuava ad andare
+  // dietro la foto ingrandita: chiudendo, la miniatura si era spostata (o era uscita dallo schermo) e la foto non
+  // sapeva più dove tornare. Appena la foto è tornata al suo posto ("zoom-closed") la galleria riprende da dove
+  // era, con il tempo che le restava.
+  function holdGallery() {
+    if (lightboxHold) return;
+    lightboxHold = true;
+    heldAt = performance.now();
+    clearTimeout(autoplayTimer);
+    heldAnimations = [];
+    [track, viewport].forEach((node) => {
+      if (typeof node.getAnimations !== "function") return;
+      node.getAnimations().forEach((animation) => {
+        if (animation.playState === "running") {
+          animation.pause();
+          heldAnimations.push(animation);
+        }
+      });
+    });
+    // La pulizia che chiude un giro (clone della foto) non deve scattare mentre tutto è fermo
+    if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
+  }
+  function releaseGallery() {
+    if (!lightboxHold) return;
+    lightboxHold = false;
+    const heldFor = performance.now() - heldAt;
+    heldAnimations.forEach((animation) => { try { animation.play(); } catch (e) { /* già finita o annullata */ } });
+    heldAnimations = [];
+    lastTransitionStart += heldFor; // le transizioni fermate riprendono con il tempo che restava
+    if (pendingWrapCleanup) {
+      const remaining = Math.max(0, TRANSITION_MS - (performance.now() - lastTransitionStart));
+      pendingWrapCleanup.timer = setTimeout(pendingWrapCleanup.finish, remaining);
+    }
+    if (!paused) scheduleNext();
+  }
+  window.addEventListener("zoom-opened", holdGallery);
+  window.addEventListener("zoom-closed", releaseGallery);
+
   // Le frecce, su un progetto, portano al progetto precedente/successivo
   // invece di scorrere le foto della galleria corrente.
   if (projectNav) {
@@ -4360,6 +4414,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const onKeyDown = (e) => {
     if (["INPUT", "TEXTAREA"].includes(e.target.tagName) || e.target.isContentEditable) return;
+    if (lightboxHold) return; // foto ingrandita: le frecce non fanno scorrere la galleria dietro
     if (e.key === "ArrowLeft") {
       if (figures.length > 1) {
         goTo(current - 1, { user: true });
@@ -4537,6 +4592,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     alignmentGuides.teardown();
     window.removeEventListener("edit-mode-toggled", onEditModeToggled);
     window.removeEventListener("edit-mode-toggled", updateDescEditable);
+    window.removeEventListener("zoom-opened", holdGallery);
+    window.removeEventListener("zoom-closed", releaseGallery);
     document.removeEventListener("keydown", onKeyDown);
     clearTimeout(autoplayTimer);
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
