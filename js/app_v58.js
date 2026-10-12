@@ -85,7 +85,8 @@ const IS_LOCAL_SERVER = location.protocol !== "file:" && ["localhost", "127.0.0.
 
 const siteStore = (() => {
   const SYNC_VERSION_KEY = "osd-synced-version"; // quale versione di site-state.js ha già visto questo browser
-  const LEGACY_BACKUP_KEY = "osd-legacy-backup"; // copia di sicurezza delle modifiche vecchie, se vengono sostituite
+  const LEGACY_BACKUP_KEY = "osd-legacy-backup"; // copia di sicurezza delle voci di questo browser che in una fusione hanno perso
+  const BASE_KEY = "osd-synced-base"; // com'era il file su disco l'ultima volta che questo browser lo ha letto/salvato (per la fusione)
   // Segni di "operazione già fatta" delle vecchie migrazioni (vedi più sotto): chi parte da zero non ha nulla da migrare.
   const MIGRATION_FLAGS = [
     "fixed_single_pages_v2",
@@ -150,7 +151,10 @@ const siteStore = (() => {
         keys: () => Array.from(fallback.keys()),
       };
 
-  const syncEnabled = IS_LOCAL_SERVER && diskReady;
+  // Il server locale fa il lavoro vero (fonde con quello che c'è su disco); basta che ci sia. Se il file
+  // js/site-state.js non si legge (es. righe di conflitto lasciate da GitHub Desktop) il server lo ricrea da qui.
+  const syncEnabled = IS_LOCAL_SERVER;
+  const merger = window.SiteStateMerge || null; // js/state-merge.js: fusione a tre vie (vedi quel file)
   let dirty = false;
   let timer = null;
   let chain = Promise.resolve(true);
@@ -183,56 +187,102 @@ const siteStore = (() => {
     return ka.length === kb.length && ka.every((key, i) => key === kb[i] && canonical(a[key]) === canonical(b[key]));
   };
 
+  // "Com'era il file su disco l'ultima volta che questo browser lo ha letto o salvato" (con la sua versione):
+  // serve alla fusione per capire cosa è cambiato QUI e cosa è cambiato ALTROVE, voce per voce.
+  const loadBase = () => {
+    try {
+      const saved = JSON.parse(backend.get(BASE_KEY));
+      return saved && typeof saved === "object" && saved.state && typeof saved.state === "object" ? saved : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  const saveBase = (version, state) => {
+    try { backend.set(BASE_KEY, JSON.stringify({ version, state })); } catch (e) { /* memoria piena: la volta dopo si salva senza base (non si toglie nulla) */ }
+  };
+  // Fa diventare lo stato di questo browser esattamente "next" (scrive solo ciò che cambia)
+  const applyLocal = (next) => {
+    const current = collect();
+    Object.keys(current).forEach((key) => { if (!(key in next)) backend.del(key); });
+    Object.keys(next).forEach((key) => { if (current[key] !== next[key]) backend.set(key, next[key]); });
+  };
+
   function showSyncConflict() {
     let box = document.getElementById("sync-conflict-alarm");
     if (!box) {
       box = document.createElement("div");
       box.id = "sync-conflict-alarm";
       box.style.cssText = "position: fixed; left: 0; right: 0; bottom: 0; background: #a33; color: #fff; padding: 14px 20px; font-family: var(--mono); font-size: 13px; --sans-stroke: 0; z-index: 100000; text-align: center; cursor: pointer;";
-      box.textContent = "Un'altra finestra ha salvato modifiche più recenti: le ultime fatte qui NON sono state salvate. Clicca per ricaricare la pagina.";
+      box.textContent = "Il server del sito è una versione vecchia (riavvialo con Start_Website.command): le ultime modifiche fatte qui NON sono state salvate. Clicca per ricaricare la pagina.";
       box.addEventListener("click", () => location.reload());
       document.body.appendChild(box);
     }
     box.style.display = "block";
   }
 
+  // Dopo un salvataggio riuscito il server risponde con lo stato FUSO (il suo + le modifiche di tutti i browser):
+  // lo si adotta, tenendo le modifiche fatte qui mentre la richiesta viaggiava.
+  function adoptServerState(sent, data) {
+    try {
+      const serverState = data.state && typeof data.state === "object" ? data.state : sent; // un server vecchio non lo manda
+      let next = collect();
+      if (merger && data.state) {
+        next = merger.mergeState(sent, next, serverState, { prefer: "local" }).merged;
+        applyLocal(next);
+      }
+      saveBase(Number(data.version), serverState);
+      backend.set(SYNC_VERSION_KEY, String(data.version));
+      // Se qui è cambiato qualcosa mentre la richiesta viaggiava, va salvato anche quello
+      if (merger && data.state && !sameState(next, serverState)) scheduleFlush();
+    } catch (e) {
+      /* la memoria del browser non risponde (es. piena): il file su disco è comunque salvato */
+    }
+  }
+
   async function sendToDisk() {
     if (!dirty) return true;
     dirty = false;
     const state = collect();
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const base = Number(backend.get(SYNC_VERSION_KEY)) || 0;
-      try {
-        const body = JSON.stringify({ baseVersion: base, state });
-        const res = await fetch("/api/sync-state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body,
-          keepalive: body.length < 60000,
+    try {
+      const baseVersion = Number(backend.get(SYNC_VERSION_KEY)) || 0;
+      // Al server si dice cosa è cambiato QUI rispetto all'ultima volta (solo le voci diverse, com'erano prima):
+      // il resto è uguale a "state". Senza base (primo salvataggio dopo l'aggiornamento) il server non toglie nulla.
+      const saved = loadBase();
+      let changes;
+      if (saved && saved.version === baseVersion) {
+        changes = {};
+        Object.keys(state).forEach((key) => {
+          if (!(key in saved.state) || canonical(saved.state[key]) !== canonical(state[key])) changes[key] = key in saved.state ? saved.state[key] : null;
         });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.success) {
-          backend.set(SYNC_VERSION_KEY, String(data.version));
-          showSaveSuccess(data.timestamp, "disco");
-          return true;
-        }
-        if (res.status === 409) {
-          // Un'altra scheda di questo stesso browser potrebbe aver appena salvato: si riprova una volta con la versione nuova.
-          if ((Number(backend.get(SYNC_VERSION_KEY)) || 0) > base) continue;
-          showSyncConflict();
-          return false;
-        }
-        throw new Error(data.error || `risposta ${res.status}`);
-      } catch (e) {
-        dirty = true;
-        if (Date.now() - lastAlarm > 20000) {
-          lastAlarm = Date.now();
-          showSaveError();
-        }
+        Object.keys(saved.state).forEach((key) => { if (!(key in state)) changes[key] = saved.state[key]; });
+      }
+      const body = JSON.stringify({ baseVersion, changes, state });
+      const res = await fetch("/api/sync-state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: body.length < 60000,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        adoptServerState(state, data);
+        showSaveSuccess(data.timestamp, "disco");
+        return true;
+      }
+      if (res.status === 409) {
+        // Solo un server rimasto alla versione vecchia risponde così (il nuovo fonde, non rifiuta).
+        showSyncConflict();
         return false;
       }
+      throw new Error(data.error || `risposta ${res.status}`);
+    } catch (e) {
+      dirty = true;
+      if (Date.now() - lastAlarm > 20000) {
+        lastAlarm = Date.now();
+        showSaveError();
+      }
+      return false;
     }
-    return false;
   }
 
   function flushNow() {
@@ -252,70 +302,59 @@ const siteStore = (() => {
     const localKeys = trackedKeys();
     const rawSynced = backend.get(SYNC_VERSION_KEY);
     const synced = rawSynced === null ? null : Number(rawSynced);
-    const replaceLocalWithDisk = () => {
+    const adoptDisk = () => {
       localKeys.forEach((key) => backend.del(key));
       Object.keys(diskState).forEach((key) => backend.set(key, diskState[key]));
       backend.set(SYNC_VERSION_KEY, String(disk.version));
+      saveBase(disk.version, diskState);
     };
 
     if (!localKeys.length) {
       // Browser nuovo (o memoria svuotata): parte da quello che c'è su disco.
-      replaceLocalWithDisk();
+      adoptDisk();
       MIGRATION_FLAGS.forEach((key) => { if (backend.get(key) === null) backend.set(key, "1"); });
-    } else if (synced === null) {
-      // Questo browser ha già modifiche sue, mai copiate su disco: va deciso quali tenere.
-      if (!syncEnabled || sameState(collect(), diskState)) {
-        backend.set(SYNC_VERSION_KEY, String(disk.version));
-      } else {
-        // "Quante modifiche" = quante voci ci sono dentro (una posizione, una misura, una riga tolta...): aiuta a scegliere.
-        const countChanges = (state) => Object.keys(state).filter((key) => !MIGRATION_FLAGS.includes(key)).reduce((sum, key) => {
-          try {
-            const value = JSON.parse(state[key]);
-            return sum + (Array.isArray(value) ? value.length : value && typeof value === "object" ? Object.keys(value).length : 1);
-          } catch (e) {
-            return sum + 1;
-          }
-        }, 0);
-        const askedAt = Date.now();
-        const keepThisBrowser = confirm(
-          "Questo browser contiene modifiche al sito (posizioni, misure, voci tolte...) che non sono ancora salvate nel progetto.\n\n" +
-          `In questo browser: ${countChanges(collect())} modifiche.\nGià salvate nel progetto: ${countChanges(diskState)} modifiche.\n\n` +
-          "Vuoi salvare ora nel progetto quelle di questo browser?\n\n" +
-          "OK = sì, salva queste (scegli OK nel browser dove hai fatto le modifiche, di solito Vivaldi)\n" +
-          "Annulla = no, usa quelle già salvate nel progetto"
-        );
-        if (keepThisBrowser) {
-          // Lo stato di questo browser diventa quello del progetto (chi non c'è qui sparisce anche dal disco)
-          backend.set(SYNC_VERSION_KEY, String(disk.version));
-          dirty = true;
-        } else if (Date.now() - askedAt < 150) {
-          // Risposta istantanea = il browser ha bloccato la finestra (es. "non mostrare altre finestre"): nessuno
-          // ha scelto davvero. Non si tocca nulla e si richiede al prossimo caricamento.
-        } else {
-          try { backend.set(LEGACY_BACKUP_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: collect() })); } catch (e) { /* copia di sicurezza non possibile */ }
-          replaceLocalWithDisk();
-        }
+    } else if (synced !== null && disk.version < synced) {
+      // Il file su disco è più VECCHIO di quello che questo browser aveva già salvato (es. in GitHub Desktop è stato rimesso
+      // all'ultima versione pubblicata): il lavoro più recente è qui, si riscrive il file da questo browser.
+      if (syncEnabled) dirty = true;
+    } else if (!merger) {
+      // Manca js/state-merge.js: senza la fusione non si decide nulla al posto tuo. Si lavora solo se i due coincidono.
+      if (synced === disk.version && sameState(collect(), diskState)) saveBase(disk.version, diskState);
+      else if (synced === disk.version && syncEnabled) dirty = true;
+    } else {
+      // Caso normale. Si fonde lo stato di questo browser con quello su disco; non si butta via niente.
+      //  - base = com'era il file quando questo browser lo ha salvato/letto l'ultima volta. Se non c'è (primo avvio dopo
+      //    l'aggiornamento) e il file non è cambiato da allora, la base è il file stesso; se non si sa, nulla viene tolto.
+      //  - Se una voce è cambiata sia qui sia sul disco, vince il disco e quella di questo browser resta nella copia di
+      //    sicurezza (osd-legacy-backup, recuperabile con "?ripristina").
+      const saved = loadBase();
+      let baseState = saved && synced !== null && saved.version === synced ? saved.state : null;
+      if (!baseState && synced !== null && synced === disk.version) baseState = diskState;
+      const before = collect();
+      const { merged, conflicts } = merger.mergeState(baseState || {}, before, diskState, { prefer: "remote" });
+      if (conflicts.length) {
+        try { backend.set(LEGACY_BACKUP_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state: before })); } catch (e) { /* copia di sicurezza non possibile */ }
       }
-    } else if (disk.version > synced) {
-      // Un altro browser ha salvato più di recente: si riparte da quello che c'è su disco.
-      replaceLocalWithDisk();
-    } else if (syncEnabled && !sameState(collect(), diskState)) {
-      dirty = true; // il disco è rimasto indietro (es. il server era spento): lo si aggiorna
+      applyLocal(merged);
+      backend.set(SYNC_VERSION_KEY, String(disk.version));
+      saveBase(disk.version, diskState);
+      if (syncEnabled && !sameState(merged, diskState)) dirty = true; // qui c'è qualcosa che sul disco non c'è ancora
     }
     if (syncEnabled && dirty) scheduleFlush();
   }
 
-  // Se per sbaglio si è risposto "Annulla" alla domanda iniziale, una copia delle modifiche che questo browser
-  // aveva prima è rimasta (osd-legacy-backup): aprendo il sito con "?ripristina" in fondo all'indirizzo si recupera.
+  // Le voci che in una fusione hanno perso (cambiate sia qui sia sul disco) restano in osd-legacy-backup:
+  // aprendo il sito con "?ripristina" in fondo all'indirizzo si rimettono, SOMMANDOLE a quelle di adesso (non si toglie nulla).
   try {
     if (new URLSearchParams(location.search).has("ripristina")) {
       const raw = backend.get(LEGACY_BACKUP_KEY);
       const saved = raw ? JSON.parse(raw) : null;
       if (!saved || !saved.state) {
         alert("In questo browser non c'è nessuna copia di modifiche da ripristinare.");
-      } else if (confirm("Ripristinare le modifiche che questo browser aveva prima?\nSostituiscono quelle attuali del progetto.")) {
-        trackedKeys().forEach((key) => backend.del(key));
-        Object.keys(saved.state).forEach((key) => backend.set(key, saved.state[key]));
+      } else if (confirm("Rimettere le modifiche che questo browser aveva prima?\nSi aggiungono a quelle attuali del progetto (se una voce c'è in tutte e due, vale quella ripristinata).")) {
+        const current = collect();
+        const restored = merger ? merger.mergeState({}, saved.state, current, { prefer: "local" }).merged : Object.assign({}, current, saved.state);
+        applyLocal(restored);
         if (syncEnabled) { dirty = true; scheduleFlush(); }
         history.replaceState(null, "", location.pathname + location.hash);
       }
@@ -1178,6 +1217,109 @@ function clearCaptionOverride(key) {
   }
 }
 
+/* -------------------------------------------------------------------------
+   Le didascalie sono legate alla FOTO (al suo file), non alla sua posizione
+   nell'elenco. Prima la chiave era il numero d'ordine ("...captionText.3"):
+   bastava aggiungere, togliere o rinominare un file nella cartella e tutti i
+   numeri dopo scorrevano, così una didascalia finiva sotto la foto sbagliata o
+   spariva. Ora la chiave è "…captionText.@<cartella>/<file>" (tutto minuscolo).
+   Le foto aggiunte con "+" (id "new-…") e le parole del Core Archive (uid)
+   avevano già un id proprio e non cambiano.
+
+   Cosa si scrive sotto una foto, in quest'ordine:
+     1. quello che hai scritto tu nel browser (anche "vuoto" = nessuna didascalia);
+     2. una didascalia ritrovata o corretta (js/recovered-captions.js);
+     3. la "caption" in content.js;
+     4. il NOME DEL FILE, se somiglia a un titolo ("upside down.JPG" → "upside down",
+        "3 field.jpg" → "field"; non "stills-13.jpg" né "IMG_0412.JPG").
+   ------------------------------------------------------------------------- */
+function captionPhotoId(src) {
+  const path = String(src).replace(/^images\//i, "");
+  return "@" + (path.normalize ? path.normalize("NFC") : path).toLowerCase();
+}
+
+// L'id con cui una foto compare nelle chiavi delle didascalie: il suo file, quando ce l'ha;
+// altrimenti (segnaposto senza foto, foto aggiunte con "+") il suo numero/id di sempre.
+function captionIdFor(image, fallbackId) {
+  return image && image.src ? captionPhotoId(image.src) : String(fallbackId);
+}
+
+// Espressioni per leggere i nomi dei file (lettere di qualsiasi lingua). Costruite qui, non scritte "a mano" nel codice, così
+// un browser molto vecchio che non le conosce ripiega su una versione più semplice invece di bloccare tutto il sito.
+const FILE_NAME_RULES = (() => {
+  let letter = "\\p{L}";
+  let flags = "u";
+  try {
+    new RegExp(letter, flags);
+  } catch (e) {
+    letter = "[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]";
+    flags = "";
+  }
+  return {
+    hasLetter: new RegExp(letter, flags),
+    leadingNumber: new RegExp("^\\d{1,3}(?:\\s*[-.):]\\s*|\\s+)(?=" + letter + ")", flags),
+    hyphenatedWords: new RegExp("^" + letter + "+(?:-" + letter + "+)+$", flags),
+  };
+})();
+
+// Il nome del file come didascalia, solo se somiglia a un titolo scritto da una persona.
+function captionFromFileName(src) {
+  if (!src) return "";
+  let name = String(src).split("/").pop().replace(/\.[a-z0-9]{2,5}$/i, "");
+  if (name.normalize) name = name.normalize("NFC");
+  name = name.replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+  // duplicati del Finder: "wire copia", "wire copy 2", "wire (1)"
+  name = name.replace(/\s*(\(\d+\)|\bcop(?:y|ia)\b(?:\s*\d+)?)\s*$/i, "").trim();
+  // numero d'ordine davanti: "1 wire", "02 - wire", "3. wire", "4-wire"
+  name = name.replace(FILE_NAME_RULES.leadingNumber, "").trim();
+  if (!FILE_NAME_RULES.hasLetter.test(name)) return ""; // senza lettere
+  if (/\d{4,}/.test(name)) return ""; // numeri lunghi: nome automatico di una macchina fotografica o una data
+  if (/[-_ ]\d+$/.test(name)) return ""; // parola + numero: "stills-13", "lines-1-8", "paris 2"
+  if (/^(img|dsc|dscn|dscf|dsf|pxl|mvimg|screenshot|schermata|image|immagine|foto|photo|pic|scan|senza titolo|untitled)\b/i.test(name)) return "";
+  // "disassembled-body" → "disassembled body" (parole unite da trattini, senza spazi)
+  if (!/\s/.test(name) && FILE_NAME_RULES.hyphenatedWords.test(name)) name = name.replace(/-/g, " ");
+  return name;
+}
+
+// Cosa si scrive sotto la foto se nessuno ha scritto niente a mano (punti 2, 3 e 4 dell'elenco sopra)
+function defaultCaptionFor(image) {
+  if (!image) return "";
+  const recovered = image.src && window.RECOVERED_CAPTIONS && window.RECOVERED_CAPTIONS[captionPhotoId(image.src)];
+  if (recovered) return recovered;
+  if (image.caption) return image.caption;
+  return image.src ? captionFromFileName(image.src) : "";
+}
+
+// Una tantum e ogni volta che serve: le didascalie scritte con la vecchia chiave (numero d'ordine) passano alla foto
+// che oggi sta in quel posto. Se la foto ha già una didascalia sua, resta quella. Quelle che non si possono legare a
+// una foto (posizione che non esiste più, segnaposto) restano dove sono, intatte.
+(function moveCaptionsToPhotos() {
+  try {
+    const all = loadCaptionOverrides();
+    let changed = false;
+    const lists = [];
+    if (typeof PROJECTS !== "undefined") PROJECTS.forEach((project) => lists.push([`project.${project.slug}`, project.images || []]));
+    if (typeof ARCHIVE !== "undefined") lists.push(["archive", ARCHIVE.images || []]);
+    lists.forEach(([galleryKey, images]) => {
+      const prefix = `${galleryKey}.captionText.`;
+      Object.keys(all).forEach((key) => {
+        if (!key.startsWith(prefix)) return;
+        const id = key.slice(prefix.length);
+        if (!/^\d+$/.test(id)) return; // già legata a una foto, o foto aggiunta con "+"
+        const image = images[Number(id)];
+        if (!image || !image.src) return;
+        const newKey = prefix + captionPhotoId(image.src);
+        if (!(newKey in all)) all[newKey] = all[key];
+        delete all[key];
+        changed = true;
+      });
+    });
+    if (changed) siteStore.setItem(CAPTION_STORE_KEY, JSON.stringify(all));
+  } catch (e) {
+    /* storage non disponibile: le didascalie restano come sono */
+  }
+})();
+
 const DESCRIPTION_STORE_KEY = "site-description-overrides-v1";
 
 function loadDescriptionOverrides() {
@@ -1829,6 +1971,7 @@ function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio
 // di content.js hanno un indice numerico ("foto #3"), quelle aggiunte con
 // "+" invece no (non esistono ancora lì) — il testo lo dice esplicitamente.
 function photoLabel(id) {
+  if (String(id).startsWith("@")) return `la foto "${String(id).slice(1)}"`; // didascalie legate al file (vedi captionPhotoId)
   return isExtraImageId(id) ? `una foto aggiunta con "+" (vedi === FOTO NUOVE === più sotto)` : `foto #${Number(id) + 1}`;
 }
 
@@ -1930,14 +2073,14 @@ function describePositionKey(key) {
 }
 
 function describeCaptionKey(key) {
-  const captionMatch = key.match(/^project\.(.+)\.captionText\.([\w-]+)$/);
+  const captionMatch = key.match(/^project\.(.+?)\.captionText\.(.+)$/);
   if (captionMatch) {
     return isExtraImageId(captionMatch[2])
       ? `Progetto "${captionMatch[1]}", ${photoLabel(captionMatch[2])}  →  usa questo testo come "caption" della nuova voce`
       : `Progetto "${captionMatch[1]}", ${photoLabel(captionMatch[2])}  →  aggiorna "caption" su quella voce di "images"`;
   }
 
-  const archiveCaptionMatch = key.match(/^archive\.captionText\.([\w-]+)$/);
+  const archiveCaptionMatch = key.match(/^archive\.captionText\.(.+)$/);
   if (archiveCaptionMatch) {
     return isExtraImageId(archiveCaptionMatch[1])
       ? `Core archive, ${photoLabel(archiveCaptionMatch[1])}  →  usa questo testo come "caption" della nuova voce`
@@ -3000,6 +3143,9 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
 
     // 1. FIRST: coordinate della miniatura nello slider.
     const firstRect = img.getBoundingClientRect();
+    // La galleria dietro si ferma dov'è (anche a metà di uno scorrimento) finché la foto è ingrandita e non è
+    // tornata al suo posto: vedi holdGallery in renderGallery.
+    window.dispatchEvent(new Event("zoom-opened"));
 
     // Nasconde temporaneamente l'originale (niente "doppione" per l'istante
     // in cui il clone appare esattamente sopra di lei).
@@ -3237,6 +3383,8 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
           img.style.opacity = "1";
         }
         zoomCurrentClose = null;
+        // La foto è tornata sulla miniatura: la galleria può riprendere
+        window.dispatchEvent(new Event("zoom-closed"));
       }, 550);
     };
   });
@@ -3737,7 +3885,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     // la misura dell'ingrandimento (zoomBox), che non ha le stesse proporzioni della foto: la schiacciava,
     // lasciando due bande vuote ai lati e la didascalia "a mezz'aria".
     const known = knownImageSize(image.src);
-    const imgAttrs = { src: TINY_GIF, alt: image.caption || "", decoding: "async" };
+    // La didascalia legata a QUESTA foto (vedi captionIdFor): scritta a mano, oppure quella di content.js, oppure ritrovata,
+    // oppure il nome del file se somiglia a un titolo. Non dipende dalla posizione della foto nell'elenco.
+    const captionKey = `${sizeKeyPrefix}.captionText.${captionIdFor(image, origIndex)}`;
+    const captionDefault = defaultCaptionFor(image);
+    const captionOverride = captionOverrides[captionKey];
+    const captionText = captionOverride != null ? captionOverride : captionDefault;
+    const imgAttrs = { src: TINY_GIF, alt: captionText, decoding: "async" };
     imgAttrs.style = (known ? `aspect-ratio: ${known[0]} / ${known[1]}; ` : "") + "transition: opacity 0.3s; opacity: 0;";
     const img = el("img", imgAttrs);
 
@@ -3765,9 +3919,6 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     // non solo quando perdi il focus — niente più testo perso se prendi
     // la maniglia per trascinarlo subito dopo aver scritto, e niente più
     // trucchi CSS ":empty"/"::before" per il segnaposto o per nasconderlo.
-    const captionKey = `${sizeKeyPrefix}.captionText.${origIndex}`;
-    const captionOverride = captionOverrides[captionKey];
-    const captionText = captionOverride != null ? captionOverride : image.caption || "";
     const captionInput = el("textarea", {
       class: "caption-input",
       placeholder: "scrivi qui la didascalia",
@@ -3783,9 +3934,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     
     captionInput.addEventListener("input", () => {
       adjustHeight();
+      // Se il testo è quello che comparirebbe comunque (content.js / nome del file) non serve salvare niente;
+      // se lo svuoti, si salva "vuoto" = nessuna didascalia (altrimenti tornerebbe quella di riserva).
       const text = captionInput.value.trim();
-      if (text) saveCaptionOverride(captionKey, text);
-      else clearCaptionOverride(captionKey);
+      if (text === captionDefault) clearCaptionOverride(captionKey);
+      else saveCaptionOverride(captionKey, text);
     });
     
     // Imposta l'altezza iniziale una volta aggiunto al DOM
@@ -4152,6 +4305,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // presto dopo una transizione avviata mentre l'autoplay era in pausa).
   let lastTransitionStart = -Infinity;
   let isAnimating = false;
+  // Finché una foto è ingrandita la galleria dietro sta FERMA (vedi holdGallery più sotto): così, chiudendo,
+  // la foto torna esattamente sulla miniatura da cui è partita.
+  let lightboxHold = false;
+  let heldAnimations = [];
+  let heldAt = 0;
 
   function updateViewportHeight() {
     const activeFigure = figures[current];
@@ -4232,7 +4390,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function goTo(i, { user = false } = {}) {
     if (isAnimating) return;
     if (!figures.length) return;
-    
+    if (lightboxHold) return; // una foto è ingrandita: la galleria dietro sta ferma (vedi holdGallery)
+
     lastTransitionStart = performance.now();
     isAnimating = true;
     setTimeout(() => { isAnimating = false; }, 500); // 500ms di debounce per evitare doppi clic veloci, ma senza bloccare i 6s di transizione
@@ -4257,13 +4416,16 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       const clone = makePhotoClone(0);
       track.appendChild(clone);
       applyPosition({ position: n }); // un passo avanti normale, verso il clone appena aggiunto in coda
-      const timer = setTimeout(() => {
+      // "finish" è quello che si fa a transizione finita: lo tiene a parte anche holdGallery/releaseGallery, per
+      // poterlo rimandare se la galleria viene fermata a metà (una foto ingrandita).
+      const finish = () => {
         clone.remove();
         applyPosition({ instant: true, position: current }); // current = 0, identico al clone: nessun cambiamento visibile
         pendingWrapCleanup = null;
-      }, TRANSITION_MS);
+      };
       pendingWrapCleanup = {
-        timer,
+        finish,
+        timer: setTimeout(finish, TRANSITION_MS),
         cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
       };
     } else if (wrapBackward) {
@@ -4274,13 +4436,14 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       // senza transizione, così finora non è cambiato nulla di visibile.
       applyPosition({ instant: true, position: 1 });
       applyPosition({ position: 0 }); // un passo indietro normale, verso il clone appena aggiunto in testa
-      const timer = setTimeout(() => {
+      const finish = () => {
         clone.remove();
         applyPosition({ instant: true, position: current }); // current = n-1, identico al clone: nessun cambiamento visibile
         pendingWrapCleanup = null;
-      }, TRANSITION_MS);
+      };
       pendingWrapCleanup = {
-        timer,
+        finish,
+        timer: setTimeout(finish, TRANSITION_MS),
         cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
       };
     } else {
@@ -4292,7 +4455,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   function scheduleNext() {
     clearTimeout(autoplayTimer);
-    if (paused || figures.length < 2 || document.hidden || isEditMode()) return;
+    if (paused || lightboxHold || figures.length < 2 || document.hidden || isEditMode()) return;
     // Se una transizione è appena partita (autoplay, click dell'utente, o
     // swipe touch), la prossima non deve scattare dopo AUTOPLAY_DELAY
     // dall'INIZIO di questa, ma dopo che questa è FINITA di arrivare
@@ -4348,6 +4511,45 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     scheduleNext();
   }
 
+  // Una foto della galleria viene ingrandita (evento "zoom-opened", vedi makeZoomable): la galleria si ferma
+  // ESATTAMENTE dov'è — anche a metà di uno scorrimento — e non ne parte nessun altro. Prima continuava ad andare
+  // dietro la foto ingrandita: chiudendo, la miniatura si era spostata (o era uscita dallo schermo) e la foto non
+  // sapeva più dove tornare. Appena la foto è tornata al suo posto ("zoom-closed") la galleria riprende da dove
+  // era, con il tempo che le restava.
+  function holdGallery() {
+    if (lightboxHold) return;
+    lightboxHold = true;
+    heldAt = performance.now();
+    clearTimeout(autoplayTimer);
+    heldAnimations = [];
+    [track, viewport].forEach((node) => {
+      if (typeof node.getAnimations !== "function") return;
+      node.getAnimations().forEach((animation) => {
+        if (animation.playState === "running") {
+          animation.pause();
+          heldAnimations.push(animation);
+        }
+      });
+    });
+    // La pulizia che chiude un giro (clone della foto) non deve scattare mentre tutto è fermo
+    if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
+  }
+  function releaseGallery() {
+    if (!lightboxHold) return;
+    lightboxHold = false;
+    const heldFor = performance.now() - heldAt;
+    heldAnimations.forEach((animation) => { try { animation.play(); } catch (e) { /* già finita o annullata */ } });
+    heldAnimations = [];
+    lastTransitionStart += heldFor; // le transizioni fermate riprendono con il tempo che restava
+    if (pendingWrapCleanup) {
+      const remaining = Math.max(0, TRANSITION_MS - (performance.now() - lastTransitionStart));
+      pendingWrapCleanup.timer = setTimeout(pendingWrapCleanup.finish, remaining);
+    }
+    if (!paused) scheduleNext();
+  }
+  window.addEventListener("zoom-opened", holdGallery);
+  window.addEventListener("zoom-closed", releaseGallery);
+
   // Le frecce, su un progetto, portano al progetto precedente/successivo
   // invece di scorrere le foto della galleria corrente.
   if (projectNav) {
@@ -4360,6 +4562,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const onKeyDown = (e) => {
     if (["INPUT", "TEXTAREA"].includes(e.target.tagName) || e.target.isContentEditable) return;
+    if (lightboxHold) return; // foto ingrandita: le frecce non fanno scorrere la galleria dietro
     if (e.key === "ArrowLeft") {
       if (figures.length > 1) {
         goTo(current - 1, { user: true });
@@ -4537,6 +4740,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     alignmentGuides.teardown();
     window.removeEventListener("edit-mode-toggled", onEditModeToggled);
     window.removeEventListener("edit-mode-toggled", updateDescEditable);
+    window.removeEventListener("zoom-opened", holdGallery);
+    window.removeEventListener("zoom-closed", releaseGallery);
     document.removeEventListener("keydown", onKeyDown);
     clearTimeout(autoplayTimer);
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
@@ -5735,3 +5940,53 @@ if (!siteStore.getItem(MIGRATION_ZOOM_RESET_V3)) {
   siteStore.setItem(MIGRATION_ZOOM_RESET_V3, "true");
 }
 
+
+// Una tantum, SOLO sul tuo computer (mai per chi visita il sito): le didascalie rimesse il 12 ottobre vanno anche nel Core Archive.
+//  - "tie, saint laurent" diventa "tie saint laurent" (senza virgola, come la didascalia);
+//  - le parole che mancavano (una per foto) si aggiungono in fondo, in un gruppo a parte, ciascuna legata alla sua foto.
+// "porcelain" c'è già e porta alla stessa foto di "ionia porcelain set": non si duplica. Una volta fatto, si ricorda (flag):
+// se poi togli o sposti una di queste parole dal browser, non ricompare. Le parole sono normali parole del Core Archive:
+// si cambiano, si spostano e si tolgono con le maniglie di sempre, e il salvataggio le scrive in site-state.js e content.js.
+(function addRestoredWordsToArchive() {
+  const FLAG_KEY = "site-archive-words-added-v1";
+  if (!IS_EDITOR || siteStore.getItem(FLAG_KEY)) return;
+  try {
+    const pages = loadArchivePages();
+    if (!pages || !pages.length) return;
+    const items = pages[0].images || (pages[0].images = []);
+    let changed = false;
+
+    items.forEach((item) => {
+      if (item.type === "word" && item.text === "tie, saint laurent") {
+        item.text = "tie saint laurent";
+        changed = true;
+      }
+    });
+
+    const wanted = [
+      { uid: "uid_added_wine", text: "wine sales negotiations", src: "images/homes/1 wine.jpg", project: "homes" },
+      { uid: "uid_added_barns", text: "barns", src: "images/homes/6 huts.jpg", project: "homes" },
+      { uid: "uid_added_construction", text: "construction", src: "images/homes/7 ongoing.jpg", project: "homes" },
+      { uid: "uid_added_cigarettes", text: "cigarettes", src: "images/recognition/recognition-5.jpg", project: "recognition" },
+      { uid: "uid_added_perfume", text: "vintage perfume bottle", src: "images/stills/stills-7.jpg", project: "stills" },
+    ];
+    const known = Array.isArray(window.DYNAMIC_IMAGES) ? window.DYNAMIC_IMAGES : null;
+    const toAdd = wanted
+      .map((word) => {
+        const real = known ? known.find((path) => path.toLowerCase() === word.src.toLowerCase()) : word.src;
+        return real ? { ...word, src: real } : null; // se la foto non c'è più, la parola non si aggiunge
+      })
+      .filter((word) => word && !items.some((item) => item.uid === word.uid || (item.type === "word" && String(item.linkedImageSrc || "").toLowerCase() === word.src.toLowerCase())));
+    if (toAdd.length) {
+      if (items.length && items[items.length - 1].type !== "break") items.push({ type: "break", uid: "uid_added_break_1" });
+      toAdd.forEach((word) => {
+        items.push({ type: "word", text: word.text, uid: word.uid, linkedImageSrc: word.src, linkedImageLinkTo: `project/${word.project}`, linkedImageProject: word.project });
+      });
+      changed = true;
+    }
+    if (changed) saveArchivePages(pages);
+    siteStore.setItem(FLAG_KEY, "1");
+  } catch (e) {
+    /* se qualcosa non va, si riprova al prossimo avvio: il flag non è stato scritto */
+  }
+})();
