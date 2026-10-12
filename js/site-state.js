@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 72,
-  "updatedAt": "2026-10-12T12:29:19.078Z",
+  "version": 75,
+  "updatedAt": "2026-10-12T14:20:07.479Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -135,14 +135,14 @@ window.SITE_STATE = {
             "type": "word",
             "text": "field",
             "uid": "uid_1791300174629_6130",
-            "linkedImageSrc": "images/core archive/lines-11.jpg",
+            "linkedImageSrc": "images/core archive/fields.jpg",
             "linkedImageProject": "boudaries"
           },
           {
             "type": "word",
             "text": "church",
             "uid": "uid_1791300315480_7880",
-            "linkedImageSrc": "images/core archive/lines-5.jpg",
+            "linkedImageSrc": "images/core archive/church.jpg",
             "linkedImageProject": "homes"
           },
           {
@@ -194,7 +194,7 @@ window.SITE_STATE = {
           },
           {
             "type": "word",
-            "text": "tie, saint laurent",
+            "text": "tie saint laurent",
             "uid": "uid_1791300788906_8601",
             "linkedImageSrc": "images/stills/stills-13.jpg",
             "linkedImageLinkTo": "project/stills",
@@ -289,22 +289,59 @@ window.SITE_STATE = {
             "linkedImageSrc": "images/core archive/michelin-5.jpg",
             "linkedImageLinkTo": "archive",
             "linkedImageProject": "michelin"
+          },
+          {
+            "type": "break",
+            "uid": "uid_added_break_1"
+          },
+          {
+            "type": "word",
+            "text": "wine sales negotiations",
+            "uid": "uid_added_wine",
+            "linkedImageSrc": "images/homes/1 wine.jpg",
+            "linkedImageLinkTo": "project/homes",
+            "linkedImageProject": "homes"
+          },
+          {
+            "type": "word",
+            "text": "barns",
+            "uid": "uid_added_barns",
+            "linkedImageSrc": "images/homes/6 huts.jpg",
+            "linkedImageLinkTo": "project/homes",
+            "linkedImageProject": "homes"
+          },
+          {
+            "type": "word",
+            "text": "cigarettes",
+            "uid": "uid_added_cigarettes",
+            "linkedImageSrc": "images/recognition/recognition-5.jpg",
+            "linkedImageLinkTo": "project/recognition",
+            "linkedImageProject": "recognition"
+          },
+          {
+            "type": "word",
+            "text": "perfume bottle",
+            "uid": "uid_added_perfume",
+            "linkedImageSrc": "images/stills/stills-7.jpg",
+            "linkedImageLinkTo": "project/stills",
+            "linkedImageProject": "stills"
           }
         ]
       }
     ],
+    "site-archive-words-added-v1": 1,
     "site-caption-overrides-v1": {
-      "project.homes.captionText.1": "upper-middle class",
-      "project.stills.captionText.0": "J. Kronester Bavaria Tea Set",
-      "project.stills.captionText.2": "furla messenger bag",
-      "project.mediality.captionText.0": "holiday",
-      "project.mediality.captionText.1": "folds, morocco",
-      "project.mediality.captionText.2": "bristol",
-      "project.mediality.captionText.3": "leather arm",
-      "project.mediality.captionText.4": "pp",
-      "project.mediality.captionText.5": "tourette",
-      "project.whitening.captionText.0": "smile",
-      "project.sofa.captionText.0": "sushi disco"
+      "project.homes.captionText.@homes/2 family.jpg": "upper-middle class",
+      "project.stills.captionText.@stills/stills-1.jpg": "J. Kronester Bavaria Tea Set",
+      "project.stills.captionText.@stills/stills-3.jpg": "furla messenger bag",
+      "project.mediality.captionText.@mediality/mediality-1.jpg": "holiday",
+      "project.mediality.captionText.@mediality/mediality-2.jpg": "folds, morocco",
+      "project.mediality.captionText.@mediality/mediality-3.jpg": "bristol",
+      "project.mediality.captionText.@mediality/mediality-4.jpg": "leather arm",
+      "project.mediality.captionText.@mediality/mediality-5.jpg": "pp",
+      "project.mediality.captionText.@mediality/senza titolo-1.jpg": "tourette",
+      "project.sofa.captionText.@sofa/sushi discotheque.jpg": "sushi disco",
+      "project.whitening.captionText.@whitening/smile.jpg": "smile"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
