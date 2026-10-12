@@ -1228,8 +1228,8 @@ function clearCaptionOverride(key) {
 
    Cosa si scrive sotto una foto, in quest'ordine:
      1. quello che hai scritto tu nel browser (anche "vuoto" = nessuna didascalia);
-     2. la "caption" in content.js;
-     3. una didascalia ritrovata (js/recovered-captions.js);
+     2. una didascalia ritrovata o corretta (js/recovered-captions.js);
+     3. la "caption" in content.js;
      4. il NOME DEL FILE, se somiglia a un titolo ("upside down.JPG" → "upside down",
         "3 field.jpg" → "field"; non "stills-13.jpg" né "IMG_0412.JPG").
    ------------------------------------------------------------------------- */
@@ -1284,10 +1284,10 @@ function captionFromFileName(src) {
 // Cosa si scrive sotto la foto se nessuno ha scritto niente a mano (punti 2, 3 e 4 dell'elenco sopra)
 function defaultCaptionFor(image) {
   if (!image) return "";
+  const recovered = image.src && window.RECOVERED_CAPTIONS && window.RECOVERED_CAPTIONS[captionPhotoId(image.src)];
+  if (recovered) return recovered;
   if (image.caption) return image.caption;
-  if (!image.src) return "";
-  const recovered = window.RECOVERED_CAPTIONS && window.RECOVERED_CAPTIONS[captionPhotoId(image.src)];
-  return recovered || captionFromFileName(image.src);
+  return image.src ? captionFromFileName(image.src) : "";
 }
 
 // Una tantum e ogni volta che serve: le didascalie scritte con la vecchia chiave (numero d'ordine) passano alla foto
@@ -5940,3 +5940,53 @@ if (!siteStore.getItem(MIGRATION_ZOOM_RESET_V3)) {
   siteStore.setItem(MIGRATION_ZOOM_RESET_V3, "true");
 }
 
+
+// Una tantum, SOLO sul tuo computer (mai per chi visita il sito): le didascalie rimesse il 12 ottobre vanno anche nel Core Archive.
+//  - "tie, saint laurent" diventa "tie saint laurent" (senza virgola, come la didascalia);
+//  - le parole che mancavano (una per foto) si aggiungono in fondo, in un gruppo a parte, ciascuna legata alla sua foto.
+// "porcelain" c'è già e porta alla stessa foto di "ionia porcelain set": non si duplica. Una volta fatto, si ricorda (flag):
+// se poi togli o sposti una di queste parole dal browser, non ricompare. Le parole sono normali parole del Core Archive:
+// si cambiano, si spostano e si tolgono con le maniglie di sempre, e il salvataggio le scrive in site-state.js e content.js.
+(function addRestoredWordsToArchive() {
+  const FLAG_KEY = "site-archive-words-added-v1";
+  if (!IS_EDITOR || siteStore.getItem(FLAG_KEY)) return;
+  try {
+    const pages = loadArchivePages();
+    if (!pages || !pages.length) return;
+    const items = pages[0].images || (pages[0].images = []);
+    let changed = false;
+
+    items.forEach((item) => {
+      if (item.type === "word" && item.text === "tie, saint laurent") {
+        item.text = "tie saint laurent";
+        changed = true;
+      }
+    });
+
+    const wanted = [
+      { uid: "uid_added_wine", text: "wine sales negotiations", src: "images/homes/1 wine.jpg", project: "homes" },
+      { uid: "uid_added_barns", text: "barns", src: "images/homes/6 huts.jpg", project: "homes" },
+      { uid: "uid_added_construction", text: "construction", src: "images/homes/7 ongoing.jpg", project: "homes" },
+      { uid: "uid_added_cigarettes", text: "cigarettes", src: "images/recognition/recognition-5.jpg", project: "recognition" },
+      { uid: "uid_added_perfume", text: "vintage perfume bottle", src: "images/stills/stills-7.jpg", project: "stills" },
+    ];
+    const known = Array.isArray(window.DYNAMIC_IMAGES) ? window.DYNAMIC_IMAGES : null;
+    const toAdd = wanted
+      .map((word) => {
+        const real = known ? known.find((path) => path.toLowerCase() === word.src.toLowerCase()) : word.src;
+        return real ? { ...word, src: real } : null; // se la foto non c'è più, la parola non si aggiunge
+      })
+      .filter((word) => word && !items.some((item) => item.uid === word.uid || (item.type === "word" && String(item.linkedImageSrc || "").toLowerCase() === word.src.toLowerCase())));
+    if (toAdd.length) {
+      if (items.length && items[items.length - 1].type !== "break") items.push({ type: "break", uid: "uid_added_break_1" });
+      toAdd.forEach((word) => {
+        items.push({ type: "word", text: word.text, uid: word.uid, linkedImageSrc: word.src, linkedImageLinkTo: `project/${word.project}`, linkedImageProject: word.project });
+      });
+      changed = true;
+    }
+    if (changed) saveArchivePages(pages);
+    siteStore.setItem(FLAG_KEY, "1");
+  } catch (e) {
+    /* se qualcosa non va, si riprova al prossimo avvio: il flag non è stato scritto */
+  }
+})();
