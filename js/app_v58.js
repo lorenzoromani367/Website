@@ -3133,9 +3133,29 @@ function ensureZoomElements() {
   document.body.appendChild(zoomActiveFrame);
 }
 
+// Prepara il file grande di una foto PRIMA che serva: si decodifica in anticipo (appena il puntatore arriva sulla foto o
+// la tocca), così quando parte l'ingrandimento la foto che vola è già pronta e compare subito, senza fotogrammi vuoti.
+// Si tengono solo le ultime foto preparate, per non occupare memoria inutilmente.
+const warmedLightboxPhotos = [];
+function warmLightboxPhoto(src) {
+  if (!src || /^data:/i.test(String(src))) return Promise.resolve();
+  const known = warmedLightboxPhotos.find((entry) => entry.src === src);
+  if (known) return known.ready;
+  const probe = new Image();
+  probe.src = src;
+  const ready = (probe.decode ? probe.decode() : Promise.resolve()).catch(() => {});
+  warmedLightboxPhotos.push({ src, probe, ready });
+  if (warmedLightboxPhotos.length > 4) warmedLightboxPhotos.shift();
+  return ready;
+}
+
 function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
+  const warmThisPhoto = () => { if (!isEditMode()) warmLightboxPhoto(img.currentSrc || img.src); };
+  frame.addEventListener("pointerenter", warmThisPhoto, { passive: true });
+  frame.addEventListener("pointerdown", warmThisPhoto, { passive: true });
+  let opening = false; // un secondo clic mentre la foto si sta preparando non deve aprirla due volte
   frame.addEventListener("click", () => {
-    if (isEditMode()) return;
+    if (isEditMode() || opening) return;
     
     zoomActiveSizeKey = sizeKey;
     zoomActiveOriginalSrc = img.getAttribute("src") || img.src;
@@ -3146,6 +3166,14 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     // La galleria dietro si ferma dov'è (anche a metà di uno scorrimento) finché la foto è ingrandita e non è
     // tornata al suo posto: vedi holdGallery in renderGallery.
     window.dispatchEvent(new Event("zoom-opened"));
+
+    // Da qui in poi niente cambia rispetto a prima, tranne UNA cosa: l'ingrandimento parte solo quando il file grande
+    // è decodificato (di solito lo è già, vedi warmLightboxPhoto: allora parte nello stesso istante del clic).
+    // Aspettare al massimo 250 ms: se il file non fosse pronto, parte comunque.
+    opening = true;
+    const photoReady = Promise.race([warmLightboxPhoto(img.currentSrc || img.src), new Promise((resolve) => setTimeout(resolve, 250))]);
+    photoReady.then(() => {
+    opening = false;
 
     // Nasconde temporaneamente l'originale (niente "doppione" per l'istante
     // in cui il clone appare esattamente sopra di lei).
@@ -3380,13 +3408,21 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
         // toglie l'attributo senza scatenare nessuna richiesta.
         activeImg.removeAttribute("src");
         if (!img.classList.contains("hidden-link-img")) {
+          // La miniatura torna visibile ISTANTANEAMENTE, nello stesso momento in cui sparisce la foto che volava: la
+          // sua dissolvenza di 0,3 s (serve al caricamento della foto) qui faceva sparire la foto per un attimo, a fine
+          // chiusura, e poi la faceva riapparire sfumando.
+          const fade = img.style.transition;
+          img.style.transition = "none";
           img.style.opacity = "1";
+          img.getBoundingClientRect(); // applica subito il cambio, prima di rimettere la dissolvenza
+          img.style.transition = fade;
         }
         zoomCurrentClose = null;
         // La foto è tornata sulla miniatura: la galleria può riprendere
         window.dispatchEvent(new Event("zoom-closed"));
       }, 550);
     };
+    });
   });
 }
 
@@ -4311,7 +4347,17 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let heldAnimations = [];
   let heldAt = 0;
 
-  function updateViewportHeight() {
+  // Allungamento del riquadro quando la foto in arrivo è più alta (vedi updateViewportHeight): breve e continuo, non di colpo.
+  const VIEWPORT_GROW_MS = 800;
+  const VIEWPORT_GROW_TRANSITION = `height ${VIEWPORT_GROW_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+  let viewportGrowTimer = null;
+
+  // "glide": vero SOLO quando l'altezza cambia perché sta partendo uno scorrimento tra le foto (vedi applyPosition): lì,
+  // se la foto in arrivo è più alta, il riquadro si allunga in modo continuo. Per tutto il resto (trascinare una
+  // didascalia, ridimensionare una foto, ridimensionare la finestra, una foto che arriva) si allunga subito, come prima:
+  // sono azioni in corso, il riquadro non può restare indietro.
+  function updateViewportHeight(options) {
+    const glide = Boolean(options && options.glide === true);
     const activeFigure = figures[current];
     if (!activeFigure) return;
     // Il rect della <figure> segue solo il flusso NORMALE: se la foto o la
@@ -4332,22 +4378,31 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const newHeightPx = bottom - viewportTop;
     const currentHeightPx = viewport.getBoundingClientRect().height;
     if (newHeightPx > currentHeightPx) {
-      // Se la foto in arrivo è più alta di quella attuale, lo scatto è
-      // ISTANTANEO invece che animato in 6 secondi: altrimenti, per tutta
-      // la durata della transizione, il riquadro resterebbe più basso di
-      // quanto serve alla foto che sta scorrendo in vista, e
-      // "overflow: hidden" (necessario per lo slide orizzontale) ne
-      // taglierebbe il fondo finché l'altezza non recupera (confermato:
-      // subito dopo l'inizio di una transizione verso una foto molto più
-      // alta, il riquadro può restare centinaia di px più basso del
-      // necessario). Se invece la foto in arrivo è più bassa, restringersi
-      // non taglia mai nulla, quindi lì la transizione morbida resta.
-      const prevTransition = viewport.style.transition;
-      viewport.style.transition = "none";
-      viewport.style.height = `${newHeightPx}px`;
-      viewport.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
-      viewport.style.transition = prevTransition;
+      // Se la foto in arrivo è più alta di quella attuale, il riquadro NON può allungarsi lentamente (6 secondi) come
+      // quando si accorcia: "overflow: hidden" (necessario per lo slide orizzontale) taglierebbe il fondo della foto che
+      // entra finché l'altezza non recupera (confermato: subito dopo l'inizio di una transizione verso una foto molto più
+      // alta, il riquadro può restare centinaia di px più basso del necessario). Prima si allungava di colpo: la barra con
+      // le frecce e il numero, e il fondo della pagina, SALTAVANO di colpo di qualche decina di px (fino a 100) nello
+      // stesso istante in cui parte lo scorrimento. Adesso si allunga in modo continuo (meno di un secondo, frenando alla
+      // fine; è già al 96% a metà strada): la foto in arrivo, in quel tempo, è ancora quasi tutta fuori dal riquadro (la
+      // curva dello scorrimento parte piano), quindi non se ne taglia nulla di visibile.
+      // Il primo disegno della pagina (prima che le foto siano arrivate) resta istantaneo: lì non c'è nulla da animare.
+      if (!glide || !firstLayoutSettled) {
+        const prevTransition = viewport.style.transition;
+        viewport.style.transition = "none";
+        viewport.style.height = `${newHeightPx}px`;
+        viewport.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
+        viewport.style.transition = prevTransition;
+      } else {
+        viewport.style.transition = VIEWPORT_GROW_TRANSITION;
+        viewport.style.height = `${newHeightPx}px`;
+        clearTimeout(viewportGrowTimer);
+        viewportGrowTimer = setTimeout(() => { viewport.style.transition = ""; }, VIEWPORT_GROW_MS + 50);
+      }
     } else {
+      // Accorciarsi non taglia mai nulla: qui resta la transizione lenta del foglio di stile (la stessa dello scorrimento).
+      clearTimeout(viewportGrowTimer);
+      if (firstLayoutSettled) viewport.style.transition = ""; // toglie l'eventuale allungamento rapido ancora in corso
       viewport.style.height = `${newHeightPx}px`;
     }
   }
@@ -4366,7 +4421,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     } else {
       track.style.transform = `translateX(-${position * 100}%)`;
     }
-    updateViewportHeight();
+    updateViewportHeight({ glide: !instant });
   }
 
   // Chiudere il giro (dall'ultima foto alla prima, o viceversa) deve
@@ -5208,7 +5263,16 @@ function whenFontReady() {
 }
 
 window.addEventListener("hashchange", renderRoute);
-window.addEventListener("DOMContentLoaded", () => { whenFontReady().then(renderRoute); });
+window.addEventListener("DOMContentLoaded", () => {
+  whenFontReady().then(renderRoute).then(() => {
+    // Sfondo scuro, riquadro che vola e pannello del testo si creano ora, a pagina già disegnata e a riposo, non al
+    // primo clic: crearli mentre parte l'ingrandimento faceva comparire lo sfondo di colpo e la foto con qualche
+    // fotogramma di ritardo (succedeva solo la prima volta dopo aver caricato il sito).
+    const prepare = () => { try { ensureZoomElements(); ensureZoomTextPanel(); } catch (e) { /* si creeranno al primo clic, come prima */ } };
+    if (window.requestIdleCallback) window.requestIdleCallback(prepare, { timeout: 1500 });
+    else setTimeout(prepare, 300);
+  });
+});
 
 function openGalleryIndex(images, track, viewport, galleryKey) {
   const originalBodyOverflow = document.body.style.overflow;
