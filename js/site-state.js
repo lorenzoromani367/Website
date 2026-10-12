@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 61,
-  "updatedAt": "2026-10-11T20:31:26.281Z",
+  "version": 64,
+  "updatedAt": "2026-10-11T21:41:04.011Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -406,7 +406,7 @@ window.SITE_STATE = {
       },
       "archive.page.page_1.zoom.uid_1791286888502_1417": {
         "width": "1519.8px",
-        "height": "665.341px"
+        "height": "513.58px"
       }
     },
     "site-size-overrides-v1:m": {},
