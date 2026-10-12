@@ -127,7 +127,7 @@ mobile: { width: "320px" },
 width: "560.086px",
 captionOffset: { x: 80, y: 380 }
 },
-{ caption: "field", src: "images/boudaries/3 field.jpg", width: "440px", height: "622px", mobile: { width: "280px", height: "396px" } },
+{ caption: "field", src: "images/boudaries/3 field.jpg", width: "440px", height: "622px", mobile: { width: "280px", height: "396px" }, zoomBox: { width: "1519.8px", height: "801.059px" } },
 { caption: "sky", src: "images/boudaries/4 sky.jpg", mobile: { width: "320px" }, width: "426.007px", captionOffset: { x: 88, y: 0 }, offset: { x: 0, y: 300 }, zoomBox: { width: "1519.8px", height: "916.76px" } },
 { caption: "olympus", src: "images/boudaries/5 olympus.jpg", width: "520px", height: "590px", mobile: { width: "300px", height: "340px" } },
 { caption: "stage", src: "images/boudaries/6 stage.JPG", mobile: { width: "300px" }, width: "565.492px", zoomBox: { width: "912.41px", height: "916.76px" } },
@@ -236,7 +236,7 @@ images: [
   {
     slug: "beach",
     name: "Beach",
-        images: [{ caption: "back", src: "images/beach/beach-1.jpg" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "513.58px" } }],
+        images: [{ caption: "back", src: "images/beach/beach-1.jpg" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "648.158px" } }],
   },
 
   {
@@ -324,12 +324,12 @@ images: [
   {
     slug: "sofa",
     name: "Sofa",
-    images: [{ caption: "", src: "images/sofa/sushi discotheque.jpg", width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 } }]
+    images: [{ caption: "", src: "images/sofa/sushi discotheque.jpg", width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "796.246px" } }]
   },
   {
     slug: "whitening",
     name: "Whitening",
-    images: [{ caption: "", src: "images/whitening/smile.jpg", align: "left", offset: { x: 0, y: 52 }, width: "338.301px" }]
+    images: [{ caption: "", src: "images/whitening/smile.jpg", align: "left", offset: { x: 0, y: 52 }, width: "338.301px", zoomBox: { width: "1519.8px", height: "988.583px" } }]
   }
 ];
 
@@ -363,14 +363,14 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "field",
                   "uid": "uid_1791300174629_6130",
-                  "linkedImageSrc": "images/core archive/lines-11.jpg",
+                  "linkedImageSrc": "images/core archive/fields.jpg",
                   "linkedImageProject": "boudaries"
               },
               {
                   "type": "word",
                   "text": "church",
                   "uid": "uid_1791300315480_7880",
-                  "linkedImageSrc": "images/core archive/lines-5.jpg",
+                  "linkedImageSrc": "images/core archive/church.jpg",
                   "linkedImageProject": "homes"
               },
               {
@@ -397,7 +397,7 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "jewelry, rabat",
                   "uid": "uid_1791300744404_2431",
-                  "linkedImageSrc": "images/core archive/stills-10.jpg",
+                  "linkedImageSrc": "images/stills/stills-10.jpg",
                   "linkedImageLinkTo": "archive",
                   "linkedImageProject": "stills"
               },
@@ -422,7 +422,7 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "tie, saint laurent",
+                  "text": "tie saint laurent",
                   "uid": "uid_1791300788906_8601",
                   "linkedImageSrc": "images/stills/stills-13.jpg",
                   "linkedImageLinkTo": "project/stills",
@@ -431,7 +431,10 @@ const ARCHIVE = {
               {
                   "type": "word",
                   "text": "wire",
-                  "uid": "uid_1791600000001_4001"
+                  "uid": "uid_1791600000001_4001",
+                  "linkedImageSrc": "images/boudaries/1 wire.JPG",
+                  "linkedImageLinkTo": "project/boudaries",
+                  "linkedImageProject": "boudaries"
               },
               {
                   "type": "word",
@@ -448,7 +451,10 @@ const ARCHIVE = {
               {
                   "type": "word",
                   "text": "murano",
-                  "uid": "uid_1791305668347_6899"
+                  "uid": "uid_1791305668347_6899",
+                  "linkedImageSrc": "images/stills/murano.JPG",
+                  "linkedImageLinkTo": "project/stills",
+                  "linkedImageProject": "stills"
               },
               {
                   "type": "word",
@@ -474,14 +480,16 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "porcelain",
                   "uid": "uid_1791304323352_9307",
-                  "linkedImageSrc": "images/core archive/stills-5.jpg",
+                  "linkedImageSrc": "images/stills/stills-5.jpg",
                   "linkedImageLinkTo": "archive",
                   "linkedImageProject": "stills"
               },
               {
                   "type": "word",
-                  "text": "still",
-                  "uid": "uid_1791600000002_4002"
+                  "text": "tourette",
+                  "uid": "uid_1791600000002_4002",
+                  "linkedImageSrc": "images/core archive/tourette.JPG",
+                  "linkedImageLinkTo": "archive"
               },
               {
                   "type": "break",
@@ -497,7 +505,7 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "upper middle-class",
+                  "text": "upper middle class",
                   "uid": "uid_1791304250928_133",
                   "linkedImageSrc": "images/homes/2 family.jpg",
                   "linkedImageProject": "homes"
@@ -505,7 +513,46 @@ const ARCHIVE = {
               {
                   "type": "word",
                   "text": "delta",
-                  "uid": "uid_1791600000003_4003"
+                  "uid": "uid_1791600000003_4003",
+                  "linkedImageSrc": "images/core archive/michelin-5.jpg",
+                  "linkedImageLinkTo": "archive",
+                  "linkedImageProject": "michelin"
+              },
+              {
+                  "type": "break",
+                  "uid": "uid_added_break_1"
+              },
+              {
+                  "type": "word",
+                  "text": "wine sales negotiations",
+                  "uid": "uid_added_wine",
+                  "linkedImageSrc": "images/homes/1 wine.jpg",
+                  "linkedImageLinkTo": "project/homes",
+                  "linkedImageProject": "homes"
+              },
+              {
+                  "type": "word",
+                  "text": "barns",
+                  "uid": "uid_added_barns",
+                  "linkedImageSrc": "images/homes/6 huts.jpg",
+                  "linkedImageLinkTo": "project/homes",
+                  "linkedImageProject": "homes"
+              },
+              {
+                  "type": "word",
+                  "text": "cigarettes",
+                  "uid": "uid_added_cigarettes",
+                  "linkedImageSrc": "images/recognition/recognition-5.jpg",
+                  "linkedImageLinkTo": "project/recognition",
+                  "linkedImageProject": "recognition"
+              },
+              {
+                  "type": "word",
+                  "text": "perfume bottle",
+                  "uid": "uid_added_perfume",
+                  "linkedImageSrc": "images/stills/stills-7.jpg",
+                  "linkedImageLinkTo": "project/stills",
+                  "linkedImageProject": "stills"
               }
           ]
       }
