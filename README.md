@@ -35,6 +35,8 @@ Lista statica (nessuna animazione): i nomi dei progetti stanno fermi, click su u
 ### Viewer di galleria
 Ogni galleria (progetti + core archive) è uno scroll **sempre verticale** di foto con didascalia — mai orizzontale. Sopra c'è la descrizione del progetto; sotto ogni foto la sua didascalia. In automatico avanza di una foto ogni **5 secondi** (`AUTOPLAY_DELAY`) con uno scroll fluido di **2 secondi** (`TRANSITION_MS`) — entrambe le costanti sono in cima a `app.js`. Le frecce ← → in basso permettono di navigare manualmente e resettano il timer dell'autoplay. Muovere il mouse sopra le foto mette in pausa l'autoplay.
 
+**Foto ingrandita = galleria ferma.** Mentre una foto è ingrandita la galleria dietro sta ferma (anche se stava scorrendo a metà) e riparte da dove era quando chiudi: così la foto ingrandita torna esattamente sulla miniatura che avevi ingrandito e non "insegue" lo scorrimento. Lo fanno `holdGallery` / `releaseGallery` in `app_v58.js`, avvisate da `makeZoomable` con gli eventi `zoom-opened` / `zoom-closed`; l'animazione di ingrandimento (FLIP) non è toccata. Con la foto aperta anche le frecce della tastiera non muovono la galleria.
+
 ### Hamburger
 L'icona ☰ in alto a destra, in ogni pagina di galleria/contatti/about, è semplicemente un link che **torna alla home** — niente overlay/menu a comparsa.
 
