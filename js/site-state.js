@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 64,
-  "updatedAt": "2026-10-11T21:41:04.011Z",
+  "version": 72,
+  "updatedAt": "2026-10-12T12:29:19.078Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -302,7 +302,9 @@ window.SITE_STATE = {
       "project.mediality.captionText.2": "bristol",
       "project.mediality.captionText.3": "leather arm",
       "project.mediality.captionText.4": "pp",
-      "project.mediality.captionText.5": "tourette"
+      "project.mediality.captionText.5": "tourette",
+      "project.whitening.captionText.0": "smile",
+      "project.sofa.captionText.0": "sushi disco"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -406,7 +408,39 @@ window.SITE_STATE = {
       },
       "archive.page.page_1.zoom.uid_1791286888502_1417": {
         "width": "1519.8px",
-        "height": "513.58px"
+        "height": "648.158px"
+      },
+      "zoom:images/beach/beach-1.jpg": {
+        "width": "1519.8px",
+        "height": "648.158px"
+      },
+      "archive.page.page_1.zoom.uid_1791300174629_6130": {
+        "width": "1519.8px",
+        "height": "801.059px"
+      },
+      "zoom:images/boudaries/3 field.jpg": {
+        "width": "1519.8px",
+        "height": "801.059px"
+      },
+      "zoom:images/core archive/fields.jpg": {
+        "width": "1519.8px",
+        "height": "801.059px"
+      },
+      "project.whitening.zoom.0": {
+        "width": "1519.8px",
+        "height": "988.583px"
+      },
+      "zoom:images/whitening/smile.jpg": {
+        "width": "1519.8px",
+        "height": "988.583px"
+      },
+      "project.sofa.zoom.0": {
+        "width": "1519.8px",
+        "height": "796.246px"
+      },
+      "zoom:images/sofa/sushi discotheque.jpg": {
+        "width": "1519.8px",
+        "height": "796.246px"
       }
     },
     "site-size-overrides-v1:m": {},
