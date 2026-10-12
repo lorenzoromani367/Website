@@ -235,4 +235,21 @@ window.IMAGE_SIZES = {
   "images/toy/toy-1.jpg": [1283, 1700],
   "images/whitening/smile.jpg": [1442, 2060]
 };
+window.IMAGE_TWINS = {
+  "images/core archive/J. Kronester Bavaria Tea Set.jpg": "images/stills/stills-1.jpg",
+  "images/core archive/back.jpg": "images/beach/beach-1.jpg",
+  "images/core archive/church.jpg": "images/homes/5 church.jpg",
+  "images/core archive/cocoon.jpg": "images/recognition/recognition-10.jpg",
+  "images/core archive/estrangement-1.jpg": "images/sospension/estrangement-1.jpg",
+  "images/core archive/fields.jpg": "images/boudaries/3 field.jpg",
+  "images/core archive/fishes.jpg": "images/recognition/recognition-9.jpg",
+  "images/core archive/furla, messenger bag.jpg": "images/stills/stills-3.jpg",
+  "images/core archive/ionia porcelain set.jpg": "images/stills/stills-5.jpg",
+  "images/core archive/jewerly, rabat.jpg": "images/stills/stills-10.jpg",
+  "images/core archive/michelin-1.jpg": "images/michelin/michelin-1.jpg",
+  "images/core archive/michelin-5.jpg": "images/michelin/michelin-5.jpg",
+  "images/core archive/stasis1.jpg": "images/sospension/recognition-3.jpg",
+  "images/core archive/stills-11.jpg": "images/stills/stills-11.jpg",
+  "images/core archive/tourette.JPG": "images/mediality/senza titolo-1.JPG"
+};
 window.DYNAMIC_TEXTS = ["about.txt","boudaries.txt","cement.txt","compression.txt","core_archive.txt","hair.txt","homes.txt","maniac.txt","mediality.txt","paper-tape.txt","recognition.txt","sospension.txt","stills.txt"];
