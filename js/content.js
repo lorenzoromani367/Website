@@ -246,7 +246,7 @@ images: [
   },
   {
     slug: "sospension",
-    name: "Sospension",
+    name: "Suspension",
         images: [
       { caption: "untitled (part of series)", src: "images/sospension/recognition-1.jpg", captionOffset: { x: 80, y: 0 }, width: "330.219px", zoomBox: { width: "1519.8px", height: "1011.32px" } },
       { caption: "untitled (part of series)", src: "images/sospension/recognition-2.jpg", width: "382.496px" },
@@ -295,7 +295,7 @@ images: [
   {
     slug: "pile",
     name: "Pile",
-        images: [{ caption: "cars", src: "images/pile/cars.JPG" , align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px" }, width: "273.793px" }],
+        images: [{ caption: "cars", src: "images/pile/cars.JPG" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "778.367px" } }],
   },
   {
     slug: "maniac",

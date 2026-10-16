@@ -1821,7 +1821,10 @@ function setupAlignmentGuides(pageEl, galleryKey) {
 // rimpiccioliscono nel suo insieme, non ne modificano l'inquadratura). In
 // quel caso si aggiunge anche una seconda maniglia a sinistra, non solo
 // quella di default a destra.
-function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alwaysVisible, src, propType = "size" } = {}) {
+// "sideHandles" (didascalie): al posto della maniglia d'angolo ce ne sono due, una per lato, a metà altezza — cambiano solo
+// la larghezza e il blocco resta centrato (ogni lato si allarga della metà del trascinamento, così la maniglia segue il
+// puntatore). "minWidth"/"maxWidth" (numero o funzione) limitano la larghezza, "onResize" scatta a ogni passo del trascinamento.
+function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alwaysVisible, src, propType = "size", sideHandles, minWidth = 40, maxWidth, onResize } = {}) {
   node.classList.add("resizable");
   if (alwaysVisible) node.classList.add("always-visible-label");
   if (!node.style.position) node.style.position = "relative";
@@ -1865,32 +1868,36 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
   // usiamo il resize nativo del browser): trascinala per cambiare
   // larghezza/altezza. Funziona con mouse e dito (pointer events).
   // "signX" e "signY" invertono il segno dello spostamento orizzontale/verticale.
-  function addHandle(extraClass, signX, signY = 1) {
+  function addHandle(extraClass, signX, signY = 1, { side = false, title } = {}) {
     let classes = "resize-handle";
     if (alwaysVisible) classes += " always-visible";
     if (extraClass) classes += ` ${extraClass}`;
-    const handle = el("div", { class: classes });
+    const handle = el("div", title ? { class: classes, title } : { class: classes });
     node.appendChild(handle);
 
     let dragStart = null; // { pointerId, startX, startY, startWidth, startHeight, aspectRatio }
 
     function onPointerMove(e) {
       if (!dragStart || e.pointerId !== dragStart.pointerId) return;
-      const dx = (e.clientX - dragStart.startX) * signX;
-      const dy = (e.clientY - dragStart.startY) * signY;
-      
+      // Maniglia laterale: solo larghezza, e doppia perché il blocco resta centrato (si allarga da entrambi i lati)
+      const dx = (e.clientX - dragStart.startX) * signX * (side ? 2 : 1);
+      const dy = side ? 0 : (e.clientY - dragStart.startY) * signY;
+
       let rawWidth = dragStart.startWidth;
-      
+
       if (dragStart.aspectRatio) {
         // Per le foto, se stiamo trascinando una maniglia in alto o in basso,
         // l'utente potrebbe muoversi più verticalmente che orizzontalmente.
         // Prendiamo il movimento dominante in scala.
         const effectiveDx = Math.abs(dx) > Math.abs(dy * dragStart.aspectRatio) ? dx : dy * dragStart.aspectRatio;
-        rawWidth = Math.max(40, dragStart.startWidth + effectiveDx);
+        rawWidth = Math.max(minWidth, dragStart.startWidth + effectiveDx);
       } else {
-        rawWidth = Math.max(40, dragStart.startWidth + dx);
+        rawWidth = Math.max(minWidth, dragStart.startWidth + dx);
       }
-      
+      // Il limite non fa mai restringere di colpo un blocco già più largo: lo impedisce solo di allargarsi ancora
+      const widthLimit = typeof maxWidth === "function" ? maxWidth() : maxWidth;
+      if (widthLimit) rawWidth = Math.min(rawWidth, Math.max(minWidth, widthLimit, dragStart.startWidth));
+
       const newWidth = e.shiftKey ? snapToGrid(rawWidth) : rawWidth;
       
       let newHeight;
@@ -1903,6 +1910,7 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
       
       node.style.width = `${newWidth}px`;
       updateLabel();
+      if (onResize) onResize();
     }
 
     function onPointerUp(e) {
@@ -1942,11 +1950,17 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
     });
   }
 
-  addHandle(null, 1, 1); // Bottom-Right
-  if (lockRatioTo) {
-    addHandle("resize-handle-left", -1, 1); // Bottom-Left
-    addHandle("resize-handle-top", 1, -1); // Top-Right
-    addHandle("resize-handle-top-left", -1, -1); // Top-Left
+  if (sideHandles) {
+    const sideTitle = "Trascina per allargare o restringere (il testo va a capo di conseguenza); Maiusc = a scatti";
+    addHandle("resize-handle-side resize-handle-side-left", -1, 1, { side: true, title: sideTitle }); // lato sinistro
+    addHandle("resize-handle-side resize-handle-side-right", 1, 1, { side: true, title: sideTitle }); // lato destro
+  } else {
+    addHandle(null, 1, 1); // Bottom-Right
+    if (lockRatioTo) {
+      addHandle("resize-handle-left", -1, 1); // Bottom-Left
+      addHandle("resize-handle-top", 1, -1); // Top-Right
+      addHandle("resize-handle-top-left", -1, -1); // Top-Left
+    }
   }
 
   return observer;
@@ -2022,6 +2036,9 @@ function describeOverrideKey(key) {
   
   const zoomMatch = key.match(/^project\.(.+)\.zoom\.([\w-]+)$/);
   if (zoomMatch) return `Progetto "${zoomMatch[1]}", ${photoLabel(zoomMatch[2])} (Ingrandimento)  →  aggiungi "zoomBox: { width, height }" a quella voce in "images"`;
+
+  const captionSizeMatch = key.match(/^project\.(.+?)\.captionSize\.(.+)$/);
+  if (captionSizeMatch) return `Progetto "${captionSizeMatch[1]}", didascalia ${photoLabel(captionSizeMatch[2])}  →  larghezza della didascalia: aggiungi "captionWidth" su quella voce di "images" (regolata sul telefono vale solo per il telefono e resta in site-state.js)`;
 
   if (key === "archive.description") return `Core archive  →  aggiorna "descriptionBox" sull'oggetto ARCHIVE`;
 
@@ -4067,19 +4084,38 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     // Imposta l'altezza iniziale una volta aggiunto al DOM
     setTimeout(adjustHeight, 0);
     const figcaption = el("figcaption", { class: "caption-box" }, [captionInput]);
-    
+
+    // Larghezza della didascalia: 240px (o "captionWidth" di content.js), oppure quella scelta con le due maniglie ai lati
+    // (in modifica), salvata per QUESTA foto — separatamente su computer e su telefono. Non è più limitata dalla larghezza
+    // della foto (prima, con una foto stretta, la didascalia andava a capo di più e nessuna maniglia poteva allargarla) e
+    // resta centrata sotto di lei: il CSS la centra con --cap-w, che qui si tiene uguale alla larghezza vera.
+    const syncCaptionWidth = () => figcaption.style.setProperty("--cap-w", figcaption.style.width || "240px");
     resizeObservers.push(
       makeResizable(
         figcaption,
-        `${sizeKeyPrefix}.captionSize.${origIndex}`,
+        `${sizeKeyPrefix}.captionSize.${captionIdFor(image, origIndex)}`,
         { width: image.captionWidth || "240px" },
         {
+          sideHandles: true,
+          minWidth: 60,
+          // Al massimo quanto serve perché resti tutta dentro il foglio e le sue maniglie (30px fuori dal riquadro) restino
+          // raggiungibili, anche rispetto al righello delle guide (14px, a sinistra): 48px di margine per lato, a partire dal
+          // centro attuale della didascalia.
+          maxWidth: () => {
+            const sheet = viewport.getBoundingClientRect();
+            const box = figcaption.getBoundingClientRect();
+            const center = box.left + box.width / 2 - sheet.left;
+            return 2 * Math.min(center - 48, sheet.width - center - 48);
+          },
+          onResize: () => { syncCaptionWidth(); adjustHeight(); }, // il testo va a capo mentre trascini
           onResizeEnd: () => {
+            syncCaptionWidth();
             adjustHeight();
           }
         }
       )
     );
+    syncCaptionWidth();
     
     const captionMove = makeMovableFree(
       figcaption,
@@ -4736,8 +4772,18 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // tutti dentro il riquadro della foto, mai nei margini laterali, quindi
   // scorrere le foto per poterle modificare una dopo l'altra non entra
   // mai in conflitto con loro.
+  // La didascalia e le maniglie di modifica non sono "margine": con una didascalia più larga della foto (e le sue maniglie
+  // ai lati) un clic lì cadeva fuori dal riquadro della foto e faceva scorrere la galleria. Vale anche per un trascinamento
+  // cominciato su una maniglia e finito fuori da essa (maniglia ferma al limite, mouse più in là): il browser manda il "click"
+  // all'elemento comune a punto di partenza e di arrivo, cioè alla galleria stessa — quindi si ricorda dove è cominciata la pressione.
+  const EDITING_PARTS = ".caption-box, .resize-handle, .move-handle";
+  let pressStartedOnEditing = false;
+  viewport.addEventListener("pointerdown", (e) => {
+    pressStartedOnEditing = !!(e.target.closest && e.target.closest(EDITING_PARTS));
+  }, true);
   viewport.addEventListener("click", (e) => {
     if (figures.length < 2) return;
+    if (pressStartedOnEditing || (e.target.closest && e.target.closest(EDITING_PARTS))) { pressStartedOnEditing = false; return; }
     const activeFrame = figures[current].querySelector(".photo-frame");
     const r = activeFrame.getBoundingClientRect();
     if (e.clientY < r.top || e.clientY > r.bottom) return; // sopra/sotto la foto (didascalia, margini): non fare nulla
