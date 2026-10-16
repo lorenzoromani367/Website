@@ -295,7 +295,7 @@ images: [
   {
     slug: "pile",
     name: "Pile",
-        images: [{ caption: "cars", src: "images/pile/cars.JPG" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "778.367px" } }],
+        images: [{ caption: "cars", src: "images/pile/cars.JPG" , align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px" }, width: "273.793px" }],
   },
   {
     slug: "maniac",
