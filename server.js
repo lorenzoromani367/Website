@@ -361,6 +361,52 @@ function findImageSrcIndex(code, src) {
   }
 }
 
+// La voce di una foto in content.js ha proprietà con lo stesso nome a più livelli:
+//   { caption: "…", src: "…", width: "380px", height: "auto", zoomBox: { width: "…", height: "…" }, mobile: { width: "…", height: "…" } }
+// Per togliere o sostituire "height" della foto NON si devono toccare quelli dentro zoomBox e mobile (prima si toglievano
+// tutti: è così che una foto ha perso l'altezza del suo ingrandimento). Si cerca su una copia del testo in cui tutto ciò che
+// sta dentro le graffe annidate, dentro le stringhe e nei commenti // è sostituito da "_": stessa lunghezza, quindi le
+// posizioni trovate valgono anche per il testo vero.
+function maskInner(text) {
+  let out = '';
+  let depth = 0;
+  let quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === '\\') { out += i + 1 < text.length ? '__' : '_'; i++; continue; }
+      if (c === quote) { quote = null; out += c; continue; }
+      out += '_';
+      continue;
+    }
+    if (c === '/' && text[i + 1] === '/') { // commento fino a fine riga
+      while (i < text.length && text[i] !== '\n') { out += '_'; i++; }
+      if (i < text.length) out += '\n';
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; out += c; continue; }
+    if (c === '{') { depth++; out += depth <= 2 ? c : '_'; continue; }
+    if (c === '}') { out += depth <= 2 ? c : '_'; depth--; continue; }
+    out += depth >= 2 ? '_' : c;
+  }
+  return out;
+}
+
+// Come testo.replace(regex, ''), ma solo per le proprietà al primo livello della voce
+function removeTopLevel(text, regex) {
+  const masked = maskInner(text);
+  const re = new RegExp(regex.source, 'g');
+  const cuts = [];
+  let m;
+  while ((m = re.exec(masked)) !== null) {
+    cuts.push([m.index, m.index + m[0].length]);
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  let out = text;
+  for (let i = cuts.length - 1; i >= 0; i--) out = out.slice(0, cuts[i][0]) + out.slice(cuts[i][1]);
+  return out;
+}
+
 // Salvataggio automatico delle proprietà delle immagini (es. zoomBox, width, offset)
 async function handleSaveImageProps(req, res) {
   try {
@@ -396,11 +442,12 @@ async function handleSaveImageProps(req, res) {
       if (startIdx >= 0 && endIdx < code.length) {
         let objStr = code.substring(startIdx, endIdx + 1);
 
-        if (props.zoomBox !== undefined) objStr = objStr.replace(/,\s*zoomBox:\s*\{[^{}]+(?:\{[^{}]+\}[^{}]*)*\}/g, '');
-        if (props.width !== undefined) objStr = objStr.replace(/,\s*width:\s*["'][^"']+["']/g, '');
-        if (props.height !== undefined) objStr = objStr.replace(/,\s*height:\s*["'][^"']+["']/g, '');
-        if (props.offset !== undefined) objStr = objStr.replace(/,\s*offset:\s*\{[^}]+\}/g, '');
-        if (props.captionOffset !== undefined) objStr = objStr.replace(/,\s*captionOffset:\s*\{[^}]+\}/g, '');
+        // Si tolgono solo le proprietà al primo livello della voce (vedi removeTopLevel): quelle dentro zoomBox e mobile restano
+        if (props.zoomBox !== undefined) objStr = removeTopLevel(objStr, /,\s*zoomBox:\s*\{[^{}]+(?:\{[^{}]+\}[^{}]*)*\}/);
+        if (props.width !== undefined) objStr = removeTopLevel(objStr, /,\s*width:\s*["'][^"']+["']/);
+        if (props.height !== undefined) objStr = removeTopLevel(objStr, /,\s*height:\s*["'][^"']+["']/);
+        if (props.offset !== undefined) objStr = removeTopLevel(objStr, /,\s*offset:\s*\{[^}]+\}/);
+        if (props.captionOffset !== undefined) objStr = removeTopLevel(objStr, /,\s*captionOffset:\s*\{[^}]+\}/);
 
         const additions = [];
         if (props.zoomBox) {
