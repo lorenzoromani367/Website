@@ -636,8 +636,14 @@ body.edit-mode .description-editable {
   left: 0;
   right: 0;
   width: 240px;
-  max-width: 100%;
-  margin: 160px auto 0 auto !important;
+  /* Non più "100%" (la larghezza della foto): con una foto stretta la didascalia veniva schiacciata alla larghezza della
+     foto, andava a capo di più e nessuna maniglia poteva allargarla. Ora ha la sua larghezza (240px, o quella scelta con le
+     maniglie ai lati) e al massimo lo schermo. */
+  max-width: calc(100vw - 16px);
+  /* Centrata sotto la foto qualunque sia la sua larghezza (anche più larga della foto, cosa che "margin: auto" non sa fare):
+     metà della foto (50% è la larghezza della foto) meno metà della larghezza della didascalia (--cap-w, tenuta uguale a
+     "width" da renderGallery). Con una didascalia più stretta della foto il risultato è identico a prima. */
+  margin: 160px 0 0 calc(50% - var(--cap-w, 240px) / 2) !important;
 }
 
 .caption-box .move-handle {
@@ -652,6 +658,41 @@ body.edit-mode .description-editable {
   position: absolute;
   top: -30px;
   left: -30px;
+}
+
+/* Maniglie per allargare/restringere la didascalia (solo in modalità modifica, su computer e su telefono): una per lato, a
+   metà altezza, fuori dal riquadro, lontane da quelle della foto. Trascinandole la didascalia si allarga da entrambi i lati
+   (resta centrata sotto la foto) e il testo va a capo di conseguenza; la larghezza si salva per quella foto, separatamente
+   per computer e per telefono. */
+.caption-box .resize-handle-side {
+  top: 50%;
+  bottom: auto;
+  margin-top: -11px;
+  cursor: ew-resize;
+}
+
+.caption-box .resize-handle-side-right {
+  right: -30px;
+  left: auto;
+}
+
+.caption-box .resize-handle-side-left {
+  left: -30px;
+  right: auto;
+}
+
+/* al posto dell'angolino delle maniglie d'angolo, una doppia freccia orizzontale */
+.caption-box .resize-handle-side::after {
+  content: "↔";
+  border: 0;
+  width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--paper);
 }
 
 /* La scrittura delle didascalie delle foto: la STESSA identica per le parole del Core Archive, che sono
