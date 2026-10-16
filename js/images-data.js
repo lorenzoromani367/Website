@@ -252,4 +252,4 @@ window.IMAGE_TWINS = {
   "images/core archive/stills-11.jpg": "images/stills/stills-11.jpg",
   "images/core archive/tourette.JPG": "images/mediality/senza titolo-1.JPG"
 };
-window.DYNAMIC_TEXTS = ["about.txt","boudaries.txt","cement.txt","compression.txt","core_archive.txt","hair.txt","homes.txt","maniac.txt","mediality.txt","paper-tape.txt","recognition.txt","sospension.txt","stills.txt"];
+window.DYNAMIC_TEXTS = ["about.txt","boudaries.txt","cement.txt","compression.txt","core_archive.txt","homes.txt","maniac.txt","mediality.txt","recognition.txt","sospension.txt","stills.txt"];
