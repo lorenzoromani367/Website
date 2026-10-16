@@ -602,6 +602,26 @@ function pickLayout(desktopValue, mobileSpecific, mobileGeneral) {
   return mobileSpecific !== undefined ? mobileSpecific : mobileGeneral;
 }
 
+// Larghezza utile per le foto nel foglio da computer (740px di foglio meno 40px di margine per lato): serve a portare su
+// telefono, in scala, la disposizione scelta per il computer.
+const DESKTOP_PHOTO_AREA = 660;
+
+// Una foto che su computer hai messo a sinistra, vicina al titolo e con una larghezza tua (content.js: align "left", width,
+// offset: sono le pagine senza testo, come Beach o Tower) e che non ha misure apposta per il telefono ("mobile: {…}") prende
+// sul telefono LA STESSA disposizione in scala: a sinistra, con la stessa parte di foglio occupata e, in proporzione, la stessa
+// distanza dal titolo. Prima su telefono occupava tutta la larghezza e stava circa il doppio più in basso. Le misure e le
+// posizioni trascinate a mano sul telefono (si salvano a parte, chiavi ":m") valgono sempre più di questo. Su computer: null.
+function phoneLayoutFromDesktop(image) {
+  if (!isMobileViewport() || !image || image.align !== "left") return null;
+  const k = Math.max(0.3, Math.min(1, (window.innerWidth - 40) / DESKTOP_PHOTO_AREA)); // foglio del telefono / foglio del computer
+  const widthPx = /px\s*$/i.test(String(image.width || "")) ? parseFloat(image.width) : NaN;
+  const offset = image.offset && typeof image.offset === "object" ? image.offset : null;
+  return {
+    width: widthPx > 0 ? `${Math.round(widthPx * k * 100) / 100}px` : undefined,
+    offset: offset ? { x: Math.round((offset.x || 0) * k), y: Math.round((offset.y || 0) * k) } : undefined,
+  };
+}
+
 // Arrotonda un valore in px al multiplo di GRID_SIZE più vicino — usato da
 // resize, riordino e spostamento libero così che, agganciandosi tutti alla
 // stessa griglia, foto e blocchi diversi finiscono per allinearsi tra loro
@@ -1531,7 +1551,10 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
     document.removeEventListener("pointerup", onPointerUp);
     dragState = null;
     savePositionOverride(key, { x: pos.x, y: pos.y });
-    if (src && propType) {
+    // Dal telefono (anteprima mobile o schermo stretto) in content.js NON si scrive: lì offset/width/zoomBox sono quelli del
+    // COMPUTER, e scriverci quelli del telefono rovinava il computer. La disposizione del telefono si salva a parte (qui sopra:
+    // site-state.js, chiavi ":m") e vale per chi guarda da telefono.
+    if (src && propType && !isMobileViewport()) {
       const props = {};
       props[propType] = { x: pos.x, y: pos.y };
       fetch('/api/save-image-props', {
@@ -1888,7 +1911,8 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
       saveSizeOverride(key, { width: node.style.width, height: node.style.height });
-      if (src && propType === "size") {
+      // Dal telefono in content.js non si scrive (vedi makeMovableFree): la misura del telefono resta in site-state.js (":m")
+      if (src && propType === "size" && !isMobileViewport()) {
         fetch('/api/save-image-props', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2582,7 +2606,8 @@ function ensureEditModeUI() {
         const size = (photo && sizeOverrides[photo.key]) || sizeOverrides[`project.${project.slug}.zoom.${idx}`];
         if (size) zoomBoxesToWrite.push({ src: image.src, size });
       }));
-      for (const { src, size } of zoomBoxesToWrite) {
+      // (Dal telefono non si scrive in content.js: lo "zoomBox" lì è la misura del COMPUTER, vedi makeMovableFree.)
+      for (const { src, size } of (isMobileViewport() ? [] : zoomBoxesToWrite)) {
         try {
           await fetch('/api/save-image-props', {
             method: 'POST',
@@ -3072,7 +3097,8 @@ function makeZoomResizable(frame, img) {
 
       // 2) Su disco: lo stato (js/site-state.js) e, se la foto sta in content.js, anche la sua misura lì ("zoomBox").
       const contentImage = photo ? contentImageOf(photo) : null;
-      const writeContent = contentImage
+      // Dal telefono in content.js non si scrive (vedi makeMovableFree): lo zoomBox lì è la misura del COMPUTER
+      const writeContent = contentImage && !isMobile
         ? fetch("/api/save-image-props", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3976,6 +4002,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   const figures = images.map((image, i) => {
     const origIndex = image._index != null ? image._index : i;
+    // Su telefono: la disposizione del computer, in scala, per le foto messe a sinistra (null per le altre e su computer)
+    const phoneFromDesktop = phoneLayoutFromDesktop(image);
     // Lo spazio della foto si riserva con le sue proporzioni VERE (vedi KNOWN_IMAGE_SIZES). Prima si usava
     // la misura dell'ingrandimento (zoomBox), che non ha le stesse proporzioni della foto: la schiacciava,
     // lasciando due bande vuote ai lati e la didascalia "a mezz'aria".
@@ -4089,8 +4117,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         // passa allo stesso calcolo automatico invece di restare fissa
         // a una larghezza pensata per tutt'altro schermo (vedi anche
         // isUntouched() più sotto, che deve ignorarla allo stesso modo).
+        // Eccezione: le foto messe a sinistra su computer (align "left")
+        // prendono su telefono la stessa larghezza in scala (vedi
+        // phoneLayoutFromDesktop).
         {
-          width: pickLayout(image.width, image.mobile && image.mobile.width, undefined),
+          width: pickLayout(image.width, image.mobile && image.mobile.width, phoneFromDesktop && phoneFromDesktop.width),
           height: pickLayout(image.height, image.mobile && image.mobile.height, undefined),
         },
         {
@@ -4113,7 +4144,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       defaultOffset: pickLayout(
         image.offset || ((isSingle && LAYOUT.gallery.singleImageOffset) ? LAYOUT.gallery.singleImageOffset : LAYOUT.gallery.imageOffset),
         image.mobile && image.mobile.offset,
-        LAYOUT.galleryMobile.imageOffset
+        (phoneFromDesktop && phoneFromDesktop.offset) || LAYOUT.galleryMobile.imageOffset
       ),
       dragOnNode: true,
       dragLockAxis: isSingle ? null : "x"
@@ -4753,7 +4784,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const key = `${sizeKeyPrefix}.image.${images[i]._index}`;
     const saved = loadSizeOverrides()[key];
     const mobileOverride = images[i].mobile && (images[i].mobile.width || images[i].mobile.height);
-    const contentDefault = pickLayout(images[i].width || images[i].height, mobileOverride, undefined);
+    const contentDefault = pickLayout(images[i].width || images[i].height, mobileOverride, (phoneLayoutFromDesktop(images[i]) || {}).width);
     return !((saved && (saved.width || saved.height)) || contentDefault);
   }
   // Misura (larghezza, altezza) della foto i: quella letta in anticipo da images-data.js se c'è,
