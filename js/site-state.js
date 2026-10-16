@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 75,
-  "updatedAt": "2026-10-12T14:20:07.479Z",
+  "version": 77,
+  "updatedAt": "2026-10-16T17:03:30.771Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -480,7 +480,16 @@ window.SITE_STATE = {
         "height": "796.246px"
       }
     },
-    "site-size-overrides-v1:m": {},
+    "site-size-overrides-v1:m": {
+      "project.pile.spacerBeforeBar": {
+        "width": "",
+        "height": "94.2656px"
+      },
+      "project.pile.image.0": {
+        "width": "273.793px",
+        "height": ""
+      }
+    },
     "site-words-promoted-v1": 1,
     "site-words-promoted-v2": 1,
     "site-zoom-rebuild-v2": 1,
