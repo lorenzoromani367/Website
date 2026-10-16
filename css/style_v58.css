@@ -370,6 +370,15 @@ body.edit-mode .home-word-delete-btn:hover {
   border-bottom: 1px solid transparent;
 }
 
+/* La "scatola" del titolo è larga quanto tutta la riga (flex: 1) e viene spostata di decine di pixel (60 su telefono, 120
+   su computer): la parte vuota a destra usciva dal bordo e rendeva la pagina PIÙ LARGA DELLO SCHERMO — su ogni telefono di
+   2 px (striscia scura sul bordo destro e pagina che "balla" di lato), su iPad in verticale fino a 42 px. Per chi visita il
+   sito quella parte vuota si ritaglia (si vede solo il testo del titolo, che non cambia). In modalità modifica no: lì le
+   maniglie di spostamento stanno fuori dai bordi del foglio e devono restare raggiungibili. */
+body:not(.edit-mode) .topbar {
+  overflow-x: clip;
+}
+
 .topbar-row {
   display: flex;
   align-items: center;
@@ -734,6 +743,13 @@ body.edit-mode .grid-btn {
 @media (max-width: 700px) {
   .gallerybar {
     padding: 24px 20px 28px;
+  }
+
+  /* Core Archive (non ha frecce): il numero in fondo su computer sta fuori dal foglio (spostato di -180px, sul fondo scuro
+     dove non si legge); su telefono finiva invece dentro la pagina, da solo in basso a sinistra. Qui si nasconde come su
+     computer; in modalità modifica resta, per poterlo spostare. */
+  body:not(.edit-mode) .gallerybar.archive-bar .topbar-index {
+    visibility: hidden;
   }
 }
 

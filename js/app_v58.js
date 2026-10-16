@@ -552,6 +552,16 @@ function isEditMode() {
   return document.body.classList.contains("edit-mode");
 }
 
+// Sugli schermi tattili, dopo ogni tocco il browser inventa anche i movimenti del "mouse" (mouseenter, click...) e il
+// "mouseleave" non arriva finché non si tocca un altro punto: usare "mouseenter" per fermare la galleria o il testo
+// scorrevole li lasciava fermi per sempre (dopo un tocco sul margine della galleria, o sul testo). Si ricorda l'ultimo
+// tocco: un "mouseenter" arrivato subito dopo non è un vero mouse e non deve fermare nulla.
+let lastTouchAt = -Infinity;
+function noteTouch() { lastTouchAt = performance.now(); }
+document.addEventListener("touchstart", noteTouch, { passive: true, capture: true });
+document.addEventListener("touchend", noteTouch, { passive: true, capture: true });
+function isTouchEcho() { return performance.now() - lastTouchAt < 1000; }
+
 // Vero anche dentro il riquadro di anteprima mobile (vedi openMobilePreview
 // più sotto): lì l'iframe ha davvero quella larghezza, non è solo un
 // restringimento visivo, quindi "window.innerWidth" lì dentro riflette la
@@ -2675,7 +2685,10 @@ function ensureZoomTextPanel() {
   zoomTextPanel.style.top = "0";
   zoomTextPanel.style.left = "0";
   zoomTextPanel.style.right = "0";
-  zoomTextPanel.style.maxHeight = "100vh";
+  // "100vh" su iPhone/iPad comprende anche la zona sotto la barra del browser: un pannello alto quanto "100vh" finisce in
+  // parte nascosto e l'ultima parte di un testo lungo non si raggiunge. "100dvh" è l'altezza davvero visibile (sul computer
+  // è identica a "100vh"); dove non esiste si resta su "100vh".
+  zoomTextPanel.style.maxHeight = window.CSS && CSS.supports && CSS.supports("max-height", "100dvh") ? "100dvh" : "100vh";
   zoomTextPanel.style.overflowY = "auto";
   zoomTextPanel.style.zIndex = "301";
   zoomTextPanel.addEventListener("click", () => { if (zoomCurrentClose) zoomCurrentClose(); });
@@ -2947,6 +2960,10 @@ let zoomActiveBaseBox = null; // la misura salvata con cui si è aperta: da qui 
 // confermato: "chiudere funziona solo sulla prima foto, poi si blocca").
 let zoomCurrentClose = null;
 
+// Rimette a misura la foto ingrandita aperta ORA quando lo schermo cambia (telefono ruotato): impostata da makeZoomable a ogni
+// apertura, tolta all'inizio della chiusura. null = nessuna foto ingrandita da adattare.
+let zoomRefit = null;
+
 // Maniglie per regolare a mano la dimensione della foto ingrandita: due,
 // una in basso e una speculare in alto (entrambe sul lato destro), così
 // almeno una resta raggiungibile anche se il riquadro ingrandito supera
@@ -3129,6 +3146,9 @@ function ensureZoomElements() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") triggerClose();
   });
+  window.addEventListener("resize", () => {
+    if (zoomRefit && zoomActiveFrame.classList.contains("is-active")) zoomRefit();
+  });
   document.body.appendChild(zoomBackdrop);
   document.body.appendChild(zoomActiveFrame);
 }
@@ -3184,6 +3204,20 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     const activeFrame = zoomActiveFrame;
     const activeImg = zoomActiveImg;
 
+    // Dove sta la scritta del progetto: di fianco alla foto (a destra) su computer; su telefono non c'è spazio di lato,
+    // quindi sotto la foto. Si rifà anche quando lo schermo cambia con la foto aperta (telefono ruotato).
+    const placeLabel = () => {
+      if (window.innerWidth <= MOBILE_BREAKPOINT) {
+        zoomProjectLabel.style.left = "0";
+        zoomProjectLabel.style.top = `calc(100% + ${LIGHTBOX_LABEL_GAP_MOBILE}px)`;
+        zoomProjectLabel.style.transform = "none";
+      } else {
+        zoomProjectLabel.style.left = `calc(100% + ${LIGHTBOX_LABEL_GAP}px)`;
+        zoomProjectLabel.style.top = "50%";
+        zoomProjectLabel.style.transform = "translateY(-50%)";
+      }
+    };
+
     if (linkTo) {
       const parts = linkTo.split("/");
       let labelName = linkTo;
@@ -3196,17 +3230,8 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       }
       zoomProjectLabel.innerText = labelName;
       zoomProjectLabel.style.display = "block";
-      // Di fianco alla foto (a destra); su telefono non c'è spazio di lato, quindi sotto la foto
-      if (window.innerWidth <= MOBILE_BREAKPOINT) {
-        zoomProjectLabel.style.left = "0";
-        zoomProjectLabel.style.top = `calc(100% + ${LIGHTBOX_LABEL_GAP_MOBILE}px)`;
-        zoomProjectLabel.style.transform = "none";
-      } else {
-        zoomProjectLabel.style.left = `calc(100% + ${LIGHTBOX_LABEL_GAP}px)`;
-        zoomProjectLabel.style.top = "50%";
-        zoomProjectLabel.style.transform = "translateY(-50%)";
-      }
-      
+      placeLabel();
+
       // Simula hover css via js perché è l'unico punto in cui lo gestiamo
       zoomProjectLabel.onmouseenter = () => zoomProjectLabel.style.opacity = "0.7";
       zoomProjectLabel.onmouseleave = () => zoomProjectLabel.style.opacity = "1";
@@ -3251,36 +3276,6 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     // Ordine di ricerca della misura: quella salvata per la foto (ovunque la
     // si sia regolata) → quella salvata per questo punto del sito → quella
     // scritta in content.js per questa foto.
-    const activeKey = sizeKey || LIGHTBOX_SIZE_KEY;
-    const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
-    const sizeOverrides = loadSizeOverrides();
-    const contentImage = zoomActivePhoto ? contentImageOf(zoomActivePhoto) : null;
-    const photoSize = zoomActivePhoto && (sizeOverrides[zoomActivePhoto.key] || sizeOverrides[zoomActivePhoto.ownKey]);
-    const savedSize = photoSize || sizeOverrides[activeKey] || zoomBox || (contentImage && contentImage.zoomBox) || null;
-    zoomActiveBaseBox = savedSize;
-    const defaultMaxW = isMobile ? window.innerWidth - 16 : window.innerWidth * 0.85;
-    const defaultMaxH = isMobile ? window.innerHeight - 16 : window.innerHeight * 0.82;
-    // Su mobile ignora del tutto eventuali ridimensionamenti salvati (che
-    // impedirebbero di andare a filo), forzando il default 100% - 16px.
-    let maxW = savedSize && savedSize.width && !isMobile ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : defaultMaxW;
-    const maxH = savedSize && savedSize.height && !isMobile ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : defaultMaxH;
-    // Core Archive su computer: la foto sta nei TRE QUARTI di sinistra dello schermo (con il margine di lato), centrata
-    // lì dentro, e il nome del progetto le sta accanto, a destra. La SUA misura (quella che hai scelto tu) vale anche
-    // se è più grande dei tre quarti: la foto può allargarsi finché a destra c'è ancora posto per il nome (in quel
-    // caso parte dal margine sinistro); oltre si riduce quanto basta, sempre con le sue proporzioni. Senza una misura
-    // scelta da te, la foto sta nei tre quarti.
-    const isArchiveZoom = Boolean(sizeKey && sizeKey.startsWith("archive.")) && !isMobile;
-    let archiveArea = null; // { left, width, maxWidth }: lo spazio ideale e il massimo in cui sta la foto dell'archivio
-    if (isArchiveZoom) {
-      const edge = Math.max(24, window.innerWidth * 0.03);
-      const labelRoom = linkTo ? LIGHTBOX_LABEL_GAP + zoomProjectLabel.offsetWidth : 0; // quanto serve alla scritta, a destra della foto
-      const hardRight = window.innerWidth - edge - labelRoom;               // fin qui può arrivare il bordo destro della foto
-      const areaRight = Math.min(window.innerWidth * 0.75, hardRight);      // lo spazio ideale: i tre quarti di sinistra
-      archiveArea = { left: edge, width: Math.max(160, areaRight - edge), maxWidth: Math.max(160, hardRight - edge) };
-      const hasChosenSize = Boolean(savedSize && savedSize.width && savedSize.height);
-      maxW = Math.min(maxW, hasChosenSize ? archiveArea.maxWidth : archiveArea.width);
-    }
-    zoomActiveArea = archiveArea;
     // Le proporzioni vere della foto si conoscono anche prima che sia arrivata (misure lette in images-data.js):
     // senza questo, un clic su una foto ancora in arrivo usava la forma della parola (larga e bassa) e la schiacciava.
     const knownSize = knownImageSize(img.getAttribute("src") || img.src);
@@ -3288,14 +3283,64 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       ? (img.naturalWidth / img.naturalHeight)
       : (knownSize ? knownSize[0] / knownSize[1] : (firstRect.width / firstRect.height));
 
-    let targetW = maxW;
-    let targetH = targetW / ratio;
-    if (targetH > maxH) {
-      targetH = maxH;
-      targetW = targetH * ratio;
-    }
-    const targetX = zoomLeftFor(targetW);
-    const targetY = (window.innerHeight - targetH) / 2;
+    // Misura e posizione finali per lo schermo di ORA. Sono una funzione perché si rifanno anche se lo schermo cambia con la
+    // foto aperta (telefono ruotato): prima la foto restava della misura e nel punto di prima, e lo schermo nuovo la tagliava.
+    const fitTarget = () => {
+      const activeKey = sizeKey || LIGHTBOX_SIZE_KEY;
+      const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      const sizeOverrides = loadSizeOverrides();
+      const contentImage = zoomActivePhoto ? contentImageOf(zoomActivePhoto) : null;
+      const photoSize = zoomActivePhoto && (sizeOverrides[zoomActivePhoto.key] || sizeOverrides[zoomActivePhoto.ownKey]);
+      const savedSize = photoSize || sizeOverrides[activeKey] || zoomBox || (contentImage && contentImage.zoomBox) || null;
+      zoomActiveBaseBox = savedSize;
+      const defaultMaxW = isMobile ? window.innerWidth - 16 : window.innerWidth * 0.85;
+      const defaultMaxH = isMobile ? window.innerHeight - 16 : window.innerHeight * 0.82;
+      // Su mobile ignora del tutto eventuali ridimensionamenti salvati (che
+      // impedirebbero di andare a filo), forzando il default 100% - 16px.
+      let maxW = savedSize && savedSize.width && !isMobile ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : defaultMaxW;
+      const maxH = savedSize && savedSize.height && !isMobile ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : defaultMaxH;
+      // Core Archive su computer: la foto sta nei TRE QUARTI di sinistra dello schermo (con il margine di lato), centrata
+      // lì dentro, e il nome del progetto le sta accanto, a destra. La SUA misura (quella che hai scelto tu) vale anche
+      // se è più grande dei tre quarti: la foto può allargarsi finché a destra c'è ancora posto per il nome (in quel
+      // caso parte dal margine sinistro); oltre si riduce quanto basta, sempre con le sue proporzioni. Senza una misura
+      // scelta da te, la foto sta nei tre quarti.
+      const isArchiveZoom = Boolean(sizeKey && sizeKey.startsWith("archive.")) && !isMobile;
+      let archiveArea = null; // { left, width, maxWidth }: lo spazio ideale e il massimo in cui sta la foto dell'archivio
+      if (isArchiveZoom) {
+        const edge = Math.max(24, window.innerWidth * 0.03);
+        const labelRoom = linkTo ? LIGHTBOX_LABEL_GAP + zoomProjectLabel.offsetWidth : 0; // quanto serve alla scritta, a destra della foto
+        const hardRight = window.innerWidth - edge - labelRoom;               // fin qui può arrivare il bordo destro della foto
+        const areaRight = Math.min(window.innerWidth * 0.75, hardRight);      // lo spazio ideale: i tre quarti di sinistra
+        archiveArea = { left: edge, width: Math.max(160, areaRight - edge), maxWidth: Math.max(160, hardRight - edge) };
+        const hasChosenSize = Boolean(savedSize && savedSize.width && savedSize.height);
+        maxW = Math.min(maxW, hasChosenSize ? archiveArea.maxWidth : archiveArea.width);
+      }
+      zoomActiveArea = archiveArea;
+
+      let targetW = maxW;
+      let targetH = targetW / ratio;
+      if (targetH > maxH) {
+        targetH = maxH;
+        targetW = targetH * ratio;
+      }
+      let targetY = (window.innerHeight - targetH) / 2;
+      // Su telefono la scritta del progetto sta SOTTO la foto: se la foto è alta quanto lo schermo (foto verticali, schermi
+      // bassi, telefono messo in orizzontale) la scritta finiva sotto il bordo e non si vedeva né si poteva toccare.
+      // Allora si lascia lo spazio alla scritta: la foto si rimpicciolisce solo se serve e il gruppo foto+scritta si centra.
+      // Le foto che hanno già posto sotto restano esattamente dove erano.
+      if (isMobile && linkTo) {
+        const labelRoom = LIGHTBOX_LABEL_GAP_MOBILE + zoomProjectLabel.offsetHeight;
+        if (targetY + targetH + labelRoom > window.innerHeight - 8) {
+          if (targetH + labelRoom > window.innerHeight - 16) {
+            targetH = window.innerHeight - 16 - labelRoom;
+            targetW = targetH * ratio;
+          }
+          targetY = (window.innerHeight - (targetH + labelRoom)) / 2;
+        }
+      }
+      return { targetW, targetH, targetX: zoomLeftFor(targetW), targetY };
+    };
+    const { targetW, targetH, targetX, targetY } = fitTarget();
 
     activeImg.src = img.src;
     activeImg.alt = img.alt;
@@ -3333,7 +3378,21 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       });
     });
 
+    // Se lo schermo cambia mentre la foto è aperta (telefono ruotato), la foto si rimette a misura dello schermo nuovo,
+    // subito e senza animazione (vedi il listener di "resize" in ensureZoomElements).
+    zoomRefit = () => {
+      if (linkTo) placeLabel();
+      const target = fitTarget();
+      activeFrame.style.transition = "none";
+      activeFrame.style.width = `${target.targetW}px`;
+      activeFrame.style.height = `${target.targetH}px`;
+      activeFrame.style.left = `${target.targetX}px`;
+      activeFrame.style.top = `${target.targetY}px`;
+      activeFrame.style.transform = "translate(0px, 0px) scale(1)";
+    };
+
     zoomCurrentClose = function close() {
+      zoomRefit = null; // durante la chiusura la foto non va più rimessa a misura
       // Ricalcola la miniatura al MOMENTO della chiusura (se nel frattempo
       // hai scrollato la pagina, "firstRect" sarebbe ormai vecchia).
       const currentThumbRect = img.getBoundingClientRect();
@@ -4267,7 +4326,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     applyMarqueeTransform();
   };
 
-  descBlock.addEventListener("mouseenter", () => { marqueeHoverPaused = true; });
+  descBlock.addEventListener("mouseenter", () => { if (!isTouchEcho()) marqueeHoverPaused = true; });
   descBlock.addEventListener("mouseleave", () => { marqueeHoverPaused = false; });
 
   if (document.fonts && document.fonts.ready) {
@@ -4655,20 +4714,26 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     else if (e.clientX > r.right) goTo(current + 1, { user: true });
   });
 
-  viewport.addEventListener("mouseenter", handlePause);
+  viewport.addEventListener("mouseenter", () => { if (!isTouchEcho()) handlePause(); });
   viewport.addEventListener("mouseleave", handleResume);
   viewport.addEventListener("touchstart", handlePause, { passive: true });
 
-  // swipe orizzontale su touch
+  // swipe orizzontale su touch. Conta solo se il movimento è più orizzontale che verticale: scorrere la pagina col pollice
+  // (quasi sempre con un po' di deriva laterale, 40px bastano) cambiava la foto per errore.
   let touchStartX = null;
-  viewport.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  let touchStartY = null;
+  viewport.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY; }, { passive: true });
   viewport.addEventListener("touchend", (e) => {
     if (touchStartX == null) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(dx) > 40) goTo(current + (dx < 0 ? 1 : -1), { user: true });
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) goTo(current + (dx < 0 ? 1 : -1), { user: true });
     touchStartX = null;
     handleResume();
   });
+  // Se il browser prende in mano il gesto (es. comincia a scorrere la pagina) può mandare "touchcancel" invece di "touchend":
+  // senza questo la galleria restava in pausa.
+  viewport.addEventListener("touchcancel", () => { touchStartX = null; handleResume(); }, { passive: true });
 
   // Finché non la tocchi, ogni foto ha la STESSA ALTEZZA: generosa,
   // proporzionale allo schermo (non allo spazio che resta dopo il testo
@@ -5042,14 +5107,17 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
     if (explicitHeight) descBlock.style.height = explicitHeight;
   }
 
+  // Larghezza e posizione di partenza del testo: le STESSE di un progetto, su computer e su telefono (sul telefono sono
+  // quelle di LAYOUT.galleryMobile). Prima qui valevano sempre i valori da computer: su telefono contatti/about/404
+  // avevano il testo più largo e 40px più in basso di ogni altra pagina, e aprendolo (zoom del testo) saltava di 40px.
   resizeObservers.push(
     makeResizable(descBlock, `${sizeKeyPrefix}.description`, {
-      width: LAYOUT.gallery.descriptionWidth,
+      width: pickLayout(LAYOUT.gallery.descriptionWidth, undefined, LAYOUT.galleryMobile.descriptionWidth) || LAYOUT.gallery.descriptionWidth,
       height: hasExplicitDescHeight ? defaultDescHeight : "auto",
     })
   );
   makeMovableFree(descBlock, `${sizeKeyPrefix}.descriptionPos`, "Trascina per spostare il testo", {
-    defaultOffset: LAYOUT.gallery.descriptionOffset,
+    defaultOffset: pickLayout(LAYOUT.gallery.descriptionOffset, undefined, LAYOUT.galleryMobile.descriptionOffset),
   });
 
   app.appendChild(topbar);
@@ -5099,7 +5167,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
     applyMarqueeTransform();
     marqueeRafId = requestAnimationFrame(marqueeTick);
 
-    descBlock.addEventListener("mouseenter", () => { marqueeHoverPaused = true; });
+    descBlock.addEventListener("mouseenter", () => { if (!isTouchEcho()) marqueeHoverPaused = true; });
     descBlock.addEventListener("mouseleave", () => { marqueeHoverPaused = false; });
 
     if (document.fonts && document.fonts.ready) {
@@ -5210,9 +5278,12 @@ function showFatalError(error) {
 // Conta i cambi di pagina: una pagina che aspetta qualcosa dalla rete (es. il testo del progetto) controlla
 // di essere ancora quella richiesta prima di disegnarsi.
 let routeCounter = 0;
+// Com'era lo schermo (telefono / computer) quando la pagina è stata disegnata: vedi redrawWhenFormatChanges più sotto.
+let renderedAsMobile = isMobileViewport();
 
 async function renderRoute() {
   routeCounter++;
+  renderedAsMobile = isMobileViewport();
   teardownCurrentView();
   app.classList.remove("is-archive");
   try {
@@ -5263,6 +5334,33 @@ function whenFontReady() {
 }
 
 window.addEventListener("hashchange", renderRoute);
+
+// La disposizione (larghezze, spostamenti, misura delle foto) cambia sotto i 700px e viene decisa nel momento in cui la
+// pagina si disegna. Se si attraversa la soglia senza ricaricare — telefono che si ruota, finestra del computer che si
+// restringe — la pagina va ridisegnata, altrimenti resta un misto di versione telefono e versione computer: testo stretto
+// nel foglio largo, titolo che esce dallo schermo, foto e didascalie fuori posto (ruotando da orizzontale a verticale la
+// pagina diventava anche più larga dello schermo di 62px). Con una foto ingrandita aperta la foto si adatta da sola
+// (vedi zoomRefit) e la pagina dietro si ridisegna appena la si chiude; il pannello del testo, che si chiude di colpo, si chiude.
+(function redrawWhenFormatChanges() {
+  let timer = null;
+  let waitingForPhoto = false;
+  const redraw = () => {
+    waitingForPhoto = false;
+    renderRoute();
+  };
+  const check = () => {
+    if (isMobileViewport() === renderedAsMobile) { waitingForPhoto = false; return; }
+    if (zoomRefit) { waitingForPhoto = true; return; }
+    if (zoomCurrentClose) zoomCurrentClose();
+    redraw();
+  };
+  // Ruotando arrivano più "resize" di fila: si aspetta che lo schermo si sia assestato. Su alcuni telefoni la misura nuova
+  // arriva dopo l'evento di rotazione: si ricontrolla anche poco dopo, per non restare con la pagina del formato sbagliato.
+  window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(check, 150); });
+  window.addEventListener("orientationchange", () => { setTimeout(check, 400); });
+  window.addEventListener("zoom-closed", () => { if (waitingForPhoto) setTimeout(check, 0); });
+})();
+
 window.addEventListener("DOMContentLoaded", () => {
   whenFontReady().then(renderRoute).then(() => {
     // Sfondo scuro, riquadro che vola e pannello del testo si creano ora, a pagina già disegnata e a riposo, non al
@@ -5841,8 +5939,8 @@ function renderArchivePagesMode(param) {
     defaultOffset: pickLayout(LAYOUT.gallery.bottomIndexOffset, undefined, LAYOUT.galleryMobile.bottomIndexOffset),
   });
   const centerGroup = el("div", { class: "gallerybar-center" }, [bottomIndexEl]);
-  const footerBar = el("div", { class: "gallerybar" }, [centerGroup]);
-  
+  const footerBar = el("div", { class: "gallerybar archive-bar" }, [centerGroup]);
+
   const spacerBottom = el("div", { class: "gallery-spacer" });
   makeHeightResizable(spacerBottom, "archive.spacerBottom", "Trascina per allungare la pagina", parseFloat(LAYOUT.gallery.spacerBottomHeight) || 0);
 
