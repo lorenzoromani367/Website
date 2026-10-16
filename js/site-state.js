@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 77,
-  "updatedAt": "2026-10-16T17:03:30.771Z",
+  "version": 78,
+  "updatedAt": "2026-10-16T21:14:06.728Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -421,7 +421,12 @@ window.SITE_STATE = {
         "y": 21.25
       }
     },
-    "site-position-overrides-v1:m": {},
+    "site-position-overrides-v1:m": {
+      "project.cement.captionPos.5": {
+        "x": -0.3125,
+        "y": 0
+      }
+    },
     "site-size-overrides-v1:d": {
       "archive.page.page_1.size.uid_1791300788906_8601": {
         "width": "155.098px",
