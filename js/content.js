@@ -315,7 +315,7 @@ images: [
     images: [
       { caption: "", src: "images/mediality/mediality-1.jpg", zoomBox: { width: "1519.8px", height: "1022px" } },
       { caption: "", src: "images/mediality/mediality-2.jpg" },
-      { caption: "", src: "images/mediality/mediality-3.jpg", zoomBox: { width: "915.969px" }, width: "614.141px" },
+      { caption: "", src: "images/mediality/mediality-3.jpg", zoomBox: { width: "915.969px", height: "916.76px" }, width: "614.141px" },
       { caption: "", src: "images/mediality/mediality-4.jpg", zoomBox: { width: "1519.8px", height: "986.157px" } },
       { caption: "", src: "images/mediality/mediality-5.jpg", zoomBox: { width: "1519.8px", height: "900.339px" } },
       { caption: "", src: "images/mediality/senza titolo-1-2.JPG", width: "503.383px", zoomBox: { width: "1519.8px", height: "994.45px" } },

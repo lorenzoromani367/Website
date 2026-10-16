@@ -811,12 +811,28 @@ body.edit-mode .grid-btn {
   .gallerybar {
     padding: 24px 20px 28px;
   }
+}
 
-  /* Core Archive (non ha frecce): il numero in fondo su computer sta fuori dal foglio (spostato di -180px, sul fondo scuro
-     dove non si legge); su telefono finiva invece dentro la pagina, da solo in basso a sinistra. Qui si nasconde come su
-     computer; in modalità modifica resta, per poterlo spostare. */
-  body:not(.edit-mode) .gallerybar.archive-bar .topbar-index {
-    visibility: hidden;
+/* Core Archive: la barra in fondo ha solo il numero (niente frecce). Con "space-between" un figlio solo andava a sinistra e lo
+   spostamento di default del numero (-180px su computer) lo portava fuori dal foglio, sul fondo scuro dove non si leggeva (su
+   telefono, senza spostamento, restava invece solo in basso a sinistra). Centrato come nelle pagine dei progetti — dove il
+   numero sta nel gruppo centrale tra le due frecce — con lo stesso spostamento finisce nello stesso punto del foglio, su
+   computer e su telefono. */
+.gallerybar.archive-bar {
+  justify-content: center;
+}
+
+/* Core Archive in modifica, su telefono: i tre pulsanti fissi in basso a sinistra (+ Parola, + Spazio, Vecchio archivio, larghi
+   196px) restano sopra il fondo della pagina e coprivano il numero della barra e la sua maniglia di spostamento. Con questo
+   posto in più sotto la pagina si scorre abbastanza da vederlo e prenderlo. Per chi visita il sito e su computer non c'è. */
+.edit-bottom-room {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  body.edit-mode .edit-bottom-room {
+    display: block;
+    height: 140px;
   }
 }
 

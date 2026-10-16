@@ -6026,7 +6026,10 @@ function renderArchivePagesMode(param) {
   app.appendChild(pageControls);
   app.appendChild(footerBar);
   app.appendChild(spacerBottom);
-  
+  // Solo in modifica su telefono (vedi ".edit-bottom-room" in style_v58.css): posto in più in fondo, perché i pulsanti fissi in
+  // basso a sinistra (+ Parola, + Spazio, Vecchio archivio) non coprano il numero della barra.
+  app.appendChild(el("div", { class: "edit-bottom-room", "aria-hidden": "true" }));
+
   const alignmentGuides = setupAlignmentGuides(app, galleryKey);
 
   // L'elenco parte esattamente sotto il titolo "core archive" e il suo bordo sinistro coincide con quello del titolo
