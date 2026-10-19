@@ -16,6 +16,9 @@ on:
       engines:
         description: "Motori da provare, separati da virgola (chromium, firefox, webkit; per diagnosi anche chromium-linux)"
         default: "chromium,firefox,webkit"
+      url:
+        description: "Se compilato (es. https://lorenzoromani367.github.io/Website), prova il sito VERO pubblicato invece di quello preparato qui"
+        default: ""
 
 # Se arriva un nuovo salvataggio mentre il controllo gira, quello vecchio si ferma (conta solo l'ultimo).
 concurrency:
@@ -61,7 +64,8 @@ jobs:
         working-directory: tests/cross-browser
         env:
           ENGINES: ${{ github.event.inputs.engines || 'chromium,firefox,webkit' }}
-        run: node check.js --site=../../_site --out=report --engines="$ENGINES"
+          SITE_URL: ${{ github.event.inputs.url }}
+        run: node check.js --site=../../_site --out=report --engines="$ENGINES" ${SITE_URL:+--url="$SITE_URL"}
 
       - name: Schermate e confronti (da scaricare)
         if: always()

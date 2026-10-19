@@ -26,6 +26,9 @@ const pw = (() => {
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => { const m = a.match(/^--([^=]+)=?(.*)$/); return [m[1], m[2] === '' ? true : m[2]]; }));
 const SITE = path.resolve(String(args.site || '../../_site'));
+// --url=https://...: invece di servire la cartella del sito, apre il sito VERO pubblicato (come lo vede un visitatore: senza "?visitor",
+// anche con l'indirizzo senza "#"). Serve a capire se un problema visto su un telefono dipende dal sito pubblicato o da quel telefono.
+const LIVE_URL = args.url && args.url !== true ? String(args.url).replace(/\/+$/, '') : null;
 const OUT = path.resolve(String(args.out || 'report'));
 const ENGINES = String(args.engines || 'chromium,firefox,webkit').split(',').filter(Boolean);
 const QUICK = !!args.quick;
@@ -50,7 +53,7 @@ const PROFILES = {
   telefono: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, shots: true },
 };
 // Pagine di cui si salvano le schermate (e il confronto affiancato): le altre si controllano e basta.
-const SHOT_ROUTES = ['#/', '#/project/boudaries', '#/project/stills', '#/project/sospension', '#/archive', '#/about', '#/contacts'];
+const SHOT_ROUTES = ['', '#/', '#/project/boudaries', '#/project/stills', '#/project/sospension', '#/archive', '#/about', '#/contacts'];
 // Sotto queste differenze tra i motori non si avvisa (i caratteri e gli arrotondamenti cambiano di qualche decimo di pixel).
 const WARN_PX = 4;
 const WARN_DOC_HEIGHT_PX = 10;
@@ -140,7 +143,7 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
   let metrics = null;
   try {
     for (let attempt = 1; ; attempt++) {
-      try { await page.goto(`${base}/?visitor${route}`, { waitUntil: 'load', timeout: 45000 }); await page.waitForSelector('#app > *', { state: 'attached', timeout: 20000 }); break; }
+      try { await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${route}`, { waitUntil: 'load', timeout: 45000 }); await page.waitForSelector('#app > *', { state: 'attached', timeout: 20000 }); break; }
       catch (e) { if (attempt >= 2) throw e; await page.waitForTimeout(1500); }
     }
     await page.evaluate(() => (document.fonts && document.fonts.ready) || null);
@@ -188,7 +191,7 @@ async function runEngine(engine, base, origin, routes) {
     context.__profile = profileName;
     if (variant.css) await context.addInitScript((css) => { const add = () => { const st = document.createElement('style'); st.textContent = css; (document.head || document.documentElement).appendChild(st); }; add(); }, variant.css);
     for (const route of routes) {
-      const slug = route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'home';
+      const slug = route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || (route === '' ? 'indirizzo_semplice' : 'home');
       const withShot = profile.shots && SHOT_ROUTES.includes(route);
       const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName.replace(/\s+/g, '-')}__${engine}.jpg`);
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
@@ -213,7 +216,7 @@ async function contactSheets(all) {
     const cells = ENGINES.filter((e) => groups[key][e]).map((e) => `<div style="width:${w}px"><div style="padding:5px 8px;background:#222;color:#fff">${LABEL[e]}</div><img style="width:${w}px;display:block" src="data:image/jpeg;base64,${fs.readFileSync(groups[key][e]).toString('base64')}"></div>`).join('');
     await page.setContent(`<body style="margin:0;background:#fff;font:14px Arial,sans-serif"><div style="padding:6px 8px;font-weight:bold">${route} — ${profile}</div><div style="display:flex;gap:10px;padding:0 8px 8px">${cells}</div></body>`);
     await page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
-    const file = path.join(OUT, 'confronti', `${route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'home'}__${profile}.jpg`);
+    const file = path.join(OUT, 'confronti', `${route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || (route === '' ? 'indirizzo_semplice' : 'home')}__${profile}.jpg`);
     await page.screenshot({ path: file, fullPage: true, type: 'jpeg', quality: 70 }); files.push(file);
   }
   await browser.close();
@@ -340,19 +343,21 @@ function summary(all, diffs, started, visual) {
 /* ------------------------------ principale ------------------------------ */
 (async () => {
   const started = Date.now();
-  if (!fs.existsSync(path.join(SITE, 'index.html'))) { console.error(`Non trovo il sito in ${SITE}`); process.exit(2); }
+  if (!LIVE_URL && !fs.existsSync(path.join(SITE, 'index.html'))) { console.error(`Non trovo il sito in ${SITE}`); process.exit(2); }
   fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(path.join(OUT, 'schermate'), { recursive: true });
-  const server = await startServer(SITE); const origin = `http://127.0.0.1:${server.address().port}`;
+  const server = LIVE_URL ? null : await startServer(SITE);
+  const origin = LIVE_URL ? new URL(LIVE_URL).origin : `http://127.0.0.1:${server.address().port}`;
+  const base = LIVE_URL || origin; // con --url l'indirizzo comprende anche la cartella (es. /Website)
   let routes;
   try {
-    const src = await (await fetch(`${origin}/js/content.js`)).text();
+    const src = await (await fetch(`${base}/js/content.js`)).text();
     const { PROJECTS } = new Function(`${src}\n;return { PROJECTS };`)();
-    routes = ['#/', ...PROJECTS.map((p) => `#/project/${p.slug}`), '#/archive', '#/about', '#/contacts', '#/zzz'];
+    routes = ['', '#/', ...PROJECTS.map((p) => `#/project/${p.slug}`), '#/archive', '#/about', '#/contacts', '#/zzz']; // '' = l'indirizzo del sito senza nient'altro, come lo scrive un visitatore
   } catch (e) { console.error('Non riesco a leggere l\'elenco dei progetti da content.js:', e.message); process.exit(2); }
   if (QUICK) routes = routes.filter((r) => ['#/', '#/project/boudaries', '#/project/stills', '#/archive', '#/contacts', '#/zzz'].includes(r));
-  console.log(`Sito: ${SITE} (${origin}) — ${routes.length} pagine × ${Object.keys(PROFILES).length} formati × ${ENGINES.length} motori (${ENGINES.join(', ')})`);
-  const all = await Promise.all(ENGINES.map((engine) => runEngine(engine, origin, origin, routes).catch((e) => ({ engine, version: '?', results: [{ engine, profile: '-', route: '-', problems: [`il motore non è partito: ${String(e.message).split('\n')[0]}`], metrics: null, shot: null }] }))));
-  server.close();
+  console.log(`Sito: ${LIVE_URL ? 'VERO ' + LIVE_URL : SITE + ' (' + origin + ')'} — ${routes.length} pagine × ${Object.keys(PROFILES).length} formati × ${ENGINES.length} motori (${ENGINES.join(', ')})`);
+  const all = await Promise.all(ENGINES.map((engine) => runEngine(engine, base, origin, routes).catch((e) => ({ engine, version: '?', results: [{ engine, profile: '-', route: '-', problems: [`il motore non è partito: ${String(e.message).split('\n')[0]}`], metrics: null, shot: null }] }))));
+  if (server) server.close();
   const diffs = engineDifferences(all);
   let sheets = [];
   try { sheets = await contactSheets(all); } catch (e) { console.error('Confronti affiancati non creati:', e.message); }
