@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 105,
-  "updatedAt": "2026-10-19T14:48:39.158Z",
+  "version": 125,
+  "updatedAt": "2026-10-19T15:36:51.603Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -181,14 +181,6 @@ window.SITE_STATE = {
             "linkedImageProject": "pile"
           },
           {
-            "type": "word",
-            "text": "delta",
-            "uid": "uid_1791304281103_1664",
-            "linkedImageSrc": "images/core archive/michelin-5.jpg",
-            "linkedImageLinkTo": "archive",
-            "linkedImageProject": "michelin"
-          },
-          {
             "type": "break",
             "uid": "uid_break_2"
           },
@@ -238,7 +230,7 @@ window.SITE_STATE = {
           },
           {
             "type": "word",
-            "text": "upside down",
+            "text": "upside down, vase",
             "uid": "uid_1791300954219_5972",
             "linkedImageSrc": "images/stills/upside down.JPG",
             "linkedImageLinkTo": "project/stills",
@@ -258,7 +250,7 @@ window.SITE_STATE = {
           },
           {
             "type": "word",
-            "text": "tourette",
+            "text": "free",
             "uid": "uid_1791600000002_4002",
             "linkedImageSrc": "images/core archive/tourette.JPG",
             "linkedImageLinkTo": "archive"
@@ -339,10 +331,11 @@ window.SITE_STATE = {
       "project.mediality.captionText.@mediality/mediality-3.jpg": "bristol",
       "project.mediality.captionText.@mediality/mediality-4.jpg": "leather arm",
       "project.mediality.captionText.@mediality/mediality-5.jpg": "pp",
-      "project.mediality.captionText.@mediality/senza titolo-1.jpg": "tourette",
       "project.sofa.captionText.@sofa/sushi discotheque.jpg": "sushi disco",
       "project.whitening.captionText.@whitening/smile.jpg": "smile",
-      "project.boudaries.captionText.@boudaries/lines-1-2.jpg": "finished"
+      "project.boudaries.captionText.@boudaries/lines-1-2.jpg": "finished",
+      "project.mediality.captionText.@mediality/senza titolo-1.jpg": "free",
+      "project.stills.captionText.@stills/upside down.jpg": "upside down, vase"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -360,6 +353,16 @@ window.SITE_STATE = {
       ]
     },
     "site-layout-scope-migration-v1": 1,
+    "site-order-overrides-v1": {
+      "project.mediality.imageOrder": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
     "site-position-overrides-v1:d": {
       "archive.page.page_1.pos.uid_1791305668347_6899": {
         "x": 3.27734375,
@@ -489,6 +492,82 @@ window.SITE_STATE = {
       "zoom:images/sofa/sushi discotheque.jpg": {
         "width": "1519.8px",
         "height": "796.246px"
+      },
+      "archive.page.page_1.zoom.uid_1791600000002_4002": {
+        "width": "944.355px",
+        "height": "916.76px"
+      },
+      "zoom:images/mediality/senza titolo-1.jpg": {
+        "width": "944.355px",
+        "height": "916.76px"
+      },
+      "zoom:images/core archive/tourette.jpg": {
+        "width": "944.355px",
+        "height": "916.76px"
+      },
+      "archive.page.page_1.zoom.uid_1791300380946_5945": {
+        "width": "1157.48px",
+        "height": "992.276px"
+      },
+      "zoom:images/recognition/recognition-9.jpg": {
+        "width": "1157.48px",
+        "height": "992.276px"
+      },
+      "archive.page.page_1.zoom.uid_1791300691867_6144": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "zoom:images/plastic/plastic-1.jpg": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "archive.page.page_1.zoom.uid_1791300840051_1654": {
+        "width": "994.301px",
+        "height": "916.76px"
+      },
+      "zoom:images/boudaries/2 hill.jpg": {
+        "width": "994.301px",
+        "height": "916.76px"
+      },
+      "archive.page.page_1.zoom.uid_1791300932325_7275": {
+        "width": "1055.11px",
+        "height": "916.76px"
+      },
+      "zoom:images/compression/sunset.jpg": {
+        "width": "1055.11px",
+        "height": "916.76px"
+      },
+      "archive.page.page_1.zoom.uid_1791304323352_9307": {
+        "width": "971.871px",
+        "height": "916.76px"
+      },
+      "zoom:images/stills/stills-5.jpg": {
+        "width": "971.871px",
+        "height": "916.76px"
+      },
+      "archive.page.page_1.zoom.uid_1791301098682_8677": {
+        "width": "1519.8px",
+        "height": "1021.99px"
+      },
+      "zoom:images/recognition/recognition-10.jpg": {
+        "width": "1519.8px",
+        "height": "1021.99px"
+      },
+      "archive.page.page_1.zoom.uid_1791304250928_133": {
+        "width": "1519.8px",
+        "height": "1004.96px"
+      },
+      "zoom:images/homes/2 family.jpg": {
+        "width": "1519.8px",
+        "height": "1004.96px"
+      },
+      "archive.page.page_1.zoom.uid_added_wine": {
+        "width": "1267.2px",
+        "height": "1022px"
+      },
+      "zoom:images/homes/1 wine.jpg": {
+        "width": "1267.2px",
+        "height": "1022px"
       }
     },
     "site-size-overrides-v1:m": {
