@@ -40,6 +40,8 @@ const SHOT_ROUTES = ['#/', '#/project/boudaries', '#/project/stills', '#/project
 // Sotto queste differenze tra i motori non si avvisa (i caratteri e gli arrotondamenti cambiano di qualche decimo di pixel).
 const WARN_PX = 4;
 const WARN_DOC_HEIGHT_PX = 10;
+const VISUAL_WARN_SIM = 96; // sotto questa somiglianza (%) con Chromium si avvisa
+const VISUAL_WARN_BIG = 3; // oltre questa quota (%) di punti molto diversi si avvisa
 
 /* ------------------------------ piccolo server statico ------------------------------ */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
@@ -72,6 +74,9 @@ function measureInPage() {
     page: rect(document.querySelector('.page')), topbar: rect(document.querySelector('.topbar')), title: rect(document.querySelector('.topbar-title')),
     description: rect(document.querySelector('.description')), firstFrame: rect(document.querySelector('.photo-frame')), firstCaption: rect(document.querySelector('.caption-input')),
   };
+  // immagini che il browser non è riuscito a mostrare (file illeggibile per quel motore) e carattere del sito
+  out.brokenImages = [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && i.currentSrc && !i.currentSrc.startsWith('data:')).map((i) => decodeURIComponent(i.currentSrc.split('/').slice(-2).join('/'))).slice(0, 5);
+  out.siteFont = (() => { try { const faces = [...document.fonts].filter((f) => /Strichpunkt/i.test(f.family)); return faces.length ? faces.map((f) => f.status).join(',') : 'assente'; } catch (e) { return 'non leggibile'; } })();
   // tasto "torna alla home"
   const h = document.querySelector('.hamburger');
   if (h) {
@@ -114,7 +119,7 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
     metrics = await page.evaluate(measureInPage);
-    if (withShot) { await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: shotPath, fullPage: true, type: 'jpeg', quality: 62 }); }
+    if (withShot) { await page.addStyleTag({ content: '.description-track{transform:none !important;animation:none !important} *{caret-color:transparent !important}' }); await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: shotPath, fullPage: true, type: 'jpeg', quality: 62 }); }
   } catch (e) {
     problems.push(`la pagina non si è caricata: ${String(e.message).split('\n')[0]}`);
   }
@@ -122,11 +127,14 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
   if (bad.length) problems.push(...[...new Set(bad)].slice(0, 4).map((b) => `file del sito mancante o rifiutato: ${b}`));
   if (metrics) {
     if (metrics.textLen < 8) problems.push('la pagina è rimasta vuota');
+    if (metrics.brokenImages && metrics.brokenImages.length) problems.push(`immagini che non si vedono: ${metrics.brokenImages.join(', ')}`);
+    if (metrics.siteFont && !/loaded/.test(metrics.siteFont) && metrics.siteFont !== 'assente') problems.push(`il carattere del sito non si è caricato (stato: ${metrics.siteFont})`);
     if (metrics.docW > metrics.innerW + 1) problems.push(`la pagina è più larga dello schermo (${metrics.docW} px contro ${metrics.innerW} px)`);
     const h = metrics.hamburger;
     if (h) {
       if (h.lines !== 3) problems.push(`il tasto "torna alla home" ha ${h.lines} lineette invece di 3`);
-      if (context.__profile === 'telefono' && (h.hitW < 44 || h.hitH < 44)) problems.push(`il tasto "torna alla home" è troppo piccolo da toccare (${h.hitW} × ${h.hitH} px, minimo 44 × 44)`);
+      // 44 px è il minimo di Apple; la misura si fa su pixel interi e ogni motore arrotonda a modo suo (Firefox dà 43 dove gli altri danno 44): 1 px di tolleranza
+      if (context.__profile === 'telefono' && (h.hitW < 43 || h.hitH < 43)) problems.push(`il tasto "torna alla home" è troppo piccolo da toccare (${h.hitW} × ${h.hitH} px, minimo 44 × 44)`);
     }
     const a = metrics.archive;
     if (a) {
@@ -185,6 +193,7 @@ async function contactSheets(all) {
 /* ------------------------------ differenze tra i motori ------------------------------ */
 function engineDifferences(all) {
   const diffs = [];
+  const everything = [];
   const by = {};
   for (const e of all) for (const r of e.results) if (r.metrics) (by[`${r.route}|${r.profile}`] = by[`${r.route}|${r.profile}`] || {})[e.engine] = r.metrics;
   const fields = (m) => {
@@ -202,14 +211,53 @@ function engineDifferences(all) {
       if (vals.length < 2) continue;
       const spread = Math.max(...vals) - Math.min(...vals);
       const limit = field === 'altezza della pagina' ? WARN_DOC_HEIGHT_PX : WARN_PX;
-      if (spread > limit) { const [route, profile] = key.split('|'); diffs.push({ route, profile, field, spread: +spread.toFixed(2), values: Object.fromEntries(names.map((n) => [n, per[n][field]])) }); }
+      const [route, profile] = key.split('|');
+      const entry = { route, profile, field, spread: +spread.toFixed(2), values: Object.fromEntries(names.map((n) => [n, per[n][field]])) };
+      everything.push(entry);
+      if (spread > limit) diffs.push(entry);
     }
   }
-  return diffs.sort((a, b) => b.spread - a.spread);
+  diffs.sort((a, b) => b.spread - a.spread);
+  diffs.top = everything.sort((a, b) => b.spread - a.spread).slice(0, 6); // le più grandi anche se sotto soglia: dice di quanto, in pratica, i motori coincidono
+  return diffs;
+}
+
+/* ------------------------------ somiglianza visiva con Chromium ------------------------------ */
+// Mette una sopra l'altra le schermate della stessa pagina (ridotte a 480 px di larghezza, per non contare le sfumature dei
+// bordi delle lettere) e misura quanto si assomigliano: 100 % = identiche. "px molto diversi" = quota di punti che cambiano
+// di colore in modo evidente (immagine mancante, lettere in un altro carattere, blocco spostato).
+async function visualSimilarity(all) {
+  const ref = all.find((e) => e.engine === 'chromium'); if (!ref || all.length < 2) return [];
+  const out = [];
+  const browser = await pw.chromium.launch(); const page = await browser.newPage();
+  const dataUrl = (f) => 'data:image/jpeg;base64,' + fs.readFileSync(f).toString('base64');
+  for (const r of ref.results) {
+    if (!r.shot) continue;
+    for (const e of all) {
+      if (e.engine === 'chromium') continue;
+      const o = e.results.find((x) => x.route === r.route && x.profile === r.profile);
+      if (!o || !o.shot) continue;
+      try {
+        const res = await page.evaluate(async ([a, b]) => {
+          const load = (src) => new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('immagine illeggibile')); i.src = src; });
+          const [ia, ib] = await Promise.all([load(a), load(b)]);
+          const W = 480; const sa = W / ia.naturalWidth, sb = W / ib.naturalWidth;
+          const H = Math.floor(Math.min(ia.naturalHeight * sa, ib.naturalHeight * sb));
+          const grab = (img, sc) => { const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, img.naturalWidth, H / sc, 0, 0, W, H); return x.getImageData(0, 0, W, H).data; };
+          const A = grab(ia, sa), B = grab(ib, sb); let sum = 0, big = 0; const n = W * H;
+          for (let i = 0; i < A.length; i += 4) { const dr = Math.abs(A[i] - B[i]), dg = Math.abs(A[i + 1] - B[i + 1]), db = Math.abs(A[i + 2] - B[i + 2]); sum += (dr + dg + db) / 3; if (Math.max(dr, dg, db) > 48) big++; }
+          return { similarity: +(100 - (sum / n / 255) * 100).toFixed(2), bigPct: +((big / n) * 100).toFixed(2), hA: ia.naturalHeight, hB: ib.naturalHeight, wA: ia.naturalWidth };
+        }, [dataUrl(r.shot), dataUrl(o.shot)]);
+        out.push({ route: r.route, profile: r.profile, engine: e.engine, ...res });
+      } catch (err) { out.push({ route: r.route, profile: r.profile, engine: e.engine, error: err.message }); }
+    }
+  }
+  await browser.close();
+  return out;
 }
 
 /* ------------------------------ riassunto ------------------------------ */
-function summary(all, diffs, started) {
+function summary(all, diffs, started, visual) {
   const lines = [];
   const total = all[0] ? all[0].results.length : 0;
   lines.push('# Controllo su più browser', '');
@@ -226,11 +274,20 @@ function summary(all, diffs, started) {
   lines.push('');
   if (all.length > 1) {
     lines.push('## Differenze tra i motori (avvisi)', '');
-    if (!diffs.length) lines.push(`Nessuna differenza oltre ${WARN_PX} px (${WARN_DOC_HEIGHT_PX} px per l'altezza della pagina).`);
+    if (!diffs.length) {
+      lines.push(`Nessuna differenza oltre ${WARN_PX} px (${WARN_DOC_HEIGHT_PX} px per l'altezza della pagina). Le più grandi trovate, in ogni caso:`, '');
+      if (diffs.top && diffs.top.length) { lines.push('| Pagina | Formato | Misura | Differenza | Valori |', '|---|---|---|---|---|'); for (const d of diffs.top) lines.push(`| \`${d.route}\` | ${d.profile} | ${d.field} | ${d.spread} px | ${Object.entries(d.values).map(([k, v]) => `${k} ${v}`).join(' · ')} |`); }
+    }
     else {
       lines.push(`Misure che cambiano di più di ${WARN_PX} px da un motore all'altro (prime 25 su ${diffs.length}). Non è un errore: è dove guardare le schermate in \`confronti\`.`, '', '| Pagina | Formato | Misura | Differenza | Valori |', '|---|---|---|---|---|');
       for (const d of diffs.slice(0, 25)) lines.push(`| \`${d.route}\` | ${d.profile} | ${d.field} | ${d.spread} px | ${Object.entries(d.values).map(([k, v]) => `${k} ${v}`).join(' · ')} |`);
     }
+  }
+  if (visual && visual.length) {
+    lines.push('', '## Somiglianza visiva con Chromium', '', 'Schermate della stessa pagina messe una sopra l\'altra (100 % = identiche; tra parentesi la quota di punti che cambiano colore in modo evidente).', '');
+    const keys = [...new Set(visual.map((v) => `${v.route}|${v.profile}`))]; const engines = [...new Set(visual.map((v) => v.engine))];
+    lines.push(`| Pagina | Formato | ${engines.map((e) => LABEL[e]).join(' | ')} |`, `|---|---|${engines.map(() => '---').join('|')}|`);
+    for (const k of keys) { const [route, profile] = k.split('|'); lines.push(`| \`${route}\` | ${profile} | ${engines.map((e) => { const v = visual.find((x) => x.engine === e && x.route === route && x.profile === profile); return !v ? '-' : v.error ? v.error : `${String(v.similarity).replace('.', ',')} % (${String(v.bigPct).replace('.', ',')} %)${v.similarity < VISUAL_WARN_SIM || v.bigPct > VISUAL_WARN_BIG ? ' ⚠' : ''}`; }).join(' | ')} |`); }
   }
   lines.push('', '_Cosa NON copre: il telefono vero (barra di Safari che si nasconde, tocco, pixel fitti, caratteri del telefono) e le versioni vecchie dei browser. Qui i tre motori sono recenti e girano su Linux._');
   return lines.join('\n');
@@ -255,9 +312,11 @@ function summary(all, diffs, started) {
   const diffs = engineDifferences(all);
   let sheets = [];
   try { sheets = await contactSheets(all); } catch (e) { console.error('Confronti affiancati non creati:', e.message); }
-  const md = summary(all, diffs, started);
+  let visual = [];
+  try { visual = await visualSimilarity(all); } catch (e) { console.error('Somiglianza visiva non calcolata:', e.message); }
+  const md = summary(all, diffs, started, visual);
   fs.writeFileSync(path.join(OUT, 'riassunto.md'), md);
-  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ engines: all.map((e) => ({ engine: e.engine, version: e.version })), differences: diffs, results: all.flatMap((e) => e.results.map((r) => ({ engine: r.engine, profile: r.profile, route: r.route, problems: r.problems, metrics: r.metrics }))) }, null, 1));
+  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ engines: all.map((e) => ({ engine: e.engine, version: e.version })), differences: diffs, topDifferences: diffs.top, visual, results: all.flatMap((e) => e.results.map((r) => ({ engine: r.engine, profile: r.profile, route: r.route, problems: r.problems, metrics: r.metrics }))) }, null, 1));
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n');
   console.log('\n' + md);
   const failed = all.some((e) => e.results.some((r) => r.problems.length));
