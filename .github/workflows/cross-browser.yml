@@ -48,12 +48,13 @@ jobs:
       - name: Install Playwright e i tre browser
         working-directory: tests/cross-browser
         run: |
-          npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium firefox webkit
+          # fino a 3 tentativi: un'interruzione di rete durante lo scaricamento dei browser non deve far diventare rosso il controllo
+          retry() { for i in 1 2 3; do "$@" && return 0; sleep 10; done; return 1; }
+          retry npm install --no-audit --no-fund
+          retry npx playwright install --with-deps chromium firefox webkit
 
       - name: Controllo su Chromium, Firefox e WebKit
         working-directory: tests/cross-browser
-        continue-on-error: true # PROVVISORIO (messa a punto): poi si toglie, così un problema vero fa diventare rossa la corsa
         run: node check.js --site=../../_site --out=report
 
       - name: Schermate e confronti (da scaricare)
