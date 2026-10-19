@@ -67,6 +67,16 @@ jobs:
           SITE_URL: ${{ github.event.inputs.url }}
         run: node check.js --site=../../_site --out=report --engines="$ENGINES" ${SITE_URL:+--url="$SITE_URL"}
 
+      # Solo quando si prova il sito vero (campo "url"): si toccano una a una le voci come farebbe un dito su un telefono
+      # (home, link in fondo, frecce tra i progetti) per vedere se qualche tocco porta a "not found".
+      - name: Giro dei tocchi sul sito vero (telefono)
+        if: ${{ always() && github.event.inputs.url != '' }}
+        working-directory: tests/cross-browser
+        env:
+          ENGINES: ${{ github.event.inputs.engines || 'chromium,firefox,webkit' }}
+          SITE_URL: ${{ github.event.inputs.url }}
+        run: node taps.js --url="$SITE_URL" --engines="$ENGINES" --out=report
+
       - name: Schermate e confronti (da scaricare)
         if: always()
         uses: actions/upload-artifact@v4
