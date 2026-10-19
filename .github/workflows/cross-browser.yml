@@ -1,0 +1,65 @@
+name: Controllo su più browser
+
+# Apre il sito (come lo vede chi lo visita) su Chromium (Chrome, Edge, Vivaldi...), Firefox e WebKit (il motore di Safari),
+# su tutte le pagine, in formato computer e telefono, e segnala errori e differenze. NON blocca la pubblicazione: è un
+# controllo a parte (la pubblicazione è "Deploy to GitHub Pages"). Il riassunto è nella pagina della corsa, le schermate e i
+# confronti affiancati si scaricano da "Artifacts" in fondo alla stessa pagina.
+# Si lancia da solo a ogni salvataggio che cambia qualcosa oltre ai file di testo .md, e a mano da
+# Actions → "Controllo su più browser" → "Run workflow". Il repository è pubblico: i minuti di GitHub non si pagano.
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+    paths-ignore: ["**/*.md"]
+  workflow_dispatch:
+
+# Se arriva un nuovo salvataggio mentre il controllo gira, quello vecchio si ferma (conta solo l'ultimo).
+concurrency:
+  group: cross-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Stessi passi della pubblicazione (deploy-pages.yml, "Prepare site"): si prova ciò che verrebbe pubblicato.
+      - name: Prepare site
+        run: |
+          node watch_images.js --once
+          mkdir _site
+          cp -r index.html css js fonts images testi _site/
+          touch _site/.nojekyll
+          V="${GITHUB_SHA::8}"
+          sed -i "s/?v=dev/?v=${V}/g; s/SITE_VERSION = \"dev\"/SITE_VERSION = \"${V}\"/" _site/index.html
+          grep -q "SITE_VERSION = \"${V}\"" _site/index.html
+
+      - name: Install Playwright e i tre browser
+        working-directory: tests/cross-browser
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium firefox webkit
+
+      - name: Controllo su Chromium, Firefox e WebKit
+        working-directory: tests/cross-browser
+        continue-on-error: true # PROVVISORIO (messa a punto): poi si toglie, così un problema vero fa diventare rossa la corsa
+        run: node check.js --site=../../_site --out=report
+
+      - name: Schermate e confronti (da scaricare)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controllo-browser
+          path: tests/cross-browser/report
+          retention-days: 14

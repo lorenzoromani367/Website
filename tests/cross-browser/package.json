@@ -1,0 +1,12 @@
+{
+  "name": "controllo-su-piu-browser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Prova il sito pubblicato su Chromium (Chrome, Edge, Vivaldi), Firefox e WebKit (il motore di Safari). Lo lancia GitHub: vedi .github/workflows/cross-browser.yml e la sezione \"Controllo su più browser\" del README.",
+  "scripts": {
+    "check": "node check.js"
+  },
+  "dependencies": {
+    "playwright": "1.56.1"
+  }
+}
