@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 128,
-  "updatedAt": "2026-10-19T16:00:25.240Z",
+  "version": 129,
+  "updatedAt": "2026-10-19T16:31:11.147Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -432,6 +432,10 @@ window.SITE_STATE = {
       "archive.page.page_1.pos.uid_1791300174629_6130": {
         "x": -231.765625,
         "y": 21.25
+      },
+      "archive.bottomIndexPos": {
+        "x": -198.35546875,
+        "y": 56.234375
       }
     },
     "site-position-overrides-v1:m": {
