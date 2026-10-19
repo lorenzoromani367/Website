@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 125,
-  "updatedAt": "2026-10-19T15:36:51.603Z",
+  "version": 128,
+  "updatedAt": "2026-10-19T16:00:25.240Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -352,6 +352,15 @@ window.SITE_STATE = {
         }
       ]
     },
+    "site-guides-v1:m": {
+      "archive.page.page_1": [
+        {
+          "id": 1,
+          "axis": "v",
+          "pos": 80.140625
+        }
+      ]
+    },
     "site-layout-scope-migration-v1": 1,
     "site-order-overrides-v1": {
       "project.mediality.imageOrder": [
@@ -429,6 +438,10 @@ window.SITE_STATE = {
       "project.cement.captionPos.5": {
         "x": -0.3125,
         "y": 0
+      },
+      "archive.bottomIndexPos": {
+        "x": -93.859375,
+        "y": 26.765625
       }
     },
     "site-removed-images-v1": {
