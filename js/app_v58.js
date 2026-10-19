@@ -2113,6 +2113,8 @@ function describePositionKey(key) {
     return `${where}, titolo in alto  →  aggiorna LAYOUT.gallery.topbarTitleOffset in content.js (vale per tutte le pagine)`;
   }
 
+  if (key === "archive.bottomIndexNudge") return `Core archive, numero in fondo (ritocco a mano sulla posizione calcolata)  →  posizione solo visiva, nessun equivalente in content.js`;
+
   const bottomIndexMatch = key.match(/^(?:project\.(.+)|(archive))\.bottomIndexPos$/);
   if (bottomIndexMatch) {
     const where = bottomIndexMatch[1] ? `Progetto "${bottomIndexMatch[1]}"` : "Core archive";
@@ -6031,14 +6033,12 @@ function renderArchivePagesMode(param) {
   const { topbar } = buildTopbar("archive", "0", ARCHIVE.title);
   
   const bottomIndexEl = el("span", { class: "topbar-index" }, "0");
-  // Su computer lo "0" sta una riga della lista (26px) più in basso del numero in fondo alle pagine dei progetti: con lo
-  // stesso spostamento era a due righe dall'ultima parola, cioè alla distanza con cui comincia un nuovo gruppo, e sembrava
-  // attaccato alla lista. Su telefono resta com'era. Vale solo come posizione di partenza: se lo sposti tu, vale la tua.
-  const ARCHIVE_NUMBER_DROP_DESKTOP = 26;
-  const archiveNumberOffset = Object.assign({ x: 0, y: 0 }, pickLayout(LAYOUT.gallery.bottomIndexOffset, undefined, LAYOUT.galleryMobile.bottomIndexOffset));
-  makeMovableFree(bottomIndexEl, `archive.bottomIndexPos`, "Trascina per spostare/allineare il numero", {
-    defaultOffset: isMobileViewport() ? archiveNumberOffset : { x: archiveNumberOffset.x, y: archiveNumberOffset.y + ARCHIVE_NUMBER_DROP_DESKTOP },
-  });
+  // La posizione dello "0" in fondo non è un numero scritto qui: la calcola alignBottomNumber (più sotto) sulla pagina vera, così è
+  // sempre sulla stessa linea verticale del titolo e dell'elenco e alla stessa distanza dall'ultima parola che in alto c'è tra il "0"
+  // e il titolo. Resta la maniglia verde per un ritocco a mano a partire da quella posizione. Chiave NUOVA: la vecchia,
+  // "archive.bottomIndexPos", era una posizione assoluta messa a occhio e riferita al centro dello schermo (cambiava con la larghezza
+  // dello schermo), e non vale più; se è rimasta salvata in site-state.js viene ignorata.
+  makeMovableFree(bottomIndexEl, `archive.bottomIndexNudge`, "Trascina per ritoccare la posizione del numero");
   const centerGroup = el("div", { class: "gallerybar-center" }, [bottomIndexEl]);
   const footerBar = el("div", { class: "gallerybar archive-bar" }, [centerGroup]);
 
@@ -6073,9 +6073,37 @@ function renderArchivePagesMode(param) {
   window.addEventListener("resize", alignList);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignList);
 
+  // Lo "0" in fondo: sulla stessa linea verticale del titolo (e quindi dell'elenco) e, dall'ultima parola, alla stessa distanza che
+  // in alto c'è tra il "0" e il titolo. Misurato sulla pagina vera come l'elenco (vale su ogni schermo, e se in modifica sposti il
+  // numero o il titolo la distanza li segue). Il foglio si allunga da solo: la distanza è il padding in alto della barra in fondo,
+  // quello a sinistra la porta sulla linea del titolo. Si usano differenze tra rettangoli, che non risentono di spostamenti comuni.
+  const topIndexEl = topbar.querySelector(".topbar-index");
+  const alignBottomNumber = () => {
+    if (!titleEl || !titleEl.isConnected || !topIndexEl || !footerBar.isConnected) return;
+    const title = titleEl.getBoundingClientRect();
+    const bar = footerBar.getBoundingClientRect();
+    footerBar.style.paddingLeft = `${Math.round((title.left - bar.left) * 100) / 100}px`;
+    const words = list.querySelectorAll(".archive-word");
+    const lastWord = words[words.length - 1];
+    if (!lastWord) return;
+    const gapAtTop = title.top - topIndexEl.getBoundingClientRect().bottom;
+    const gapNow = bar.top - lastWord.getBoundingClientRect().bottom; // il "0" parte in cima alla barra, dopo il suo padding
+    footerBar.style.paddingTop = `${Math.max(0, Math.round((gapAtTop - gapNow) * 100) / 100)}px`;
+  };
+  alignBottomNumber();
+  window.addEventListener("resize", alignBottomNumber);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignBottomNumber);
+  if (typeof ResizeObserver === "function") {
+    const barObserver = new ResizeObserver(alignBottomNumber);
+    barObserver.observe(viewport);
+    barObserver.observe(topbar);
+    resizeObservers.push(barObserver);
+  }
+
   currentTeardown = () => {
     window.removeEventListener("edit-mode-toggled", toggleControls);
     window.removeEventListener("resize", alignList);
+    window.removeEventListener("resize", alignBottomNumber);
     alignmentGuides.teardown();
     resizeObservers.forEach(o => o.disconnect());
   };
