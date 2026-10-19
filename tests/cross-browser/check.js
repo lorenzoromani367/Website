@@ -74,6 +74,17 @@ function measureInPage() {
     page: rect(document.querySelector('.page')), topbar: rect(document.querySelector('.topbar')), title: rect(document.querySelector('.topbar-title')),
     description: rect(document.querySelector('.description')), firstFrame: rect(document.querySelector('.photo-frame')), firstCaption: rect(document.querySelector('.caption-input')),
   };
+  // a capo: quante righe occupa ogni paragrafo di testo e ogni didascalia (se un motore spezza una riga in un punto diverso, qui si vede)
+  const lineCount = (el) => {
+    try {
+      const rg = document.createRange(); rg.selectNodeContents(el);
+      const tops = [...rg.getClientRects()].filter((q) => q.width > 0.5 && q.height > 0.5).map((q) => q.top).sort((a, b) => a - b);
+      let n = 0, last = -1e9; for (const t of tops) if (t - last > 8) { n++; last = t; }
+      return n;
+    } catch (e) { return -1; }
+  };
+  out.paragraphs = [...document.querySelectorAll('#app p, #app .contact-line')].filter((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0).slice(0, 60).map((e) => ({ t: (e.textContent || '').trim().slice(0, 28), n: lineCount(e) }));
+  out.captionLines = [...document.querySelectorAll('.caption-input')].filter((e) => e.getBoundingClientRect().width > 0).slice(0, 60).map((e) => { const cs = getComputedStyle(e); return Math.round((e.scrollHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / (parseFloat(cs.lineHeight) || 18)); });
   // immagini che il browser non è riuscito a mostrare (file illeggibile per quel motore) e carattere del sito
   out.brokenImages = [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && i.currentSrc && !i.currentSrc.startsWith('data:')).map((i) => decodeURIComponent(i.currentSrc.split('/').slice(-2).join('/'))).slice(0, 5);
   out.siteFont = (() => { try { const faces = [...document.fonts].filter((f) => /Strichpunkt/i.test(f.family)); return faces.length ? faces.map((f) => f.status).join(',') : 'assente'; } catch (e) { return 'non leggibile'; } })();
@@ -217,6 +228,15 @@ function engineDifferences(all) {
       if (spread > limit) diffs.push(entry);
     }
   }
+  // a capo diversi: stesso paragrafo (o stessa didascalia) su più o meno righe da un motore all'altro
+  diffs.wraps = [];
+  for (const [key, engines] of Object.entries(by)) {
+    const names = Object.keys(engines); if (names.length < 2) continue; const [route, profile] = key.split('|');
+    const pl = names.map((n) => engines[n].paragraphs || []); const cl = names.map((n) => engines[n].captionLines || []);
+    if (pl.every((a) => a.length === pl[0].length)) pl[0].forEach((p, i) => { const counts = pl.map((a) => a[i].n); if (Math.max(...counts) !== Math.min(...counts)) diffs.wraps.push({ route, profile, what: `paragrafo "${p.t}…"`, values: Object.fromEntries(names.map((n, k) => [n, counts[k]])) }); });
+    if (cl.every((a) => a.length === cl[0].length)) cl[0].forEach((c, i) => { const counts = cl.map((a) => a[i]); if (Math.max(...counts) !== Math.min(...counts)) diffs.wraps.push({ route, profile, what: `didascalia n. ${i + 1}`, values: Object.fromEntries(names.map((n, k) => [n, counts[k]])) }); });
+    diffs.wrapsChecked = (diffs.wrapsChecked || 0) + (pl.every((a) => a.length === pl[0].length) ? pl[0].length : 0) + (cl.every((a) => a.length === cl[0].length) ? cl[0].length : 0);
+  }
   diffs.sort((a, b) => b.spread - a.spread);
   diffs.top = everything.sort((a, b) => b.spread - a.spread).slice(0, 6); // le più grandi anche se sotto soglia: dice di quanto, in pratica, i motori coincidono
   return diffs;
@@ -283,6 +303,11 @@ function summary(all, diffs, started, visual) {
       for (const d of diffs.slice(0, 25)) lines.push(`| \`${d.route}\` | ${d.profile} | ${d.field} | ${d.spread} px | ${Object.entries(d.values).map(([k, v]) => `${k} ${v}`).join(' · ')} |`);
     }
   }
+  if (all.length > 1) {
+    lines.push('', '## A capo del testo', '');
+    if (!diffs.wraps || !diffs.wraps.length) lines.push(`✅ Identici su tutti i motori: ${diffs.wrapsChecked || 0} blocchi di testo (paragrafi e didascalie) controllati, nessuno va a capo in un punto diverso.`);
+    else { lines.push(`⚠ ${diffs.wraps.length} blocchi di testo occupano un numero di righe diverso da un motore all'altro (su ${diffs.wrapsChecked || '?'} controllati):`, '', '| Pagina | Formato | Testo | Righe per motore |', '|---|---|---|---|'); for (const w of diffs.wraps.slice(0, 30)) lines.push(`| \`${w.route}\` | ${w.profile} | ${w.what} | ${Object.entries(w.values).map(([k, v]) => `${k} ${v}`).join(' · ')} |`); }
+  }
   if (visual && visual.length) {
     lines.push('', '## Somiglianza visiva con Chromium', '', 'Schermate della stessa pagina messe una sopra l\'altra (100 % = identiche; tra parentesi la quota di punti che cambiano colore in modo evidente).', '');
     const keys = [...new Set(visual.map((v) => `${v.route}|${v.profile}`))]; const engines = [...new Set(visual.map((v) => v.engine))];
@@ -316,7 +341,7 @@ function summary(all, diffs, started, visual) {
   try { visual = await visualSimilarity(all); } catch (e) { console.error('Somiglianza visiva non calcolata:', e.message); }
   const md = summary(all, diffs, started, visual);
   fs.writeFileSync(path.join(OUT, 'riassunto.md'), md);
-  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ engines: all.map((e) => ({ engine: e.engine, version: e.version })), differences: diffs, topDifferences: diffs.top, visual, results: all.flatMap((e) => e.results.map((r) => ({ engine: r.engine, profile: r.profile, route: r.route, problems: r.problems, metrics: r.metrics }))) }, null, 1));
+  fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ engines: all.map((e) => ({ engine: e.engine, version: e.version })), differences: diffs, topDifferences: diffs.top, wrapDifferences: diffs.wraps, visual, results: all.flatMap((e) => e.results.map((r) => ({ engine: r.engine, profile: r.profile, route: r.route, problems: r.problems, metrics: r.metrics }))) }, null, 1));
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n');
   console.log('\n' + md);
   const failed = all.some((e) => e.results.some((r) => r.problems.length));
