@@ -1959,7 +1959,9 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
     if (lockRatioTo) {
       addHandle("resize-handle-left", -1, 1); // Bottom-Left
       addHandle("resize-handle-top", 1, -1); // Top-Right
-      addHandle("resize-handle-top-left", -1, -1); // Top-Left
+      // (Qui c'era anche una maniglia "Top-Left" senza posizione nel CSS: finiva nell'angolo in basso a destra, sopra quella
+      // vera, e con i segni invertiti: trascinando verso destra la foto si RESTRINGEVA, verso sinistra si allargava. In alto a
+      // sinistra c'è comunque l'etichetta con la misura.)
     }
   }
 
@@ -3049,8 +3051,11 @@ function makeZoomResizable(frame, img) {
       const effectiveDx = isLeft ? -dx : dx;
       // Core Archive: la foto può crescere finché a destra resta posto per il nome del progetto
       const area = zoomActiveArea;
-      const maxW = area ? area.maxWidth : window.innerWidth - 96;
-      const maxH = window.innerHeight - 96;
+      // Su telefono le maniglie stanno DENTRO gli angoli della foto (vedi style_v58.css), quindi basta il margine di 8px per
+      // lato: con i 96px di prima il primo spostamento faceva scattare la foto da 354px a 274px.
+      const onPhone = window.innerWidth <= MOBILE_BREAKPOINT;
+      const maxW = area ? area.maxWidth : window.innerWidth - (onPhone ? 16 : 96);
+      const maxH = window.innerHeight - (onPhone ? 16 : 96);
       let newWidth = Math.max(120, Math.min(maxW, dragStart.startWidth + effectiveDx));
       let newHeight = newWidth / dragStart.aspectRatio;
       if (newHeight > maxH) {
@@ -3334,14 +3339,19 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       const sizeOverrides = loadSizeOverrides();
       const contentImage = zoomActivePhoto ? contentImageOf(zoomActivePhoto) : null;
       const photoSize = zoomActivePhoto && (sizeOverrides[zoomActivePhoto.key] || sizeOverrides[zoomActivePhoto.ownKey]);
-      const savedSize = photoSize || sizeOverrides[activeKey] || zoomBox || (contentImage && contentImage.zoomBox) || null;
+      // Su telefono vale solo la misura scelta SUL TELEFONO (qui loadSizeOverrides() dà lo store ":m"): lo "zoomBox" di content.js
+      // è la misura del COMPUTER e lì non conta. Prima su telefono ogni misura salvata veniva ignorata del tutto: ridimensionando
+      // la foto ingrandita compariva "✓ Salvato", ma riaprendola tornava a filo schermo.
+      const savedSize = isMobile
+        ? (photoSize || sizeOverrides[activeKey] || null)
+        : (photoSize || sizeOverrides[activeKey] || zoomBox || (contentImage && contentImage.zoomBox) || null);
       zoomActiveBaseBox = savedSize;
       const defaultMaxW = isMobile ? window.innerWidth - 16 : window.innerWidth * 0.85;
       const defaultMaxH = isMobile ? window.innerHeight - 16 : window.innerHeight * 0.82;
-      // Su mobile ignora del tutto eventuali ridimensionamenti salvati (che
-      // impedirebbero di andare a filo), forzando il default 100% - 16px.
-      let maxW = savedSize && savedSize.width && !isMobile ? Math.min(parseFloat(savedSize.width), window.innerWidth - 32) : defaultMaxW;
-      const maxH = savedSize && savedSize.height && !isMobile ? Math.min(parseFloat(savedSize.height), window.innerHeight - 32) : defaultMaxH;
+      // Mai oltre lo schermo: su telefono 8px di margine per lato (a filo, come di default), su computer 16px.
+      const screenMargin = isMobile ? 16 : 32;
+      let maxW = savedSize && savedSize.width ? Math.min(parseFloat(savedSize.width), window.innerWidth - screenMargin) : defaultMaxW;
+      const maxH = savedSize && savedSize.height ? Math.min(parseFloat(savedSize.height), window.innerHeight - screenMargin) : defaultMaxH;
       // Core Archive su computer: la foto sta nei TRE QUARTI di sinistra dello schermo (con il margine di lato), centrata
       // lì dentro, e il nome del progetto le sta accanto, a destra. La SUA misura (quella che hai scelto tu) vale anche
       // se è più grande dei tre quarti: la foto può allargarsi finché a destra c'è ancora posto per il nome (in quel
@@ -4164,6 +4174,15 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
           src: image.src,
           propType: "size",
           lockRatioTo: img,
+          // La foto non può essere più larga dello spazio che ha (il CSS la ferma lì: "max-width: 100%"). Senza questo limite
+          // si poteva trascinare ben oltre: a schermo la foto restava ferma e sembrava "tornare com'era" (su telefono quasi
+          // tutte le foto larghe arrivano già al massimo), ma si salvava una larghezza più grande di quella che si vedeva.
+          maxWidth: () => {
+            const holder = frame.parentElement;
+            if (!holder) return 0;
+            const style = getComputedStyle(holder);
+            return holder.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+          },
           onResizeEnd: () => {
             clearPositionOverride(`${sizeKeyPrefix}.captionPos.${origIndex}`);
             captionMove.reset();
