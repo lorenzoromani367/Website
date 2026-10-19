@@ -12,6 +12,10 @@ on:
     branches: ["main", "claude/**"]
     paths-ignore: ["**/*.md"]
   workflow_dispatch:
+    inputs:
+      engines:
+        description: "Motori da provare, separati da virgola (chromium, firefox, webkit; per diagnosi anche chromium-nohint, chromium-geo)"
+        default: "chromium,firefox,webkit"
 
 # Se arriva un nuovo salvataggio mentre il controllo gira, quello vecchio si ferma (conta solo l'ultimo).
 concurrency:
@@ -55,7 +59,9 @@ jobs:
 
       - name: Controllo su Chromium, Firefox e WebKit
         working-directory: tests/cross-browser
-        run: node check.js --site=../../_site --out=report
+        env:
+          ENGINES: ${{ github.event.inputs.engines || 'chromium,firefox,webkit' }}
+        run: node check.js --site=../../_site --out=report --engines="$ENGINES"
 
       - name: Schermate e confronti (da scaricare)
         if: always()
