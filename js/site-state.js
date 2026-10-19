@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 82,
-  "updatedAt": "2026-10-19T10:27:34.029Z",
+  "version": 105,
+  "updatedAt": "2026-10-19T14:48:39.158Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -341,7 +341,8 @@ window.SITE_STATE = {
       "project.mediality.captionText.@mediality/mediality-5.jpg": "pp",
       "project.mediality.captionText.@mediality/senza titolo-1.jpg": "tourette",
       "project.sofa.captionText.@sofa/sushi discotheque.jpg": "sushi disco",
-      "project.whitening.captionText.@whitening/smile.jpg": "smile"
+      "project.whitening.captionText.@whitening/smile.jpg": "smile",
+      "project.boudaries.captionText.@boudaries/lines-1-2.jpg": "finished"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -427,6 +428,11 @@ window.SITE_STATE = {
         "y": 0
       }
     },
+    "site-removed-images-v1": {
+      "project.stills": [
+        "src:images/stills/senza titolo-1.JPG"
+      ]
+    },
     "site-size-overrides-v1:d": {
       "archive.page.page_1.size.uid_1791300788906_8601": {
         "width": "155.098px",
@@ -491,7 +497,7 @@ window.SITE_STATE = {
         "height": "94.2656px"
       },
       "project.pile.image.0": {
-        "width": "273.793px",
+        "width": "254.842px",
         "height": ""
       },
       "project.whitening.image.0": {
@@ -500,6 +506,74 @@ window.SITE_STATE = {
       },
       "project.sofa.image.0": {
         "width": "233.293px",
+        "height": ""
+      },
+      "project.compression.image.0": {
+        "width": "299.795px",
+        "height": ""
+      },
+      "project.moon.image.0": {
+        "width": "271.867px",
+        "height": ""
+      },
+      "project.licking.image.0": {
+        "width": "226.945px",
+        "height": ""
+      },
+      "project.fluoxetine.image.0": {
+        "width": "250.394px",
+        "height": ""
+      },
+      "project.hair.image.0": {
+        "width": "272.143px",
+        "height": ""
+      },
+      "project.plastic.image.0": {
+        "width": "229.605px",
+        "height": ""
+      },
+      "project.beach.image.0": {
+        "width": "258.21px",
+        "height": ""
+      },
+      "project.paper-tape.image.0": {
+        "width": "292.028px",
+        "height": ""
+      },
+      "project.michelin.image.0": {
+        "width": "217.429px",
+        "height": ""
+      },
+      "project.michelin.image.4": {
+        "width": "228.586px",
+        "height": ""
+      },
+      "project.michelin.image.3": {
+        "width": "244.66px",
+        "height": ""
+      },
+      "project.michelin.image.2": {
+        "width": "256.886px",
+        "height": ""
+      },
+      "project.michelin.image.1": {
+        "width": "253.794px",
+        "height": ""
+      },
+      "project.tower.image.0": {
+        "width": "292.676px",
+        "height": ""
+      },
+      "project.tower.image.1": {
+        "width": "229.181px",
+        "height": ""
+      },
+      "project.boudaries.image.3": {
+        "width": "240.08px",
+        "height": ""
+      },
+      "project.boudaries.image.0": {
+        "width": "319.424px",
         "height": ""
       }
     },
