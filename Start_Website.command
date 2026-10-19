@@ -64,14 +64,40 @@ echo "Apertura del browser ($BROWSER_APP)... Se non si apre da solo, scrivi $URL
 ) &
 
 # 4. Per vedere dall'iPhone (o da un altro telefono) la versione che stai preparando PRIMA di pubblicarla: stesso Wi-Fi del Mac e,
-#    nel Safari del telefono, l'indirizzo scritto qui sotto. Da quell'indirizzo il sito è in sola lettura (come per chi lo visita:
-#    la modalità modifica c'è solo su localhost). La prima volta il Mac può chiedere se "node" può accettare connessioni: Consenti.
-IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
-if [ -n "$IP" ]; then
-  echo "Dall'iPhone (collegato allo stesso Wi-Fi) apri: http://$IP:8000"
+#    nel Safari del telefono, uno degli indirizzi scritti qui sotto. Da quegli indirizzi il sito è in sola lettura (come per chi lo
+#    visita: la modalità modifica c'è solo su localhost). La prima volta il Mac può chiedere se "node" può accettare connessioni: Consenti.
+#    Se il telefono non si collega, qui compare anche una prova fatta dal Mac stesso (riga "[rete]"): se dice "risponde", il server è
+#    a posto e il problema sta nella rete (Wi-Fi diverso, rete "ospiti", VPN acceso sul telefono) o nel firewall del Mac.
+IPS=""
+for IFACE in en0 en1 en2 en3; do
+  ADDR=$(ipconfig getifaddr "$IFACE" 2>/dev/null || true)
+  if [ -n "$ADDR" ]; then IPS="$IPS $ADDR"; fi
+done
+MACNAME=$(scutil --get LocalHostName 2>/dev/null || true)
+if [ -n "$IPS" ]; then
+  echo "Dall'iPhone (stesso Wi-Fi del Mac, senza VPN) apri in Safari uno di questi indirizzi:"
+  for ADDR in $IPS; do echo "    http://$ADDR:8000"; done
+  if [ -n "$MACNAME" ]; then echo "    http://$MACNAME.local:8000"; fi
 else
   echo "Per l'iPhone: stesso Wi-Fi del Mac e, in Safari, http://<indirizzo IP del Mac>:8000 (lo trovi in Impostazioni di Sistema → Wi-Fi → Dettagli)."
 fi
+if /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | grep -qi "is enabled"; then
+  echo "Il firewall del Mac è acceso: se l'iPhone non si collega, apri Impostazioni di Sistema → Rete → Firewall → Opzioni e metti \"node\" su \"Consenti connessioni in entrata\"."
+fi
+(
+  for i in $(seq 1 50); do
+    lsof -ti:8000 -sTCP:LISTEN >/dev/null 2>&1 && break
+    sleep 0.2
+  done
+  for ADDR in $IPS; do
+    CODE=$(curl -s -o /dev/null -m 4 -w '%{http_code}' "http://$ADDR:8000/" 2>/dev/null || true)
+    if [ "$CODE" = "200" ]; then
+      echo "[rete] Prova fatta dal Mac: risponde su http://$ADDR:8000. Se l'iPhone non lo apre il server è a posto: controlla il Wi-Fi (lo stesso del Mac, non la rete ospiti), la VPN sul telefono e il firewall."
+    else
+      echo "[rete] ATTENZIONE: il Mac non risponde su http://$ADDR:8000 (risposta: ${CODE:-nessuna})."
+    fi
+  done
+) &
 
 # 5. Avvia il server Node
 echo "Avvio server locale su http://localhost:8000"
