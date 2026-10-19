@@ -752,12 +752,19 @@ body.edit-mode .caption-input:focus {
   }
 
   /* Solo su mobile, il testo "principale" (titolo, numeri, descrizione) è
-     2pt più piccolo che su desktop — le didascalie (.caption-input, sua
-     dimensione a parte) restano invariate. */
+     2pt più piccolo che su desktop. */
   .topbar-index,
   .topbar-title,
   .description {
     font-size: calc(0.95rem - 2pt);
+  }
+
+  /* Anche le didascalie delle foto (e le parole del Core Archive, che hanno la stessa scrittura): prima su telefono restavano a
+     0.8rem come su computer, quindi più grandi del testo che le accompagna (12,8px contro 12,5px, mentre su computer sono 12,8
+     contro 15,2). Ora 2pt più piccole, come il resto del testo: 10,1px, quasi la stessa proporzione del computer. */
+  .caption-input,
+  .archive-word {
+    font-size: calc(0.8rem - 2pt);
   }
 
   .description {
@@ -1905,6 +1912,12 @@ body.edit-mode .photo-caption-text {
   color: var(--ink);
   background: rgba(138, 135, 124, 0.1);
   border-radius: 3px;
+}
+@media (max-width: 700px) {
+  /* come le altre didascalie: 2pt più piccola su telefono (vedi più sopra, accanto a ".caption-input") */
+  .photo-caption-text {
+    font-size: calc(0.8rem - 2pt);
+  }
 }
 
 .hidden-link-img {
