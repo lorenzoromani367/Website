@@ -558,7 +558,6 @@ const CONTACTS = {
   paragraphs: [],
   lines: [
     { label: "email", value: "lorenzoromani1@gmail.com" },
-    { label: "cellulare", value: "+39 3911618380" },
   ],
 };
 

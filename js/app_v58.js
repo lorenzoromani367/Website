@@ -6031,8 +6031,13 @@ function renderArchivePagesMode(param) {
   const { topbar } = buildTopbar("archive", "0", ARCHIVE.title);
   
   const bottomIndexEl = el("span", { class: "topbar-index" }, "0");
+  // Su computer lo "0" sta una riga della lista (26px) più in basso del numero in fondo alle pagine dei progetti: con lo
+  // stesso spostamento era a due righe dall'ultima parola, cioè alla distanza con cui comincia un nuovo gruppo, e sembrava
+  // attaccato alla lista. Su telefono resta com'era. Vale solo come posizione di partenza: se lo sposti tu, vale la tua.
+  const ARCHIVE_NUMBER_DROP_DESKTOP = 26;
+  const archiveNumberOffset = Object.assign({ x: 0, y: 0 }, pickLayout(LAYOUT.gallery.bottomIndexOffset, undefined, LAYOUT.galleryMobile.bottomIndexOffset));
   makeMovableFree(bottomIndexEl, `archive.bottomIndexPos`, "Trascina per spostare/allineare il numero", {
-    defaultOffset: pickLayout(LAYOUT.gallery.bottomIndexOffset, undefined, LAYOUT.galleryMobile.bottomIndexOffset),
+    defaultOffset: isMobileViewport() ? archiveNumberOffset : { x: archiveNumberOffset.x, y: archiveNumberOffset.y + ARCHIVE_NUMBER_DROP_DESKTOP },
   });
   const centerGroup = el("div", { class: "gallerybar-center" }, [bottomIndexEl]);
   const footerBar = el("div", { class: "gallerybar archive-bar" }, [centerGroup]);

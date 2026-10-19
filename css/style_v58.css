@@ -467,16 +467,17 @@ body.edit-mode .topbar-index-input:focus {
   width: 100%;
 }
 
-/* Su telefono il tasto "torna alla home" è più grande e più facile da premere: le tre lineette passano da 14 a 24 px di
-   larghezza (e da 1,5 a 2 px di spessore), e l'area sensibile al tocco arriva a 50 × 44 px, oltre il disegno. Il bordo
-   destro e il centro restano dove erano e i margini negativi lasciano invariata l'altezza della barra: tutto il resto
-   della pagina non si muove. In modalità modifica resta com'era (lì c'è la maniglia di spostamento sotto il tasto). */
+/* Su telefono il tasto "torna alla home" è più grande e più facile da premere: le tre lineette passano da 14 a 20 px di
+   larghezza (e da 1,5 a 2 px di spessore; erano 24 px, poi ridotte un po'), e l'area sensibile al tocco arriva a 50 × 44 px,
+   oltre il disegno. Il bordo destro e il centro verticale restano dove erano e i margini negativi lasciano invariata
+   l'altezza della barra (20,5 px, come su computer): tutto il resto della pagina non si muove. In modalità modifica resta
+   com'era (lì c'è la maniglia di spostamento sotto il tasto). */
 @media (max-width: 700px) {
   body:not(.edit-mode) .hamburger {
-    width: 32px;
-    gap: 6px;
-    margin-top: -2.75px;
-    margin-bottom: -2.75px;
+    width: 28px;
+    gap: 5px;
+    margin-top: -1.75px;
+    margin-bottom: -1.75px;
   }
 
   body:not(.edit-mode) .hamburger span {
@@ -486,10 +487,10 @@ body.edit-mode .topbar-index-input:focus {
   body:not(.edit-mode) .hamburger::before {
     content: "";
     position: absolute;
-    top: -9px;
-    right: -9px;
-    bottom: -9px;
-    left: -9px;
+    top: -10px;
+    right: -11px;
+    bottom: -10px;
+    left: -11px;
   }
 }
 
