@@ -54,8 +54,10 @@ const SHOT_ROUTES = ['#/', '#/project/boudaries', '#/project/stills', '#/project
 // Sotto queste differenze tra i motori non si avvisa (i caratteri e gli arrotondamenti cambiano di qualche decimo di pixel).
 const WARN_PX = 4;
 const WARN_DOC_HEIGHT_PX = 10;
-const VISUAL_WARN_SIM = 96; // sotto questa somiglianza (%) con Chromium si avvisa
-const VISUAL_WARN_BIG = 3; // oltre questa quota (%) di punti molto diversi si avvisa
+// Il testo piccolo (12 px) si disegna con sfumature un po' diverse da un motore all'altro: sulle pagine di solo testo, su telefono, fino al 96,4 %
+// di somiglianza e all'8 % di punti molto diversi è normale. Si avvisa solo oltre: è il segno di un'immagine che manca o di un blocco spostato.
+const VISUAL_WARN_SIM = 95; // sotto questa somiglianza (%) con Chromium si avvisa
+const VISUAL_WARN_BIG = 8; // oltre questa quota (%) di punti molto diversi si avvisa
 
 /* ------------------------------ piccolo server statico ------------------------------ */
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
