@@ -30,10 +30,20 @@ const OUT = path.resolve(String(args.out || 'report'));
 const ENGINES = String(args.engines || 'chromium,firefox,webkit').split(',').filter(Boolean);
 const QUICK = !!args.quick;
 const SETTLE_MS = Number(args.settle || 1800);
-const LABEL = { chromium: 'Chromium (Chrome, Edge, Vivaldi)', firefox: 'Firefox', webkit: 'WebKit (Safari)' };
+const LABEL = { chromium: 'Chromium (Chrome, Edge, Vivaldi)', firefox: 'Firefox', webkit: 'WebKit (Safari)', 'chromium-nohint': 'Chromium senza hinting', 'chromium-geo': 'Chromium + geometricPrecision' };
+// Prove di diagnosi: stesso Chromium con un'impostazione di scrittura diversa (si lanciano solo a mano con --engines=...)
+const VARIANTS = {
+  chromium: { engine: 'chromium' }, firefox: { engine: 'firefox' }, webkit: { engine: 'webkit' },
+  'chromium-nohint': { engine: 'chromium', args: ['--font-render-hinting=none'] },
+  'chromium-geo': { engine: 'chromium', css: '*{text-rendering:geometricPrecision !important}' },
+};
+// Tre formati: computer con schermo normale (1 punto per pixel), computer con schermo "retina" come i Mac (2 punti per pixel:
+// qui le lettere non si arrotondano al pixel intero e le righe del testo vanno a capo come sul Mac) e telefono come un iPhone (3).
+// Le schermate si salvano solo per il primo e l'ultimo (alla misura dello schermo, non ai pixel veri: file più leggeri).
 const PROFILES = {
-  computer: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, hasTouch: false, isMobile: false },
-  telefono: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true },
+  computer: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, hasTouch: false, isMobile: false, shots: true },
+  'computer retina': { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, hasTouch: false, isMobile: false, shots: false },
+  telefono: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, shots: true },
 };
 // Pagine di cui si salvano le schermate (e il confronto affiancato): le altre si controllano e basta.
 const SHOT_ROUTES = ['#/', '#/project/boudaries', '#/project/stills', '#/project/sospension', '#/archive', '#/about', '#/contacts'];
@@ -83,7 +93,8 @@ function measureInPage() {
       return n;
     } catch (e) { return -1; }
   };
-  out.paragraphs = [...document.querySelectorAll('#app p, #app .contact-line')].filter((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0).slice(0, 60).map((e) => ({ t: (e.textContent || '').trim().slice(0, 28), n: lineCount(e) }));
+  const natWidth = (el) => { try { const cs = getComputedStyle(el); const sp = document.createElement('span'); sp.style.cssText = `position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0;font-family:${cs.fontFamily};font-size:${cs.fontSize};font-weight:${cs.fontWeight};font-style:${cs.fontStyle};letter-spacing:${cs.letterSpacing};font-kerning:${cs.fontKerning};text-rendering:${cs.textRendering}`; sp.textContent = el.textContent; document.body.appendChild(sp); const w = sp.getBoundingClientRect().width; sp.remove(); return +w.toFixed(2); } catch (e) { return -1; } };
+  out.paragraphs = [...document.querySelectorAll('#app p, #app .contact-line')].filter((e) => !e.closest('[aria-hidden="true"]') && e.getBoundingClientRect().width > 0).slice(0, 60).map((e) => { const n = lineCount(e); return { t: (e.textContent || '').trim().slice(0, 28), n, cw: +e.getBoundingClientRect().width.toFixed(2), nat: n >= 2 ? natWidth(e) : 0 }; });
   out.captionLines = [...document.querySelectorAll('.caption-input')].filter((e) => e.getBoundingClientRect().width > 0).slice(0, 60).map((e) => { const cs = getComputedStyle(e); return Math.round((e.scrollHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / (parseFloat(cs.lineHeight) || 18)); });
   // immagini che il browser non è riuscito a mostrare (file illeggibile per quel motore) e carattere del sito
   out.brokenImages = [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && i.currentSrc && !i.currentSrc.startsWith('data:')).map((i) => decodeURIComponent(i.currentSrc.split('/').slice(-2).join('/'))).slice(0, 5);
@@ -130,7 +141,7 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
     metrics = await page.evaluate(measureInPage);
-    if (withShot) { await page.addStyleTag({ content: '.description-track{transform:none !important;animation:none !important} *{caret-color:transparent !important}' }); await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: shotPath, fullPage: true, type: 'jpeg', quality: 62 }); }
+    if (withShot) { await page.addStyleTag({ content: '.description-track{transform:none !important;animation:none !important} *{caret-color:transparent !important}' }); await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: shotPath, fullPage: true, type: 'jpeg', quality: 62, scale: 'css' }); }
   } catch (e) {
     problems.push(`la pagina non si è caricata: ${String(e.message).split('\n')[0]}`);
   }
@@ -160,18 +171,20 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
 
 /* ------------------------------ un motore intero ------------------------------ */
 async function runEngine(engine, base, origin, routes) {
-  const browser = await pw[engine].launch();
+  const variant = VARIANTS[engine] || { engine };
+  const browser = await pw[variant.engine].launch(variant.args ? { args: variant.args } : {});
   const version = browser.version();
   const results = [];
   for (const [profileName, profile] of Object.entries(PROFILES)) {
     const opts = { viewport: profile.viewport, deviceScaleFactor: profile.deviceScaleFactor, hasTouch: profile.hasTouch };
-    if (profile.isMobile && engine !== 'firefox') opts.isMobile = true; // Firefox non conosce "isMobile": il formato telefono si decide dalla larghezza (come fa il sito)
+    if (profile.isMobile && variant.engine !== 'firefox') opts.isMobile = true; // Firefox non conosce "isMobile": il formato telefono si decide dalla larghezza (come fa il sito)
     const context = await browser.newContext(opts);
     context.__profile = profileName;
+    if (variant.css) await context.addInitScript((css) => { const add = () => { const st = document.createElement('style'); st.textContent = css; (document.head || document.documentElement).appendChild(st); }; add(); }, variant.css);
     for (const route of routes) {
       const slug = route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'home';
-      const withShot = SHOT_ROUTES.includes(route);
-      const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName}__${engine}.jpg`);
+      const withShot = profile.shots && SHOT_ROUTES.includes(route);
+      const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName.replace(/\s+/g, '-')}__${engine}.jpg`);
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
@@ -233,7 +246,7 @@ function engineDifferences(all) {
   for (const [key, engines] of Object.entries(by)) {
     const names = Object.keys(engines); if (names.length < 2) continue; const [route, profile] = key.split('|');
     const pl = names.map((n) => engines[n].paragraphs || []); const cl = names.map((n) => engines[n].captionLines || []);
-    if (pl.every((a) => a.length === pl[0].length)) pl[0].forEach((p, i) => { const counts = pl.map((a) => a[i].n); if (Math.max(...counts) !== Math.min(...counts)) diffs.wraps.push({ route, profile, what: `paragrafo "${p.t}…"`, values: Object.fromEntries(names.map((n, k) => [n, counts[k]])) }); });
+    if (pl.every((a) => a.length === pl[0].length)) pl[0].forEach((p, i) => { const counts = pl.map((a) => a[i].n); if (Math.max(...counts) !== Math.min(...counts)) diffs.wraps.push({ route, profile, what: `paragrafo "${p.t}…"`, values: Object.fromEntries(names.map((n, k) => [n, `${counts[k]} (testo su una riga ${pl[k][i].nat} px, riquadro ${pl[k][i].cw} px)`])) }); });
     if (cl.every((a) => a.length === cl[0].length)) cl[0].forEach((c, i) => { const counts = cl.map((a) => a[i]); if (Math.max(...counts) !== Math.min(...counts)) diffs.wraps.push({ route, profile, what: `didascalia n. ${i + 1}`, values: Object.fromEntries(names.map((n, k) => [n, counts[k]])) }); });
     diffs.wrapsChecked = (diffs.wrapsChecked || 0) + (pl.every((a) => a.length === pl[0].length) ? pl[0].length : 0) + (cl.every((a) => a.length === cl[0].length) ? cl[0].length : 0);
   }
@@ -282,7 +295,7 @@ function summary(all, diffs, started, visual) {
   const total = all[0] ? all[0].results.length : 0;
   lines.push('# Controllo su più browser', '');
   lines.push(`Commit \`${(process.env.GITHUB_SHA || 'locale').slice(0, 8)}\` · ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC · durata ${Math.round((Date.now() - started) / 1000)} s`, '');
-  lines.push(QUICK ? `Prova rapida: ${total / 2} pagine, in formato computer e telefono.` : `Pagine controllate: ${total / 2} (tutte quelle del sito), ciascuna in formato computer e telefono, su ogni motore.`, '');
+  lines.push(QUICK ? `Prova rapida: ${total / Object.keys(PROFILES).length} pagine, nei tre formati.` : `Pagine controllate: ${total / Object.keys(PROFILES).length} (tutte quelle del sito), ciascuna in tre formati (computer, computer con schermo retina, telefono), su ogni motore.`, '');
   lines.push('| Motore | Versione | Pagine con problemi |', '|---|---|---|');
   for (const e of all) { const bad = e.results.filter((r) => r.problems.length).length; lines.push(`| ${LABEL[e.engine]} | ${e.version} | ${bad === 0 ? '✅ nessuna' : '❌ ' + bad} |`); }
   const problems = all.flatMap((e) => e.results.filter((r) => r.problems.length).map((r) => ({ e: e.engine, r })));
