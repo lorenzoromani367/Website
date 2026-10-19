@@ -920,6 +920,20 @@ body.edit-mode .grid-btn {
   pointer-events: auto;
 }
 
+/* Foto ingrandita su telefono, in modifica: le maniglie per regolarne la misura stanno normalmente a 30px FUORI dal bordo, cioè
+   fuori dallo schermo (la foto arriva a 8px dal bordo): non si vedevano e non si potevano afferrare. Qui stanno DENTRO gli angoli. */
+@media (max-width: 700px) {
+  .lightbox-active-frame .resize-handle {
+    right: 6px;
+    bottom: 6px;
+  }
+
+  .lightbox-active-frame .resize-handle.resize-handle-top {
+    top: 6px;
+    bottom: auto;
+  }
+}
+
 .lightbox-active-img {
   display: block;
   width: 100%;
@@ -1259,6 +1273,20 @@ body.edit-mode .resizable-label,
   bottom: auto;
   top: -30px;
   cursor: nwse-resize;
+}
+
+/* Su telefono (in modifica) le foto larghe quasi quanto lo schermo hanno le maniglie laterali a 30px fuori dal bordo, cioè fuori
+   dallo schermo: se ne vedevano solo pochi pixel (o niente) e non si potevano afferrare bene. Qui stanno a 12px: ancora quasi
+   tutte fuori dalla foto, ma dentro lo schermo (la pagina ha 20px di margine). Non vale per le parole del Core Archive. */
+@media (max-width: 700px) {
+  .photo-frame > .resize-handle {
+    right: -12px;
+  }
+
+  .photo-frame > .resize-handle.resize-handle-left {
+    right: auto;
+    left: -12px;
+  }
 }
 
 /* Eccezione: sulla foto ingrandita dello zoom la maniglia per decidere
