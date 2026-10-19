@@ -125,7 +125,8 @@ caption: "hill",
 src: "images/boudaries/2 hill.JPG",
 mobile: { width: "320px" },
 width: "560.086px",
-captionOffset: { x: 80, y: 380 }
+captionOffset: { x: 80, y: 380 },
+zoomBox: { width: "994.301px", height: "916.76px" }
 },
 { caption: "field", src: "images/boudaries/3 field.jpg", width: "440px", height: "622px", mobile: { width: "280px", height: "396px" }, zoomBox: { width: "1519.8px", height: "801.059px" } },
 { caption: "sky", src: "images/boudaries/4 sky.jpg", mobile: { width: "320px" }, width: "426.007px", captionOffset: { x: 88, y: 0 }, offset: { x: 0, y: 300 }, zoomBox: { width: "1519.8px", height: "916.76px" } },
@@ -145,8 +146,8 @@ mobile: { width: "320px", height: "363px" },
 slug: "homes",
 name: "Homes",
 images: [
-{ caption: "wine", src: "images/homes/1 wine.jpg", width: "583.004px", zoomBox: { width: "1000.86px", height: "900.3599999999999px" } },
-{ caption: "family", src: "images/homes/2 family.jpg", width: "463.138px", zoomBox: { width: "1519.8px", height: "910.779px" } },
+{ caption: "wine", src: "images/homes/1 wine.jpg", width: "583.004px", zoomBox: { width: "1267.2px", height: "1022px" } },
+{ caption: "family", src: "images/homes/2 family.jpg", width: "463.138px", zoomBox: { width: "1519.8px", height: "1004.96px" } },
 { caption: "left", src: "images/homes/3 left.jpg", width: "548.138px" },
 { caption: "squatting", src: "images/homes/4 squatting.jpg", width: "391.37px", zoomBox: { width: "1519.8px", height: "1022px" } },
 { caption: "church", src: "images/homes/5 church.jpg", width: "445.187px", zoomBox: { width: "1519.8px", height: "951.308px" } },
@@ -162,7 +163,7 @@ images: [
       { caption: "pot and bowl", src: "images/stills/stills-2.jpg", width: "562.798px" },
       { caption: "furla men’s bag", src: "images/stills/stills-3.jpg", width: "408.808px" },
       { caption: "apples", src: "images/stills/stills-4.jpg" },
-      { caption: "ionia porcelain set", src: "images/stills/stills-5.jpg", width: "587.294px" },
+      { caption: "ionia porcelain set", src: "images/stills/stills-5.jpg", width: "587.294px", zoomBox: { width: "971.871px", height: "916.76px" } },
       { caption: "ikea flowers", src: "images/stills/stills-6.jpg", zoomBox: { width: "1519.8px", height: "1003.05px" } },
       { caption: "perfume bottle", src: "images/stills/stills-7.jpg", width: "488.255px" },
       { caption: "table cloth", src: "images/stills/stills-8.jpg", width: "429.924px" },
@@ -195,8 +196,8 @@ images: [
       { caption: "bacon", src: "images/recognition/recognition-6.jpg", width: "533.742px" },
       { caption: "belvedere", src: "images/recognition/recognition-7.jpg", width: "465.988px" },
       { caption: "dreamy landscape", src: "images/recognition/recognition-8.jpg" },
-      { caption: "fishes", src: "images/recognition/recognition-9.jpg", width: "577.02px" },
-      { caption: "cocoon", src: "images/recognition/recognition-10.jpg", width: "400.021px", zoomBox: { width: "1519.8px", height: "1013.19px" } },
+      { caption: "fishes", src: "images/recognition/recognition-9.jpg", width: "577.02px", zoomBox: { width: "1157.48px", height: "992.276px" } },
+      { caption: "cocoon", src: "images/recognition/recognition-10.jpg", width: "400.021px", zoomBox: { width: "1519.8px", height: "1021.99px" } },
       { caption: "iceberg", src: "images/recognition/recognition-11.jpg", width: "428.314px" },
     ],
   },
@@ -242,7 +243,7 @@ images: [
   {
     slug: "plastic",
     name: "Plastic",
-        images: [{ caption: "horse", src: "images/plastic/plastic-1.jpg" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }}],
+        images: [{ caption: "horse", src: "images/plastic/plastic-1.jpg" , width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "1022px" } }],
   },
   {
     slug: "sospension",
@@ -288,7 +289,7 @@ images: [
     slug: "compression",
     name: "Compression",
         images: [
-      { caption: "sunset", src: "images/compression/sunset.JPG", align: "left", offset: { x: 0, y: 52 }, width: "413.033px", zoomBox: { width: "1272.2px", height: "916.76px" } }
+      { caption: "sunset", src: "images/compression/sunset.JPG", align: "left", offset: { x: 0, y: 52 }, width: "413.033px", zoomBox: { width: "1055.11px", height: "916.76px" } }
     ],
   },
 
@@ -409,14 +410,6 @@ const ARCHIVE = {
                   "linkedImageProject": "pile"
               },
               {
-                  "type": "word",
-                  "text": "delta",
-                  "uid": "uid_1791304281103_1664",
-                  "linkedImageSrc": "images/core archive/michelin-5.jpg",
-                  "linkedImageLinkTo": "archive",
-                  "linkedImageProject": "michelin"
-              },
-              {
                   "type": "break",
                   "uid": "uid_break_2"
               },
@@ -466,7 +459,7 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "upside down",
+                  "text": "upside down, vase",
                   "uid": "uid_1791300954219_5972",
                   "linkedImageSrc": "images/stills/upside down.JPG",
                   "linkedImageLinkTo": "project/stills",
@@ -486,7 +479,7 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "tourette",
+                  "text": "free",
                   "uid": "uid_1791600000002_4002",
                   "linkedImageSrc": "images/core archive/tourette.JPG",
                   "linkedImageLinkTo": "archive"
