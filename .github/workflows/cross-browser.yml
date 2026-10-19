@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       engines:
-        description: "Motori da provare, separati da virgola (chromium, firefox, webkit; per diagnosi anche chromium-nohint, chromium-geo)"
+        description: "Motori da provare, separati da virgola (chromium, firefox, webkit; per diagnosi anche chromium-linux)"
         default: "chromium,firefox,webkit"
 
 # Se arriva un nuovo salvataggio mentre il controllo gira, quello vecchio si ferma (conta solo l'ultimo).

@@ -30,12 +30,16 @@ const OUT = path.resolve(String(args.out || 'report'));
 const ENGINES = String(args.engines || 'chromium,firefox,webkit').split(',').filter(Boolean);
 const QUICK = !!args.quick;
 const SETTLE_MS = Number(args.settle || 1800);
-const LABEL = { chromium: 'Chromium (Chrome, Edge, Vivaldi)', firefox: 'Firefox', webkit: 'WebKit (Safari)', 'chromium-nohint': 'Chromium senza hinting', 'chromium-geo': 'Chromium + geometricPrecision' };
-// Prove di diagnosi: stesso Chromium con un'impostazione di scrittura diversa (si lanciano solo a mano con --engines=...)
+const LABEL = { chromium: 'Chromium (Chrome, Edge, Vivaldi)', firefox: 'Firefox', webkit: 'WebKit (Safari)', 'chromium-linux': 'Chromium di serie su Linux (lettere arrotondate)' };
+// Chromium parte con "--font-render-hinting=none": come Chrome su Mac e su Windows, dove la larghezza delle lettere NON si arrotonda
+// al pixel intero. Di serie su Linux (i computer di GitHub) invece sì: il testo viene più largo del 3 % circa e 8-13 paragrafi
+// su 300 vanno a capo una riga prima/dopo rispetto a Firefox, Safari e a un Chrome vero (verificato: con questa opzione le
+// larghezze coincidono con quelle di Firefox e WebKit entro lo 0,6 %). "chromium-linux" = quello di serie, solo per diagnosi.
 const VARIANTS = {
-  chromium: { engine: 'chromium' }, firefox: { engine: 'firefox' }, webkit: { engine: 'webkit' },
-  'chromium-nohint': { engine: 'chromium', args: ['--font-render-hinting=none'] },
-  'chromium-geo': { engine: 'chromium', css: '*{text-rendering:geometricPrecision !important}' },
+  chromium: { engine: 'chromium', args: ['--font-render-hinting=none'] },
+  'chromium-linux': { engine: 'chromium' },
+  firefox: { engine: 'firefox' },
+  webkit: { engine: 'webkit' },
 };
 // Tre formati: computer con schermo normale (1 punto per pixel), computer con schermo "retina" come i Mac (2 punti per pixel:
 // qui le lettere non si arrotondano al pixel intero e le righe del testo vanno a capo come sul Mac) e telefono come un iPhone (3).
