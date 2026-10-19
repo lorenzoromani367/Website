@@ -63,6 +63,16 @@ echo "Apertura del browser ($BROWSER_APP)... Se non si apre da solo, scrivi $URL
   fi
 ) &
 
-# 4. Avvia il server Node
+# 4. Per vedere dall'iPhone (o da un altro telefono) la versione che stai preparando PRIMA di pubblicarla: stesso Wi-Fi del Mac e,
+#    nel Safari del telefono, l'indirizzo scritto qui sotto. Da quell'indirizzo il sito è in sola lettura (come per chi lo visita:
+#    la modalità modifica c'è solo su localhost). La prima volta il Mac può chiedere se "node" può accettare connessioni: Consenti.
+IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
+if [ -n "$IP" ]; then
+  echo "Dall'iPhone (collegato allo stesso Wi-Fi) apri: http://$IP:8000"
+else
+  echo "Per l'iPhone: stesso Wi-Fi del Mac e, in Safari, http://<indirizzo IP del Mac>:8000 (lo trovi in Impostazioni di Sistema → Wi-Fi → Dettagli)."
+fi
+
+# 5. Avvia il server Node
 echo "Avvio server locale su http://localhost:8000"
 node server.js
