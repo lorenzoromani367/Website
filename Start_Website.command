@@ -27,16 +27,39 @@ echo "Sincronizzazione file completata (Vanilla JS/CSS auto-sync)."
 # 3. Apri automaticamente il sito nel browser scelto in cima a questo file (BROWSER_APP).
 #    Prima si apriva "il browser predefinito" del Mac: tolto e reinstallato Vivaldi, il predefinito è cambiato (di solito
 #    torna Safari) e il sito non si apriva più lì. Ora il browser si sceglie qui; se non c'è, si usa quello predefinito.
-#    Si aspetta che il server risponda (al massimo 10 secondi), così la pagina non si apre prima che sia pronto.
-echo "Apertura del browser ($BROWSER_APP)..."
+#    Si aspetta che il server sia in ascolto (al massimo 10 secondi), così la pagina non si apre prima che sia pronto.
+#    Prova 1: il browser per nome. Prova 2: per percorso (se nel Mac ci sono più copie dell'app, o una vecchia rimasta nel
+#    Cestino, il nome può puntare a quella sbagliata). Prova 3: il browser predefinito. Ogni passo scrive cosa risponde il Mac
+#    (righe "[browser]"), e alla fine dice se il browser risulta acceso: se qualcosa non va, si vede qui.
+URL="http://localhost:8000"
+echo "Apertura del browser ($BROWSER_APP)... Se non si apre da solo, scrivi $URL nella barra degli indirizzi."
 (
+  # il server è pronto quando qualcosa ascolta sulla porta 8000 (si guarda la porta, non si fa una richiesta web: così
+  # non dipende da proxy, VPN o altre impostazioni di rete del Mac)
   for i in $(seq 1 50); do
-    curl -s -o /dev/null http://localhost:8000/ && break
+    lsof -ti:8000 -sTCP:LISTEN >/dev/null 2>&1 && break
     sleep 0.2
   done
-  if ! open -a "$BROWSER_APP" http://localhost:8000 2>/dev/null; then
-    echo "$BROWSER_APP non trovato: apro il sito nel browser predefinito del Mac."
-    open http://localhost:8000
+  OPENED=""
+  OUT=$(open -a "$BROWSER_APP" "$URL" 2>&1) && OPENED="per nome"
+  if [ -z "$OPENED" ]; then
+    echo "[browser] \"open -a $BROWSER_APP\" non è riuscito: $OUT"
+    for APP in "/Applications/$BROWSER_APP.app" "$HOME/Applications/$BROWSER_APP.app"; do
+      if [ -d "$APP" ]; then
+        OUT=$(open -a "$APP" "$URL" 2>&1) && { OPENED="da $APP"; break; }
+        echo "[browser] \"open -a $APP\" non è riuscito: $OUT"
+      fi
+    done
+  fi
+  if [ -z "$OPENED" ]; then
+    echo "[browser] $BROWSER_APP non si apre: provo con il browser predefinito del Mac."
+    open "$URL"
+  fi
+  sleep 5
+  if pgrep -x "$BROWSER_APP" >/dev/null 2>&1; then
+    echo "[browser] $BROWSER_APP è acceso${OPENED:+ (aperto $OPENED)}. Se il sito non compare, scrivi $URL nella barra degli indirizzi."
+  else
+    echo "[browser] $BROWSER_APP NON risulta acceso: aprilo a mano e scrivi $URL nella barra degli indirizzi."
   fi
 ) &
 
