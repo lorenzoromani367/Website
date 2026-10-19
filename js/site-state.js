@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 78,
-  "updatedAt": "2026-10-16T21:14:06.728Z",
+  "version": 82,
+  "updatedAt": "2026-10-19T10:27:34.029Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -492,6 +492,14 @@ window.SITE_STATE = {
       },
       "project.pile.image.0": {
         "width": "273.793px",
+        "height": ""
+      },
+      "project.whitening.image.0": {
+        "width": "215.316px",
+        "height": ""
+      },
+      "project.sofa.image.0": {
+        "width": "233.293px",
         "height": ""
       }
     },
