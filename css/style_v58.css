@@ -467,17 +467,19 @@ body.edit-mode .topbar-index-input:focus {
   width: 100%;
 }
 
-/* Su telefono il tasto "torna alla home" è più grande e più facile da premere: le tre lineette passano da 14 a 20 px di
-   larghezza (e da 1,5 a 2 px di spessore; erano 24 px, poi ridotte un po'), e l'area sensibile al tocco arriva a 50 × 44 px,
-   oltre il disegno. Il bordo destro e il centro verticale restano dove erano e i margini negativi lasciano invariata
-   l'altezza della barra (20,5 px, come su computer): tutto il resto della pagina non si muove. In modalità modifica resta
-   com'era (lì c'è la maniglia di spostamento sotto il tasto). */
+/* Su telefono il tasto "torna alla home" è un po' più grande di quello del computer e più facile da premere: le tre lineette
+   passano da 14 a 16 px di larghezza (e da 1,5 a 2 px di spessore; erano 24 px, poi 20, e sembravano ancora grosse), e
+   l'area sensibile al tocco resta di 50 × 44 px, oltre il disegno. Il bordo destro e il centro verticale restano dove erano
+   e i margini negativi lasciano invariata l'altezza della barra (20,5 px, come su computer): tutto il resto della pagina non
+   si muove. In modalità modifica resta com'era (lì c'è la maniglia di spostamento sotto il tasto). Misure: scatola = 16 px di
+   lineette + 4 px di padding per lato = 24 px; altezza = 3 × 2 px + 2 × 4 px di spazio + 8 px di padding = 22 px, quindi
+   margini di -0,75 px (22 - 0,75 - 0,75 = 20,5); area sensibile = 24 + 2 × 13 = 50 px e 22 + 2 × 11 = 44 px. */
 @media (max-width: 700px) {
   body:not(.edit-mode) .hamburger {
-    width: 28px;
-    gap: 5px;
-    margin-top: -1.75px;
-    margin-bottom: -1.75px;
+    width: 24px;
+    gap: 4px;
+    margin-top: -0.75px;
+    margin-bottom: -0.75px;
   }
 
   body:not(.edit-mode) .hamburger span {
@@ -487,10 +489,10 @@ body.edit-mode .topbar-index-input:focus {
   body:not(.edit-mode) .hamburger::before {
     content: "";
     position: absolute;
-    top: -10px;
-    right: -11px;
-    bottom: -10px;
-    left: -11px;
+    top: -11px;
+    right: -13px;
+    bottom: -11px;
+    left: -13px;
   }
 }
 
@@ -821,13 +823,13 @@ body.edit-mode .grid-btn {
   }
 }
 
-/* Core Archive: la barra in fondo ha solo il numero (niente frecce). Con "space-between" un figlio solo andava a sinistra e lo
-   spostamento di default del numero (-180px su computer) lo portava fuori dal foglio, sul fondo scuro dove non si leggeva (su
-   telefono, senza spostamento, restava invece solo in basso a sinistra). Centrato come nelle pagine dei progetti — dove il
-   numero sta nel gruppo centrale tra le due frecce — con lo stesso spostamento finisce nello stesso punto del foglio, su
-   computer e su telefono. */
+/* Core Archive: la barra in fondo ha solo il numero (niente frecce). Il numero parte a sinistra e la sua posizione la mette
+   il codice (alignBottomNumber in app_v58.js): padding a sinistra = linea verticale del titolo e dell'elenco, padding in alto =
+   distanza dall'ultima parola uguale a quella che in alto c'è tra il "0" e il titolo. Prima era centrato e spostato di -180px
+   (computer) o di una misura a occhio (telefono): non cadeva sulla linea del titolo e, essendo riferito al centro, si
+   spostava con la larghezza dello schermo. */
 .gallerybar.archive-bar {
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 /* Core Archive in modifica, su telefono: i tre pulsanti fissi in basso a sinistra (+ Parola, + Spazio, Vecchio archivio, larghi
