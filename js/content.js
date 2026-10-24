@@ -102,7 +102,7 @@ const LAYOUT = {
 const PROJECTS = [
   {
     slug: "boudaries",
-    name: "Boundaries",
+    name: "Collusion",
         // Nessuna "descriptionBox" qui: la dimensione/posizione di
     // quel blocco resta quella di default in LAYOUT sia per desktop che per mobile.
     // Ordine, didascalie e "mobile: {...}" aggiornati dall'export panel
