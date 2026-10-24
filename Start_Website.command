@@ -81,6 +81,7 @@ if [ -n "$IPS" ]; then
 else
   echo "Per l'iPhone: stesso Wi-Fi del Mac e, in Safari, http://<indirizzo IP del Mac>:8000 (lo trovi in Impostazioni di Sistema → Wi-Fi → Dettagli)."
 fi
+echo "Da quegli indirizzi il sito è in sola lettura, come lo vedono i visitatori: senza i pulsanti di modifica. Per MODIFICARE apri sempre http://localhost:8000 (senza ?visitor)."
 if /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | grep -qi "is enabled"; then
   echo "Il firewall del Mac è acceso: se l'iPhone non si collega, apri Impostazioni di Sistema → Rete → Firewall → Opzioni e metti \"node\" su \"Consenti connessioni in entrata\"."
 fi

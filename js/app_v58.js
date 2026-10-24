@@ -83,6 +83,16 @@ const IS_EDITOR = (() => {
 })();
 const IS_LOCAL_SERVER = location.protocol !== "file:" && ["localhost", "127.0.0.1", "[::1]", "::1"].includes(location.hostname);
 
+// Il sito del tuo computer aperto SENZA pulsanti di modifica (con "?visitor", o da un indirizzo di rete come quello per l'iPhone):
+// il titolo della scheda comincia con "Vista visitatore", così si capisce subito perché ⇲ e l'icona del telefono non ci sono.
+// Sul sito pubblicato non compare (lì l'indirizzo non è del tuo computer né della tua rete di casa).
+(() => {
+  const host = String(location.hostname || "").toLowerCase();
+  const atHome = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(host) || host.endsWith(".local")
+    || /^10\.\d+\.\d+\.\d+$/.test(host) || /^192\.168\.\d+\.\d+$/.test(host) || /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host);
+  if (!IS_EDITOR && atHome) document.title = `Vista visitatore · ${document.title}`;
+})();
+
 const siteStore = (() => {
   const SYNC_VERSION_KEY = "osd-synced-version"; // quale versione di site-state.js ha già visto questo browser
   const LEGACY_BACKUP_KEY = "osd-legacy-backup"; // copia di sicurezza delle voci di questo browser che in una fusione hanno perso
