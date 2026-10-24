@@ -73,6 +73,26 @@ async function runEngine(engine) {
       if (bad) result.problems.push(`${what} → ${s.hash || '(nessun #)'}: ${s.notFound ? '"Questa pagina non esiste."' : s.fatal ? 'errore di content.js' : 'pagina vuota'}`);
     };
 
+    // 0. indirizzi vecchi, come quelli che Safari riapre dalla cronologia (un progetto tolto, una parola cancellata): partendo da
+    //    zero con quell'indirizzo deve comparire la home con l'avviso, mai la pagina "not found". Ogni indirizzo in una scheda nuova.
+    for (const old of ['#/project/lines', '#/project/boundaries', '#/word/word-che-non-esiste']) {
+      const fresh = await context.newPage();
+      fresh.on('pageerror', (e) => result.jsErrors.push(e.message));
+      await fresh.goto(`${BASE}/${old}`, { waitUntil: 'load' });
+      await fresh.waitForSelector('#app > *', { state: 'attached', timeout: 15000 });
+      await fresh.waitForTimeout(SETTLE_MS);
+      const r = await fresh.evaluate(() => ({
+        hash: location.hash,
+        rows: document.querySelectorAll('.home-list .home-word-input').length,
+        notice: (document.querySelector('[role="status"]') || {}).textContent || '',
+        notFoundPage: /not found/.test((document.querySelector('.topbar-title') || {}).textContent || ''),
+      }));
+      const ok = r.rows > 0 && /^#\/?$/.test(r.hash) && !r.notFoundPage && r.notice.includes('Questa pagina non esiste più');
+      result.steps.push({ what: `indirizzo vecchio ${old}`, hash: r.hash, ok });
+      if (!ok) result.problems.push(`indirizzo vecchio ${old} → ${r.hash || '(nessun #)'}: ${r.notFoundPage ? 'pagina "not found"' : r.rows ? "manca l'avviso" : 'la home non si vede'}`);
+      await fresh.close();
+    }
+
     // 1. ogni voce della home (progetti e parole)
     await openHome(page);
     const names = await page.$$eval('.home-list .home-word-input', (inputs) => inputs.map((i) => i.value || '(parola senza testo)'));
