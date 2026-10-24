@@ -530,21 +530,70 @@ if (!siteStore.getItem("core_archive_reset_v1")) {
   siteStore.setItem("core_archive_reset_v1", "true");
 }
 
+// Cartelle delle foto rinominate (vedi projectImageFolder): [cartella di adesso, cartella che ha il nome interno del progetto],
+// tutte e due "images/<nome>/" in minuscolo. Servono a stablePhotoPath.
+const PHOTO_FOLDER_ALIASES = [];
+
+// La cartella delle foto di un progetto è images/<slug>/ (lo slug è il nome interno del progetto, che non cambia quando lo si rinomina).
+// Se però esiste una cartella che porta il NOME che il progetto ha adesso ("images/collusion/" per "Collusion") e contiene delle foto,
+// è quella — così rinominare un progetto e la sua cartella funziona (prima la galleria restava vuota: il sito toglieva le foto che non
+// trovava più nella cartella col vecchio nome). Una cartella che è lo slug di un altro progetto non vale mai.
+function projectImageFolder(project) {
+  const slug = String(project.slug).toLowerCase();
+  const files = window.DYNAMIC_IMAGES;
+  if (!Array.isArray(files)) return slug;
+  const hasPhotos = (folder) => files.some((path) => path.toLowerCase().startsWith(`images/${folder}/`));
+  const name = String(project.name || "").trim().toLowerCase();
+  for (const candidate of [name, name.replace(/\s+/g, "-"), name.replace(/\s+/g, "_")]) {
+    if (!candidate || candidate === slug || /[\\/]/.test(candidate)) continue;
+    if (PROJECTS.some((other) => other !== project && String(other.slug).toLowerCase() === candidate)) continue;
+    if (hasPhotos(candidate)) return candidate;
+  }
+  return slug;
+}
+
+// L'IDENTITÀ di una foto nello stato salvato (didascalie, misure dell'ingrandimento, foto tolte, didascalie ritrovate) è il suo
+// percorso con la cartella che ha il nome interno del progetto: se la cartella viene rinominata ("images/boudaries/" →
+// "images/collusion/") tutto quello che è già salvato continua a valere, e quello che si salva da adesso è coerente con il resto.
+function stablePhotoPath(path) {
+  const text = String(path);
+  const lower = text.toLowerCase();
+  for (const [folder, legacy] of PHOTO_FOLDER_ALIASES) {
+    if (lower.startsWith(folder)) return legacy + text.slice(folder.length);
+  }
+  return text;
+}
+
 // Assorbe automaticamente le modifiche alla cartella "images" usando l'elenco
 // generato dal watcher (images-data.js), mantenendo le impostazioni salvate in content.js.
 (function mergeDynamicImages() {
   if (typeof window.DYNAMIC_IMAGES === "undefined" || typeof PROJECTS === "undefined" || typeof ARCHIVE === "undefined") return;
 
-  const mergeProjectImages = (project, folderSlug) => {
+  const mergeProjectImages = (project, folderSlug, ownSlug) => {
     const folderPrefix = `images/${folderSlug.toLowerCase()}/`;
     const projectFiles = window.DYNAMIC_IMAGES.filter(path => path.toLowerCase().startsWith(folderPrefix));
-    
+    // Cartella rinominata: content.js può ricordare ancora le foto nella cartella di prima (images/<slug>/)
+    const previousPrefix = ownSlug && ownSlug.toLowerCase() !== folderSlug.toLowerCase() ? `images/${ownSlug.toLowerCase()}/` : null;
+    if (previousPrefix) PHOTO_FOLDER_ALIASES.push([folderPrefix, previousPrefix]);
+
+    if (!project.images) project.images = [];
+    if (previousPrefix) {
+      // quelle foto passano alla cartella nuova (stesso nome di file); se il file non c'è più, resta com'è e qui sotto viene tolta
+      project.images.forEach(img => {
+        if (!img.src || !img.src.toLowerCase().startsWith(previousPrefix)) return;
+        const fileName = img.src.slice(previousPrefix.length).toLowerCase();
+        const moved = projectFiles.find(pf => pf.slice(folderPrefix.length).toLowerCase() === fileName);
+        if (moved) img.src = moved;
+      });
+    }
+
     // Rimuove i file fisicamente cancellati, ignorando i placeholder (src == null)
     // o i file che puntano ad altre cartelle
-    if (!project.images) project.images = [];
     project.images = project.images.filter(img => {
-      if (!img.src || !img.src.toLowerCase().startsWith(folderPrefix)) return true;
-      return projectFiles.some(pf => pf.toLowerCase() === img.src.toLowerCase());
+      if (!img.src) return true;
+      const lowerSrc = img.src.toLowerCase();
+      if (!lowerSrc.startsWith(folderPrefix) && !(previousPrefix && lowerSrc.startsWith(previousPrefix))) return true;
+      return projectFiles.some(pf => pf.toLowerCase() === lowerSrc);
     });
 
     // Su Mac "rock.jpg" e "rock.JPG" sono lo stesso file, sul sito pubblicato (e su Windows/Linux
@@ -565,7 +614,7 @@ if (!siteStore.getItem("core_archive_reset_v1")) {
     });
   };
 
-  PROJECTS.forEach(project => mergeProjectImages(project, project.slug));
+  PROJECTS.forEach(project => mergeProjectImages(project, projectImageFolder(project), project.slug));
   mergeProjectImages(ARCHIVE, "core archive");
 })();
 
@@ -901,7 +950,7 @@ function removedIdsFor(key) {
 // controllare se una foto è tra quelle eliminate — DEVE restare identica
 // nei due punti, altrimenti un'eliminazione non verrebbe mai riconosciuta.
 function imageRemovalId(image, origIndex) {
-  return image.src ? `src:${image.src}` : `orig:${origIndex}`;
+  return image.src ? `src:${stablePhotoPath(image.src)}` : `orig:${origIndex}`;
 }
 
 // Stessa idea per il blocco di descrizione: il testo stesso è l'id, non
@@ -1327,7 +1376,8 @@ function clearCaptionOverride(key) {
         "3 field.jpg" → "field"; non "stills-13.jpg" né "IMG_0412.JPG").
    ------------------------------------------------------------------------- */
 function captionPhotoId(src) {
-  const path = String(src).replace(/^images\//i, "");
+  // (con stablePhotoPath: se la cartella del progetto è stata rinominata, l'id resta quello di prima e le didascalie salvate valgono ancora)
+  const path = stablePhotoPath(String(src)).replace(/^images\//i, "");
   return "@" + (path.normalize ? path.normalize("NFC") : path).toLowerCase();
 }
 
@@ -3040,7 +3090,8 @@ function zoomPhoto(src) {
     imageTwinsByLowerPath = new Map(Object.entries(window.IMAGE_TWINS || {}).map(([copy, original]) => [copy.toLowerCase(), original]));
   }
   const original = imageTwinsByLowerPath.get(path.toLowerCase()) || path;
-  return { src: original, key: `zoom:${original.toLowerCase()}`, ownKey: `zoom:${path.toLowerCase()}` };
+  // (con stablePhotoPath: le misure già salvate sotto il nome della cartella di prima valgono ancora dopo averla rinominata)
+  return { src: original, key: `zoom:${stablePhotoPath(original).toLowerCase()}`, ownKey: `zoom:${stablePhotoPath(path).toLowerCase()}` };
 }
 
 // Dove sta il bordo sinistro di una foto ingrandita larga "width": al centro dello schermo, oppure (Core Archive) al

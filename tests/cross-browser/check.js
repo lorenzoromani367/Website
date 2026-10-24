@@ -169,6 +169,23 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
       });
       if (textCheck && textCheck.file && textCheck.length > 0 && textCheck.shown === 0) problems.push(`il testo di testi/${textCheck.file} non compare nella pagina del progetto`);
     } catch (e) { /* controllo accessorio: se non si riesce a farlo non si inventa un errore */ }
+    // Anche la galleria deve comparire: se in images/ ci sono foto del progetto (cartella col suo indirizzo interno o col suo nome),
+    // la pagina deve mostrarne almeno una. Succedeva che dopo aver rinominato la cartella delle foto ("boudaries" → "collusion") la
+    // galleria restasse vuota: il sito toglieva le foto che content.js ricordava ancora nella cartella col vecchio nome.
+    try {
+      const galleryCheck = await page.evaluate(() => {
+        const m = location.hash.match(/^#\/project\/([^/]+)/);
+        if (!m || typeof PROJECTS === 'undefined') return null;
+        const project = PROJECTS.find((p) => p.slug === m[1]);
+        if (!project) return null;
+        const name = String(project.name || '').trim().toLowerCase();
+        const folders = [String(project.slug).toLowerCase(), name, name.replace(/\s+/g, '-'), name.replace(/\s+/g, '_')].filter(Boolean);
+        const onDisk = (Array.isArray(window.DYNAMIC_IMAGES) ? window.DYNAMIC_IMAGES : []).filter((f) => folders.some((d) => f.toLowerCase().startsWith(`images/${d}/`))).length;
+        const shown = [...document.querySelectorAll('.photo-frame img')].filter((i) => i.getAttribute('src') && !i.getAttribute('src').startsWith('data:')).length;
+        return { onDisk, shown };
+      });
+      if (galleryCheck && galleryCheck.onDisk > 0 && galleryCheck.shown === 0) problems.push(`la galleria del progetto è vuota anche se in images/ ci sono ${galleryCheck.onDisk} sue foto`);
+    } catch (e) { /* controllo accessorio */ }
     if (withShot) { await page.addStyleTag({ content: '.description-track{transform:none !important;animation:none !important} *{caret-color:transparent !important}' }); await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: shotPath, fullPage: true, type: 'jpeg', quality: 62, scale: 'css' }); }
   } catch (e) {
     problems.push(`la pagina non si è caricata: ${String(e.message).split('\n')[0]}`);
