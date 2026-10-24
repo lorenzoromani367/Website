@@ -91,13 +91,13 @@ const IS_AT_HOME = (() => {
 })();
 
 // Avviso in alto al centro, fatto con le sole funzioni del browser (non dipende dal resto del sito). Un clic lo chiude, o fa "onClick".
-function showOwnerNotice(text, { onClick = null, seconds = 12 } = {}) {
+function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
   try {
     if (!document.body) return;
     const box = document.createElement("div");
     box.setAttribute("role", "status");
     box.textContent = text;
-    box.style.cssText = "position: fixed; top: 12px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 24px); z-index: 100001; background: #2b2b28; color: #edebe0; font-family: var(--mono); font-size: 13px; line-height: 1.45; --sans-stroke: 0; padding: 10px 18px; border-radius: 22px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); text-align: center; cursor: pointer; opacity: 0; transition: opacity 0.3s;";
+    box.style.cssText = "position: fixed; top: 12px; left: 0; right: 0; margin: 0 auto; width: max-content; max-width: calc(100vw - 24px); box-sizing: border-box; z-index: 100001; background: #2b2b28; color: #edebe0; font-family: var(--mono); font-size: 13px; line-height: 1.45; --sans-stroke: 0; padding: 10px 18px; border-radius: 22px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); text-align: center; cursor: pointer; opacity: 0; transition: opacity 0.3s;";
     const close = () => { box.style.opacity = "0"; setTimeout(() => box.remove(), 400); };
     box.addEventListener("click", () => { if (onClick) onClick(); else close(); });
     document.body.appendChild(box);
@@ -119,7 +119,7 @@ function showOwnerNotice(text, { onClick = null, seconds = 12 } = {}) {
   document.title = `Vista visitatore · ${document.title}`;
   if (/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent || "") || navigator.webdriver || window.top !== window) return;
   const onThisComputer = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(String(location.hostname || "").toLowerCase());
-  showOwnerNotice("Vista visitatore: qui non ci sono i pulsanti di modifica. Clicca qui per modificare.", {
+  showPageNotice("Vista visitatore: qui non ci sono i pulsanti di modifica. Clicca qui per modificare.", {
     onClick: () => {
       // Stessa pagina, senza "?visitor"; da un indirizzo di rete si va su localhost (la modifica funziona solo da lì).
       const base = onThisComputer ? location.origin : `http://localhost${location.port ? ":" + location.port : ""}`;
@@ -2720,7 +2720,7 @@ function ensureEditModeUI() {
       try {
         const style = getComputedStyle(toggle);
         if (!toggle.isConnected || style.display === "none" || style.visibility === "hidden" || toggle.getBoundingClientRect().width === 0) {
-          showOwnerNotice("I pulsanti di modifica ci sono, ma il browser li nasconde: di solito è un'estensione (per esempio un blocco pubblicità). Disattivala per questo indirizzo e ricarica la pagina.", { seconds: 20 });
+          showPageNotice("I pulsanti di modifica ci sono, ma il browser li nasconde: di solito è un'estensione (per esempio un blocco pubblicità). Disattivala per questo indirizzo e ricarica la pagina.", { seconds: 20 });
         }
       } catch (e) {
         /* niente da dire */
@@ -5107,7 +5107,7 @@ async function autoDetectImages(projectObj, folderSlug) {
 async function renderProject(slug) {
   const project = findProject(slug);
   if (!project) {
-    renderNotFound();
+    renderMissingPage();
     return;
   }
   const myRoute = routeCounter; // vedi renderRoute: serve a non disegnare una pagina ormai superata
@@ -5203,7 +5203,7 @@ function renderOldArchive() {
 function renderWordPage(id) {
   const word = extraTextFor("home").find((w) => w.id === id);
   if (!word) {
-    renderNotFound();
+    renderMissingPage();
     return;
   }
   const galleryKey = `word.${id}`;
@@ -5407,6 +5407,26 @@ function renderAbout() {
 
 function renderNotFound() {
   renderSimplePage({ title: "not found", paragraphs: ["Questa pagina non esiste."] });
+}
+
+// Un indirizzo che non porta a niente (un progetto tolto, un segnalibro, una scheda rimasta aperta da prima: Safari ricorda l'ultimo
+// indirizzo visitato e lo riapre, il sito sembrava "non funzionare" e bastava toccare il tasto home) non lascia il visitatore su una
+// pagina "not found": lo si porta alla home, correggendo l'indirizzo, e per qualche secondo un avviso dice cosa è successo (con
+// l'indirizzo vecchio, così si capisce da dove arrivava). Sul tuo computer (modalità modifica) resta la pagina "not found",
+// così un errore di battitura si vede.
+function renderMissingPage() {
+  if (IS_EDITOR) {
+    renderNotFound();
+    return;
+  }
+  const wrong = location.hash;
+  try {
+    history.replaceState(null, "", "#/");
+  } catch (e) {
+    /* se il browser non lo permette resta l'indirizzo vecchio, ma la home si vede lo stesso */
+  }
+  renderHome();
+  showPageNotice(`Questa pagina non esiste più${wrong && wrong !== "#" ? ` (${wrong})` : ""}: ecco la home.`);
 }
 
 /* -------------------------------------------------------------------------
