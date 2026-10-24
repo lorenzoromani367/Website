@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 129,
-  "updatedAt": "2026-10-19T16:31:11.147Z",
+  "version": 135,
+  "updatedAt": "2026-10-24T10:24:36.402Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -333,7 +333,7 @@ window.SITE_STATE = {
       "project.mediality.captionText.@mediality/mediality-5.jpg": "pp",
       "project.sofa.captionText.@sofa/sushi discotheque.jpg": "sushi disco",
       "project.whitening.captionText.@whitening/smile.jpg": "smile",
-      "project.boudaries.captionText.@boudaries/lines-1-2.jpg": "finished",
+      "project.boudaries.captionText.@boudaries/lines-1-2.jpg": "window",
       "project.mediality.captionText.@mediality/senza titolo-1.jpg": "free",
       "project.stills.captionText.@stills/upside down.jpg": "upside down, vase"
     },
@@ -585,6 +585,18 @@ window.SITE_STATE = {
       "zoom:images/homes/1 wine.jpg": {
         "width": "1267.2px",
         "height": "1022px"
+      },
+      "project.boudaries.image.6": {
+        "width": "576.486px",
+        "height": ""
+      },
+      "project.boudaries.zoom.6": {
+        "width": "987.156px",
+        "height": "916.76px"
+      },
+      "zoom:images/boudaries/compression.jpg": {
+        "width": "987.156px",
+        "height": "916.76px"
       }
     },
     "site-size-overrides-v1:m": {
