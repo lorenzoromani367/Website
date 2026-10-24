@@ -425,7 +425,7 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "wire",
                   "uid": "uid_1791600000001_4001",
-                  "linkedImageSrc": "images/collusion/1 wire.JPG",
+                  "linkedImageSrc": "images/boudaries/1 wire.JPG",
                   "linkedImageLinkTo": "project/boudaries",
                   "linkedImageProject": "boudaries"
               },
@@ -433,7 +433,7 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "hill",
                   "uid": "uid_1791300840051_1654",
-                  "linkedImageSrc": "images/collusion/2 hill.JPG",
+                  "linkedImageSrc": "images/boudaries/2 hill.JPG",
                   "linkedImageLinkTo": "project/boudaries",
                   "linkedImageProject": "boudaries"
               },
