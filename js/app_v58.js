@@ -593,6 +593,24 @@ function findProject(slug) {
   return PROJECTS.find((p) => p.slug === slug) || null;
 }
 
+// Il testo di un progetto sta in testi/<nome>.txt. Di solito <nome> è lo "slug" del progetto (il suo indirizzo interno, che NON cambia
+// quando lo si rinomina: "sospension" per "Suspension"). Se però c'è un file che porta il NOME che il progetto ha adesso
+// ("collusion.txt" per "Collusion"), vale quello, anche se esiste ancora il vecchio file col vecchio indirizzo: così rinominare un
+// progetto e scrivere il testo in un file col nuovo nome funziona (prima il testo non compariva più: si cercava solo lo slug).
+// Restituisce il nome del file senza ".txt" (lo slug, se non c'è nessun file o se l'elenco dei testi non c'è).
+function projectTextFile(project) {
+  if (!project) return "";
+  const files = Array.isArray(window.DYNAMIC_TEXTS) ? window.DYNAMIC_TEXTS : null;
+  if (!files) return project.slug;
+  const byLowerCase = new Map(files.map((file) => [file.toLowerCase(), file]));
+  const name = String(project.name || "").trim().toLowerCase();
+  for (const candidate of [name, name.replace(/\s+/g, "-"), name.replace(/\s+/g, "_"), project.slug]) {
+    const real = candidate && byLowerCase.get(`${candidate}.txt`);
+    if (real) return real.replace(/\.txt$/i, "");
+  }
+  return project.slug;
+}
+
 function isEditMode() {
   return document.body.classList.contains("edit-mode");
 }
@@ -2617,8 +2635,9 @@ function ensureEditModeUI() {
       // "archive"): prima si mandava la chiave intera ("project.stills"), quindi il testo finiva in un file
       // sbagliato (testi/project.stills.txt) e il testo vero non cambiava — la modifica andava persa.
       const textFileFor = (key) => {
-        if (key.startsWith("project.")) return key.slice("project.".length);
-        if (key.startsWith("project:")) return key.slice("project:".length);
+        // Il testo va nello stesso file da cui il sito lo legge (vedi projectTextFile: lo slug, o il nome attuale del progetto).
+        const projectSlug = key.startsWith("project.") ? key.slice("project.".length) : key.startsWith("project:") ? key.slice("project:".length) : null;
+        if (projectSlug !== null) return findProject(projectSlug) ? projectTextFile(findProject(projectSlug)) : projectSlug;
         if (key === "core" || key === "archive") return "core archive";
         return null; // le pagine-parola non hanno un file di testo: la modifica resta nello stato salvato
       };
@@ -5112,14 +5131,15 @@ async function renderProject(slug) {
   }
   const myRoute = routeCounter; // vedi renderRoute: serve a non disegnare una pagina ormai superata
   
-  // Il testo di ogni progetto sta in testi/<slug>.txt. L'indirizzo è RELATIVO (non "/testi/...": quello
-  // cerca la cartella in cima al dominio e, sul sito pubblicato dentro "/Website/", non la trova mai)
-  // e si scarica solo se il file esiste davvero (elenco in images-data.js): niente 404 a vuoto.
+  // Il testo di ogni progetto sta in testi/<slug>.txt, oppure in testi/<nome del progetto>.txt (vedi projectTextFile). L'indirizzo
+  // è RELATIVO (non "/testi/...": quello cerca la cartella in cima al dominio e, sul sito pubblicato dentro "/Website/", non la
+  // trova mai) e si scarica solo se il file esiste davvero (elenco in images-data.js): niente 404 a vuoto.
   let descText = "";
   const knownTexts = window.DYNAMIC_TEXTS;
-  if (!Array.isArray(knownTexts) || knownTexts.includes(`${project.slug}.txt`)) {
+  const textFile = projectTextFile(project);
+  if (!Array.isArray(knownTexts) || knownTexts.some((file) => file.toLowerCase() === `${textFile}.txt`.toLowerCase())) {
     try {
-      const res = await fetch(`testi/${encodeURIComponent(project.slug)}.txt?v=${IS_PUBLISHED_BUILD ? IMAGE_VERSION : Date.now()}`);
+      const res = await fetch(`testi/${encodeURIComponent(textFile)}.txt?v=${IS_PUBLISHED_BUILD ? IMAGE_VERSION : Date.now()}`);
       if (res.ok) {
         descText = await res.text();
         // Rimuovi eventuali spazi bianchi superflui all'inizio/fine
