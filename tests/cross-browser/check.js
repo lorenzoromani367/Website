@@ -150,6 +150,25 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
     metrics = await page.evaluate(measureInPage);
+    // Il testo di un progetto deve comparire: se in testi/ c'è un file col nome del progetto (o col suo indirizzo interno) e non è
+    // vuoto, la pagina deve mostrarlo. Succedeva che dopo aver rinominato un progetto ("Boundaries" → "Collusion") e scritto il testo in
+    // un file col nuovo nome, la pagina restasse con le sole foto (il sito cercava solo il vecchio indirizzo interno).
+    try {
+      const textCheck = await page.evaluate(async () => {
+        const m = location.hash.match(/^#\/project\/([^/]+)/);
+        if (!m || typeof PROJECTS === 'undefined') return null;
+        const project = PROJECTS.find((p) => p.slug === m[1]);
+        if (!project) return null;
+        const lower = new Map((Array.isArray(window.DYNAMIC_TEXTS) ? window.DYNAMIC_TEXTS : []).map((f) => [f.toLowerCase(), f]));
+        const name = String(project.name || '').trim().toLowerCase();
+        const file = [name, name.replace(/\s+/g, '-'), name.replace(/\s+/g, '_'), project.slug].map((c) => lower.get(`${c}.txt`)).find(Boolean);
+        if (!file) return { file: null };
+        const body = (await (await fetch(`testi/${encodeURIComponent(file)}`)).text()).trim();
+        const shown = [...document.querySelectorAll('.description-content p')].map((p) => p.textContent.trim()).filter(Boolean).join(' ').length;
+        return { file, length: body.length, shown };
+      });
+      if (textCheck && textCheck.file && textCheck.length > 0 && textCheck.shown === 0) problems.push(`il testo di testi/${textCheck.file} non compare nella pagina del progetto`);
+    } catch (e) { /* controllo accessorio: se non si riesce a farlo non si inventa un errore */ }
     if (withShot) { await page.addStyleTag({ content: '.description-track{transform:none !important;animation:none !important} *{caret-color:transparent !important}' }); await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: shotPath, fullPage: true, type: 'jpeg', quality: 62, scale: 'css' }); }
   } catch (e) {
     problems.push(`la pagina non si è caricata: ${String(e.message).split('\n')[0]}`);
