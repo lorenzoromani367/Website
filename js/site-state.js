@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 144,
-  "updatedAt": "2026-10-24T10:43:17.882Z",
+  "version": 148,
+  "updatedAt": "2026-10-24T10:47:45.041Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -597,6 +597,22 @@ window.SITE_STATE = {
       "zoom:images/boudaries/compression.jpg": {
         "width": "987.156px",
         "height": "916.76px"
+      },
+      "project.boudaries.image.7": {
+        "width": "536.547px",
+        "height": ""
+      },
+      "project.boudaries.image.9": {
+        "width": "547.395px",
+        "height": ""
+      },
+      "project.boudaries.image.10": {
+        "width": "556.591px",
+        "height": ""
+      },
+      "project.boudaries.image.11": {
+        "width": "572.38px",
+        "height": ""
       }
     },
     "site-size-overrides-v1:m": {
