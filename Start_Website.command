@@ -31,7 +31,10 @@ echo "Sincronizzazione file completata (Vanilla JS/CSS auto-sync)."
 #    Prova 1: il browser per nome. Prova 2: per percorso (se nel Mac ci sono più copie dell'app, o una vecchia rimasta nel
 #    Cestino, il nome può puntare a quella sbagliata). Prova 3: il browser predefinito. Ogni passo scrive cosa risponde il Mac
 #    (righe "[browser]"), e alla fine dice se il browser risulta acceso: se qualcosa non va, si vede qui.
-URL="http://localhost:8000"
+#    "?edit" in fondo = modalità modifica garantita: Vivaldi nella barra degli indirizzi nasconde ciò che sta dopo il "?" e, scrivendo
+#    a mano "localhost:8000", può completare da solo l'indirizzo con un "?visitor" usato in passato (vista visitatore, senza i
+#    pulsanti di modifica). Su localhost la modalità modifica c'è comunque, "?edit" serve solo a non dipendere dal completamento.
+URL="http://localhost:8000/?edit"
 echo "Apertura del browser ($BROWSER_APP)... Se non si apre da solo, scrivi $URL nella barra degli indirizzi."
 (
   # il server è pronto quando qualcosa ascolta sulla porta 8000 (si guarda la porta, non si fa una richiesta web: così
@@ -81,7 +84,8 @@ if [ -n "$IPS" ]; then
 else
   echo "Per l'iPhone: stesso Wi-Fi del Mac e, in Safari, http://<indirizzo IP del Mac>:8000 (lo trovi in Impostazioni di Sistema → Wi-Fi → Dettagli)."
 fi
-echo "Da quegli indirizzi il sito è in sola lettura, come lo vedono i visitatori: senza i pulsanti di modifica. Per MODIFICARE apri sempre http://localhost:8000 (senza ?visitor)."
+echo "Da quegli indirizzi il sito è in sola lettura (come lo vedono i visitatori): senza i pulsanti di modifica."
+echo "Per MODIFICARE usa $URL (la scheda che si apre da sola): in basso a destra deve esserci il pulsante ⇲. Vivaldi nasconde nella barra ciò che sta dopo il ?, quindi guarda il pulsante, non la barra."
 if /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate 2>/dev/null | grep -qi "is enabled"; then
   echo "Il firewall del Mac è acceso: se l'iPhone non si collega, apri Impostazioni di Sistema → Rete → Firewall → Opzioni e metti \"node\" su \"Consenti connessioni in entrata\"."
 fi

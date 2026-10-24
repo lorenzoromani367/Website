@@ -83,14 +83,49 @@ const IS_EDITOR = (() => {
 })();
 const IS_LOCAL_SERVER = location.protocol !== "file:" && ["localhost", "127.0.0.1", "[::1]", "::1"].includes(location.hostname);
 
-// Il sito del tuo computer aperto SENZA pulsanti di modifica (con "?visitor", o da un indirizzo di rete come quello per l'iPhone):
-// il titolo della scheda comincia con "Vista visitatore", così si capisce subito perché ⇲ e l'icona del telefono non ci sono.
-// Sul sito pubblicato non compare (lì l'indirizzo non è del tuo computer né della tua rete di casa).
-(() => {
+// Il sito aperto dal tuo computer o dalla tua rete di casa (e non dal sito pubblicato).
+const IS_AT_HOME = (() => {
   const host = String(location.hostname || "").toLowerCase();
-  const atHome = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(host) || host.endsWith(".local")
+  return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(host) || host.endsWith(".local")
     || /^10\.\d+\.\d+\.\d+$/.test(host) || /^192\.168\.\d+\.\d+$/.test(host) || /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host);
-  if (!IS_EDITOR && atHome) document.title = `Vista visitatore · ${document.title}`;
+})();
+
+// Avviso in alto al centro, fatto con le sole funzioni del browser (non dipende dal resto del sito). Un clic lo chiude, o fa "onClick".
+function showOwnerNotice(text, { onClick = null, seconds = 12 } = {}) {
+  try {
+    if (!document.body) return;
+    const box = document.createElement("div");
+    box.setAttribute("role", "status");
+    box.textContent = text;
+    box.style.cssText = "position: fixed; top: 12px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 24px); z-index: 100001; background: #2b2b28; color: #edebe0; font-family: var(--mono); font-size: 13px; line-height: 1.45; --sans-stroke: 0; padding: 10px 18px; border-radius: 22px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); text-align: center; cursor: pointer; opacity: 0; transition: opacity 0.3s;";
+    const close = () => { box.style.opacity = "0"; setTimeout(() => box.remove(), 400); };
+    box.addEventListener("click", () => { if (onClick) onClick(); else close(); });
+    document.body.appendChild(box);
+    requestAnimationFrame(() => { box.style.opacity = "1"; });
+    setTimeout(close, seconds * 1000);
+  } catch (e) {
+    /* l'avviso è solo un aiuto: se non si può mostrare, il sito funziona lo stesso */
+  }
+}
+
+// Il sito del tuo computer aperto SENZA pulsanti di modifica (con "?visitor", o da un indirizzo di rete come quello per l'iPhone):
+// il titolo della scheda comincia con "Vista visitatore" e, su un computer, per qualche secondo compare nella pagina un avviso con
+// un clic per tornare alla modifica. Serve perché Vivaldi nella barra degli indirizzi nasconde tutto ciò che sta dopo il "?" (resta
+// scritto solo "localhost:8000" anche con "?visitor") e può completare da solo "localhost:8000" con un "?visitor" usato in passato:
+// ⇲ e l'icona del telefono sembrano spariti senza motivo. L'avviso non compare sul sito pubblicato (lì l'indirizzo non è del tuo
+// computer né della tua rete di casa), né su un telefono, né quando il sito è aperto da un programma di prova (navigator.webdriver).
+(() => {
+  if (!IS_AT_HOME || IS_EDITOR) return;
+  document.title = `Vista visitatore · ${document.title}`;
+  if (/iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent || "") || navigator.webdriver || window.top !== window) return;
+  const onThisComputer = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(String(location.hostname || "").toLowerCase());
+  showOwnerNotice("Vista visitatore: qui non ci sono i pulsanti di modifica. Clicca qui per modificare.", {
+    onClick: () => {
+      // Stessa pagina, senza "?visitor"; da un indirizzo di rete si va su localhost (la modifica funziona solo da lì).
+      const base = onThisComputer ? location.origin : `http://localhost${location.port ? ":" + location.port : ""}`;
+      location.href = base + location.pathname + location.hash;
+    },
+  });
 })();
 
 const siteStore = (() => {
@@ -2677,6 +2712,21 @@ function ensureEditModeUI() {
   );
   exportBtn.addEventListener("click", () => openExportPanel());
   document.body.appendChild(exportBtn);
+
+  // Poco dopo si controlla che il browser non abbia nascosto il pulsante ⇲ (lo fanno alcune estensioni, per esempio i blocchi
+  // pubblicità): se è sparito, un avviso lo dice, invece di lasciare una pagina senza modo di modificare e senza spiegazione.
+  if (window.top === window && !navigator.webdriver) {
+    setTimeout(() => {
+      try {
+        const style = getComputedStyle(toggle);
+        if (!toggle.isConnected || style.display === "none" || style.visibility === "hidden" || toggle.getBoundingClientRect().width === 0) {
+          showOwnerNotice("I pulsanti di modifica ci sono, ma il browser li nasconde: di solito è un'estensione (per esempio un blocco pubblicità). Disattivala per questo indirizzo e ricarica la pagina.", { seconds: 20 });
+        }
+      } catch (e) {
+        /* niente da dire */
+      }
+    }, 1500);
+  }
 
   if (window.top === window) setupMobilePreviewToggle();
 }
