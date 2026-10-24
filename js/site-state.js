@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 150,
-  "updatedAt": "2026-10-24T12:09:11.054Z",
+  "version": 156,
+  "updatedAt": "2026-10-24T12:43:28.264Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -447,6 +447,10 @@ window.SITE_STATE = {
       "archive.bottomIndexPos": {
         "x": -198.35546875,
         "y": 56.234375
+      },
+      "project.boudaries.imagePos.9": {
+        "x": -0.296875,
+        "y": 300
       }
     },
     "site-position-overrides-v1:m": {
@@ -628,6 +632,30 @@ window.SITE_STATE = {
       "project.homes.image.8": {
         "width": "461.947px",
         "height": ""
+      },
+      "project.boudaries.zoom.9": {
+        "width": "831.848px",
+        "height": "916.76px"
+      },
+      "zoom:images/boudaries/log.jpg": {
+        "width": "831.848px",
+        "height": "916.76px"
+      },
+      "project.boudaries.image.8": {
+        "width": "514.625px",
+        "height": ""
+      },
+      "project.homes.image.7": {
+        "width": "456.956px",
+        "height": ""
+      },
+      "project.homes.zoom.7": {
+        "width": "1519.8px",
+        "height": "804.832px"
+      },
+      "zoom:images/homes/inmates.jpg": {
+        "width": "1519.8px",
+        "height": "804.832px"
       }
     },
     "site-size-overrides-v1:m": {
