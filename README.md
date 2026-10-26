@@ -15,6 +15,7 @@ js/images-data.js        elenco delle foto, loro misure, elenco dei testi (gener
 js/state-merge.js        fusione delle modifiche tra browser e file su disco (vedi "Salvataggio")
 js/recovered-captions.js didascalie ritrovate dalla cronologia (vedi "Didascalie")
 fonts/                   i file font (vedi fonts/README.md)
+icons/                   immagine dell'anteprima per i social (preview.png, 1200 × 630) e, quando verrà scelta, l'icona della scheda
 images/<progetto>/       le foto, una cartella per progetto (più "core archive")
 testi/<progetto>.txt     il testo di ogni progetto (vedi "Salvataggio")
 server.js, watch_images.js, Start_Website.command   il server locale per lavorare sul computer
