@@ -5316,7 +5316,8 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
   const allText = [...paragraphs];
   if (extraLines.length) {
     allText.push("");
-    extraLines.forEach((line) => allText.push(`${escapeHtml(line.label)} — ${contactValueHtml(line.value)}`));
+    // "etichetta — valore"; senza etichetta, solo il valore (nei contatti: solo l'indirizzo email, senza la parola «email»)
+    extraLines.forEach((line) => allText.push(line.label ? `${escapeHtml(line.label)} — ${contactValueHtml(line.value)}` : contactValueHtml(line.value)));
   }
 
   const defaultDescHeight = LAYOUT.gallery.descriptionHeight;

@@ -331,6 +331,15 @@ images: [
     slug: "whitening",
     name: "Whitening",
     images: [{ caption: "", src: "images/whitening/smile.jpg", align: "left", offset: { x: 0, y: 52 }, width: "338.301px", zoomBox: { width: "1519.8px", height: "988.583px" } }]
+  },
+  {
+    slug: "bar",
+    name: "Bar",
+    // Due foto, senza didascalie (le scrivi tu dalla modalità modifica).
+    images: [
+      { caption: "", src: "images/bar/bar-1.jpg", align: "left", offset: { x: 0, y: 52 }, width: "420px", mobile: { width: "280px" } },
+      { caption: "", src: "images/bar/bar-2.jpg", align: "left", offset: { x: 0, y: 52 }, width: "420px", mobile: { width: "280px" } }
+    ],
   }
 ];
 
@@ -556,8 +565,10 @@ const ARCHIVE = {
 const CONTACTS = {
   title: "Contacts",
   paragraphs: [],
+  // Ogni riga mostra solo il valore (l'indirizzo email diventa un collegamento). "label" è facoltativa: se la scrivi, compare
+  // davanti con un trattino ("email — ...").
   lines: [
-    { label: "email", value: "lorenzoromani1@gmail.com" },
+    { value: "lorenzoromani1@gmail.com" },
   ],
 };
 
