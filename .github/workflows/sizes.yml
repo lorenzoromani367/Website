@@ -1,0 +1,66 @@
+name: Prova a molte misure di schermo
+
+# Apre tutte le pagine del sito a 13 misure di schermo (telefoni piccoli e grandi, telefoni orizzontali, iPad, computer fino a 2560 px)
+# su Chromium (Chrome, Edge, Vivaldi...), Firefox e WebKit (il motore di Safari), e segnala pagine più larghe dello schermo, foto rotte,
+# errori in console e testi che escono dai bordi. NON si lancia da solo (impiega una decina di minuti): si avvia a mano da
+# Actions → "Prova a molte misure di schermo" → "Run workflow". Con il campo "url" prova il sito VERO pubblicato, altrimenti quello
+# preparato qui (gli stessi passi della pubblicazione). I tre motori girano in parallelo, ognuno in un suo lavoro.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Se compilato (es. https://lorenzoromani367.github.io/Website), prova il sito VERO pubblicato invece di quello preparato qui"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  sizes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Stessi passi della pubblicazione (deploy-pages.yml, "Prepare site").
+      - name: Prepare site
+        run: |
+          node watch_images.js --once
+          mkdir _site
+          cp -r index.html 404.html css js fonts images testi _site/
+          touch _site/.nojekyll
+          V="${GITHUB_SHA::8}"
+          sed -i "s/?v=dev/?v=${V}/g; s/SITE_VERSION = \"dev\"/SITE_VERSION = \"${V}\"/" _site/index.html
+          grep -q "SITE_VERSION = \"${V}\"" _site/index.html
+
+      - name: Install Playwright e il browser
+        working-directory: tests/cross-browser
+        run: |
+          retry() { for i in 1 2 3; do "$@" && return 0; sleep 10; done; return 1; }
+          retry npm install --no-audit --no-fund
+          retry npx playwright install --with-deps ${{ matrix.engine }}
+
+      - name: Giro delle misure (${{ matrix.engine }})
+        working-directory: tests/cross-browser
+        env:
+          SITE_URL: ${{ github.event.inputs.url }}
+        run: node sizes.js --site=../../_site --out=report --engines=${{ matrix.engine }} ${SITE_URL:+--url="$SITE_URL"}
+
+      - name: Report (da scaricare)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: misure-${{ matrix.engine }}
+          path: tests/cross-browser/report
+          retention-days: 14

@@ -83,6 +83,15 @@ a {
   text-decoration: none;
 }
 
+/* Email nei contatti: stesso aspetto del testo; col mouse si attenua come i link in fondo alla home, da tastiera si sottolinea. */
+.mail-link:hover {
+  opacity: 0.6;
+}
+.mail-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 button {
   font-family: inherit;
   background: none;

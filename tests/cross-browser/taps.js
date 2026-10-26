@@ -4,7 +4,8 @@
    Apre il sito con un "telefono" (390 × 844, tocco, schermo fitto come un iPhone) su Chromium, Firefox e WebKit (il motore di
    Safari) e TOCCA ogni collegamento come farebbe un dito: ogni voce della home, i tre link in fondo (core archive, contacts,
    about), le frecce avanti/indietro di ogni progetto (anche oltre l'ultimo, che ricomincia dal primo) e il tasto home.
-   Dopo ogni tocco controlla che si sia aperta una pagina vera — mai "not found" ("Questa pagina non esiste.") — e che non
+   Dopo ogni tocco controlla che si sia aperta una pagina vera — mai "not found" ("Questa pagina non esiste.") né l'avviso
+   di indirizzo vecchio ("This page no longer exists", che è il comportamento giusto SOLO per un indirizzo vecchio) — e che non
    ci siano errori JavaScript.
    Serve a capire se, toccando in giro, un telefono può finire su una pagina inesistente: il controllo normale (check.js) apre
    ogni pagina dall'indirizzo, qui invece si arriva alle pagine come ci arriva un visitatore.
@@ -45,7 +46,7 @@ async function snapshot(page) {
     hash: location.hash,
     text: document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 70),
     length: document.body.innerText.trim().length,
-    notFound: /Questa pagina non esiste/.test(document.body.innerText),
+    notFound: /Questa pagina non esiste|This page no longer exists/.test(document.body.innerText),
     fatal: /errore in content\.js/.test(document.body.innerText),
   }));
 }
@@ -75,7 +76,7 @@ async function runEngine(engine) {
 
     // 0. indirizzi vecchi, come quelli che Safari riapre dalla cronologia (un progetto tolto, una parola cancellata): partendo da
     //    zero con quell'indirizzo deve comparire la home con l'avviso, mai la pagina "not found". Ogni indirizzo in una scheda nuova.
-    for (const old of ['#/project/lines', '#/project/boundaries', '#/word/word-che-non-esiste']) {
+    for (const old of ['#/project/lines', '#/project/boundaries', '#/word/word-che-non-esiste', '#/old-archive']) {
       const fresh = await context.newPage();
       fresh.on('pageerror', (e) => result.jsErrors.push(e.message));
       await fresh.goto(`${BASE}/${old}`, { waitUntil: 'load' });
@@ -87,9 +88,25 @@ async function runEngine(engine) {
         notice: (document.querySelector('[role="status"]') || {}).textContent || '',
         notFoundPage: /not found/.test((document.querySelector('.topbar-title') || {}).textContent || ''),
       }));
-      const ok = r.rows > 0 && /^#\/?$/.test(r.hash) && !r.notFoundPage && r.notice.includes('Questa pagina non esiste più');
+      const ok = r.rows > 0 && /^#\/?$/.test(r.hash) && !r.notFoundPage && r.notice.includes('This page no longer exists');
       result.steps.push({ what: `indirizzo vecchio ${old}`, hash: r.hash, ok });
       if (!ok) result.problems.push(`indirizzo vecchio ${old} → ${r.hash || '(nessun #)'}: ${r.notFoundPage ? 'pagina "not found"' : r.rows ? "manca l'avviso" : 'la home non si vede'}`);
+      await fresh.close();
+    }
+
+    // 0b. un indirizzo senza "#" che sul sito non esiste (una cartella digitata a mano, un vecchio collegamento): GitHub risponde con
+    //     404.html, che riporta alla home. Si controlla che si finisca davvero sulla home del sito (non sulla pagina bianca di GitHub).
+    {
+      const fresh = await context.newPage();
+      fresh.on('pageerror', (e) => result.jsErrors.push(e.message));
+      await fresh.goto(`${BASE}/pagina-che-non-esiste/ancora`, { waitUntil: 'load' }).catch(() => {});
+      await fresh.waitForSelector('.home-list .home-word-input', { state: 'attached', timeout: 15000 }).catch(() => {});
+      await fresh.waitForTimeout(SETTLE_MS);
+      const r = await fresh.evaluate(() => ({ path: location.pathname, rows: document.querySelectorAll('.home-list .home-word-input').length }));
+      const homePath = new URL(`${BASE}/`).pathname;
+      const ok = r.rows > 0 && r.path === homePath;
+      result.steps.push({ what: 'indirizzo inesistente senza # (pagina 404)', hash: r.path, ok });
+      if (!ok) result.problems.push(`indirizzo inesistente senza # → ${r.path}: ${r.rows ? 'non si torna alla home del sito' : 'la home non si vede (pagina 404 di GitHub?)'}`);
       await fresh.close();
     }
 

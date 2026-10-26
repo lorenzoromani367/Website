@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <meta name="color-scheme" content="only light" />
+  <title>Lorenzo Romani — Photography</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #161616; }
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; font: 14px/1.5 "Courier New", Courier, monospace; color: #ede9e0; }
+    a { color: inherit; }
+  </style>
+</head>
+<body>
+  <p>This page does not exist. <a id="home" href="/">Go to the home page</a>.</p>
+  <script>
+    // GitHub Pages mostra questa pagina per ogni indirizzo che non esiste (il sito vero è una sola pagina, index.html).
+    // Qui si riporta il visitatore alla home: sul dominio proprio la home è "/", sull'indirizzo di GitHub è "/Website/".
+    (function () {
+      var parts = location.pathname.split("/");
+      var base = /\.github\.io$/i.test(location.hostname) && parts[1] ? "/" + parts[1] + "/" : "/";
+      document.getElementById("home").href = base;
+      location.replace(base);
+    })();
+  </script>
+</body>
+</html>

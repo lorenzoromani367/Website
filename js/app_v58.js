@@ -2917,7 +2917,7 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock, pageTitle = "", 
   // così il "foglio beige" dello zoom è grande esattamente quanto quello della main page.
   panel.style.removeProperty("--panel-width");
 
-  const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Chiudi", style: "color: var(--ink); z-index: 10;" }, "×");
+  const closeBtn = el("button", { class: "lightbox-close", "aria-label": "Close", style: "color: var(--ink); z-index: 10;" }, "×");
   closeBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (zoomCurrentClose) zoomCurrentClose();
@@ -3955,7 +3955,7 @@ function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange, hideIndex
   const topbarIndexEl = el("span", { class: "topbar-index" }, [indexInput]);
   if (hideIndex) topbarIndexEl.style.visibility = "hidden";
   const topbarTitleEl = el("span", { class: "topbar-title" }, titleText);
-  const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Torna alla home" }, [
+  const hamburgerEl = el("a", { href: "#/", class: "hamburger", "aria-label": "Back to home" }, [
     el("span", {}), el("span", {}), el("span", {}),
   ]);
   if (hideHamburger) hamburgerEl.style.visibility = "hidden";
@@ -4433,8 +4433,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
   setTimeout(settleFirstLayout, 1500);
 
-  const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Precedente" }, "←");
-  const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Successivo" }, "→");
+  const prevBtn = el("button", { class: "nav-arrow prev", "aria-label": "Previous" }, "←");
+  const nextBtn = el("button", { class: "nav-arrow next", "aria-label": "Next" }, "→");
   const indexBtn = el("button", { class: "nav-arrow grid-btn", "aria-label": "Mostra tutte le foto", title: "Index" });
   indexBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" style="display:block; margin: 0 auto;"><rect x="1" y="1" width="6" height="6"/><rect x="9" y="1" width="6" height="6"/><rect x="1" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/></svg>';
   indexBtn.addEventListener("click", () => openGalleryIndex(images, track, viewport, galleryKey));
@@ -5292,6 +5292,18 @@ function renderWordPage(id) {
 /* -------------------------------------------------------------------------
    8. Render: CONTACTS / ABOUT
    ------------------------------------------------------------------------- */
+function escapeHtml(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Nei contatti un indirizzo email diventa un collegamento "mailto:" (era solo testo: su computer non si poteva cliccare).
+// Stesso colore e stesso carattere del resto; si sottolinea solo al passaggio del mouse (vedi ".mail-link" in style_v58.css).
+function contactValueHtml(value) {
+  const text = String(value).trim();
+  if (/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(text)) return `<a class="mail-link" href="mailto:${escapeHtml(text)}">${escapeHtml(text)}</a>`;
+  return escapeHtml(value);
+}
+
 function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee = false }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
@@ -5304,7 +5316,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
   const allText = [...paragraphs];
   if (extraLines.length) {
     allText.push("");
-    extraLines.forEach((line) => allText.push(`${line.label} — ${line.value}`));
+    extraLines.forEach((line) => allText.push(`${escapeHtml(line.label)} — ${contactValueHtml(line.value)}`));
   }
 
   const defaultDescHeight = LAYOUT.gallery.descriptionHeight;
@@ -5497,7 +5509,7 @@ function renderMissingPage() {
     /* se il browser non lo permette resta l'indirizzo vecchio, ma la home si vede lo stesso */
   }
   renderHome();
-  showPageNotice(`Questa pagina non esiste più${wrong && wrong !== "#" ? ` (${wrong})` : ""}: ecco la home.`);
+  showPageNotice(`This page no longer exists${wrong && wrong !== "#" ? ` (${wrong})` : ""} — here is the home page.`);
 }
 
 /* -------------------------------------------------------------------------
@@ -5546,7 +5558,10 @@ async function renderRoute() {
         renderArchive(param);
         break;
       case "old-archive":
-        renderOldArchive();
+        // Pagina di lavoro ("core archive (Vecchio)"), raggiungibile solo dal pulsante dell'editor: un visitatore che ne digita
+        // l'indirizzo finisce in home, come per ogni indirizzo che non esiste.
+        if (IS_EDITOR) renderOldArchive();
+        else renderMissingPage();
         break;
       case "word":
         renderWordPage(param);

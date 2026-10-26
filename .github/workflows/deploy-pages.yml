@@ -35,7 +35,7 @@ jobs:
 
           # Si pubblica solo quello che serve al sito (non node_modules, script di lavoro, ecc.)
           mkdir _site
-          cp -r index.html css js fonts images testi _site/
+          cp -r index.html 404.html css js fonts images testi _site/
           touch _site/.nojekyll
 
           # Versione di questa pubblicazione: i browser riscaricano file/foto solo quando cambia
