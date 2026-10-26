@@ -43,6 +43,17 @@ jobs:
           sed -i "s/?v=dev/?v=${V}/g; s/SITE_VERSION = \"dev\"/SITE_VERSION = \"${V}\"/" _site/index.html
           grep -q "SITE_VERSION = \"${V}\"" _site/index.html
 
+          # Rete di sicurezza: ogni push su main va online da solo. Se un file del sito ha un errore di scrittura (per esempio le righe
+          # "<<<<<<<" che un conflitto di GitHub Desktop lascia dentro un file) la pubblicazione si FERMA e resta online l'ultima
+          # versione buona, invece di un sito bianco.
+          for f in _site/js/*.js; do
+            node --check "$f" || { echo "::error::$f ha un errore di scrittura: pubblicazione fermata, il sito online resta com'era"; exit 1; }
+          done
+          if grep -rlE '^(<<<<<<<|>>>>>>>)( |$)' _site/index.html _site/404.html _site/css _site/js _site/testi; then
+            echo "::error::righe di conflitto (<<<<<<< / >>>>>>>) in un file del sito: pubblicazione fermata, il sito online resta com'era"
+            exit 1
+          fi
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
