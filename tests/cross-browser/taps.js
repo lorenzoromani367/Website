@@ -132,6 +132,13 @@ async function runEngine(engine) {
       await link.tap({ timeout: 8000 });
       await page.waitForTimeout(SETTLE_MS);
       await record(`home → link "${label}"`, await snapshot(page));
+      // nei contatti un indirizzo email scritto in pagina deve essere un collegamento "mailto:" (cliccabile), non solo testo
+      if (/contact/i.test(label)) {
+        const mail = await page.evaluate(() => ({ text: /[^\s@]+@[^\s@]+\.[^\s@]+/.test(document.body.innerText), link: !!document.querySelector('a[href^="mailto:"]') }));
+        const mailOk = !mail.text || mail.link;
+        result.steps.push({ what: 'contacts: email cliccabile', hash: mail.link ? 'mailto' : mail.text ? '(solo testo)' : '(nessuna email)', ok: mailOk });
+        if (!mailOk) result.problems.push("contacts: l'email c'è ma non è un collegamento mailto (non si può cliccare)");
+      }
       // dal link, il tasto home riporta alla home
       const burger = await page.$('a.hamburger');
       if (burger) {
