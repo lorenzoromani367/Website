@@ -2,3 +2,10 @@
 
 # Copie di sicurezza locali dello stato salvato (le crea il server, non vanno pubblicate)
 .state-backups/
+
+# Cartella delle dipendenze di prova (il sito non ne ha bisogno), resti di modifiche non riuscite e cartella dell'editor Antigravity:
+# se tornano a comparire sul computer, non finiscono su GitHub
+node_modules/
+*.orig
+*.rej
+.antigravity/
