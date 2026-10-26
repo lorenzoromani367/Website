@@ -33,6 +33,7 @@ window.RECOVERED_CAPTIONS = {
   "@maniac/maniac-3.jpg": "unknown IV",
   "@maniac/maniac-4.jpg": "unknown V",
   "@maniac/maniac-5.jpg": "unknown I",
+  "@maniac/maniac-6.jpg": "unknown VI",
   "@sofa/sushi discotheque.jpg": "sushi disco",
   "@whitening/smile.jpg": "smile",
   "@hair/hair-1.jpg": "black dye",

@@ -5,8 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lorenzo Romani — Photography</title>
   <meta name="description" content="Lorenzo Romani — photography" />
-  <!-- Colori sempre chiari: senza questa riga alcuni browser (scurimento forzato, "modo scuro" di certi telefoni) invertono il foglio beige e i colori delle foto -->
+  <!-- Il sito si vede sempre con i suoi colori. Due segnali, perché a leggerli sono programmi diversi:
+       - "only light": il modo con cui un sito dice "sono solo chiaro" ai browser che scuriscono le pagine da soli (Chrome ha una
+         funzione così, "Auto Dark Theme", e descrive questo segnale per chi non vuole essere scurito);
+       - "darkreader-lock": il modo con cui un sito chiede a Dark Reader (l'estensione più diffusa per scurire i siti) di lasciarlo stare.
+       Un'estensione che non legge nessuno dei due, o una persona che sceglie apposta di invertire i colori, un sito non li può fermare. -->
   <meta name="color-scheme" content="only light" />
+  <meta name="darkreader-lock" />
   <!-- Il carattere si scarica subito, prima del resto: così il testo non cambia misura a metà caricamento -->
   <link rel="preload" href="fonts/StrichpunktSans-Regular.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/style_v58.css?v=dev" />

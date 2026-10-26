@@ -31,6 +31,9 @@ body {
 }
 
 html {
+  /* Il sito è solo chiaro: i browser che scuriscono le pagine da soli (o con il "modo scuro" del telefono) non devono toccare
+     né i colori né i controlli (barre di scorrimento, campi di testo). Stessa cosa del meta "color-scheme" in index.html. */
+  color-scheme: only light;
   /* iPhone/iPad ingrandiscono da soli il testo quando giri lo schermo: qui no */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
