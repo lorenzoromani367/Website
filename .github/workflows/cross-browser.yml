@@ -30,7 +30,10 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Versione del sistema FISSATA (non "latest"): tra il 26 e il 28 ottobre "ubuntu-latest" è diventato Ubuntu 26.04, che Playwright 1.56.1 non
+    # supporta ("Playwright does not support chromium on ubuntu26.04-x64"): l'installazione dei browser falliva e il controllo diventava
+    # rosso senza aver controllato niente. Sulla 24.04 le prove girano come prima (Chromium 141, Firefox 142, WebKit 26).
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
