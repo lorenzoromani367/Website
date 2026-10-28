@@ -40,7 +40,6 @@ window.DYNAMIC_IMAGES = [
   "images/core archive/stills-11.jpg",
   "images/core archive/stills-16.jpg",
   "images/core archive/tourette.JPG",
-  "images/eating/dreams.jpg",
   "images/fluoxetine/dinner.JPG",
   "images/hair/hair-1.jpg",
   "images/homes/1 wine.jpg",
@@ -118,7 +117,6 @@ window.DYNAMIC_IMAGES = [
   "images/stills/upside down.JPG",
   "images/tower/tower-1.jpg",
   "images/tower/tower-2.jpg",
-  "images/toy/toy-1.jpg",
   "images/whitening/smile.jpg"
 ];
 window.IMAGE_SIZES = {
@@ -162,7 +160,6 @@ window.IMAGE_SIZES = {
   "images/core archive/stills-11.jpg": [1792, 2200],
   "images/core archive/stills-16.jpg": [1886, 2200],
   "images/core archive/tourette.JPG": [916, 765],
-  "images/eating/dreams.jpg": [1700, 1360],
   "images/fluoxetine/dinner.JPG": [1000, 1250],
   "images/hair/hair-1.jpg": [1700, 1591],
   "images/homes/1 wine.jpg": [2000, 1613],
@@ -240,7 +237,6 @@ window.IMAGE_SIZES = {
   "images/stills/upside down.JPG": [503, 418],
   "images/tower/tower-1.jpg": [2200, 1755],
   "images/tower/tower-2.jpg": [2149, 2200],
-  "images/toy/toy-1.jpg": [1283, 1700],
   "images/whitening/smile.jpg": [1442, 2060]
 };
 window.IMAGE_TWINS = {
