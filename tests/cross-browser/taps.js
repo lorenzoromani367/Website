@@ -8,7 +8,8 @@
    di indirizzo vecchio ("This page no longer exists", che è il comportamento giusto SOLO per un indirizzo vecchio) — e che non
    ci siano errori JavaScript.
    Serve a capire se, toccando in giro, un telefono può finire su una pagina inesistente: il controllo normale (check.js) apre
-   ogni pagina dall'indirizzo, qui invece si arriva alle pagine come ci arriva un visitatore.
+   ogni pagina dall'indirizzo, qui invece si arriva alle pagine come ci arriva un visitatore. Controlla anche che le icone
+   (scheda del browser, anteprima per i social) si scarichino davvero dal sito pubblicato.
    Uso:  node taps.js --url=https://lorenzoromani367.github.io/Website [--engines=webkit,chromium,firefox] [--out=report]
    Esce con errore (codice 1) se una pagina risulta inesistente, vuota o con errori JavaScript.
    ========================================================================== */
@@ -110,9 +111,40 @@ async function runEngine(engine) {
       await fresh.close();
     }
 
+    // 0c. icone: l'icona della scheda (SVG, .ico, apple-touch-icon) e l'immagine dell'anteprima per i social devono esistere sul sito
+    //     pubblicato. La pubblicazione copia solo certe cartelle e un file dimenticato darebbe 404 senza che nessuno se ne accorga
+    //     (i browser automatici non richiedono l'icona da soli). L'immagine dell'anteprima punta al dominio vero: si controlla il
+    //     file con lo stesso nome sul sito che si sta provando.
+    {
+      await openHome(page);
+      const files = await page.evaluate(() => {
+        const list = [...document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')].map((l) => ({ what: `icona: ${l.getAttribute('href')}`, url: l.href }));
+        const og = document.querySelector('meta[property="og:image"]');
+        if (og && og.content) {
+          const file = new URL(og.content).pathname.replace(/^\/+/, '');
+          list.push({ what: `anteprima social: ${file}`, url: new URL(file, document.baseURI).href });
+        }
+        return list;
+      });
+      if (!files.some((f) => f.what.startsWith('icona:'))) result.problems.push('nessuna icona della scheda dichiarata in index.html');
+      for (const f of files) {
+        const r = await page.evaluate(async (url) => {
+          try {
+            const res = await fetch(url, { cache: 'no-store' });
+            return { status: res.status, type: res.headers.get('content-type') || '', bytes: (await res.arrayBuffer()).byteLength };
+          } catch (e) {
+            return { status: 0, type: String(e.message || e), bytes: 0 };
+          }
+        }, f.url);
+        const ok = r.status === 200 && /^image\//.test(r.type) && r.bytes > 100;
+        result.steps.push({ what: f.what, hash: ok ? r.type : `${r.status} ${r.type}`, ok });
+        if (!ok) result.problems.push(`${f.what} → ${r.status || 'non raggiungibile'} ${r.type} (${r.bytes} byte)`);
+      }
+    }
+
     // 1. ogni voce della home (progetti e parole)
     await openHome(page);
-    const names = await page.$$eval('.home-list .home-word-input', (inputs) => inputs.map((i) => i.value || '(parola senza testo)'));
+    const names =await page.$$eval('.home-list .home-word-input', (inputs) => inputs.map((i) => i.value || '(parola senza testo)'));
     for (let i = 0; i < names.length; i++) {
       await openHome(page);
       const target = (await page.$$('.home-list .home-word-input'))[i];

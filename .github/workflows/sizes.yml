@@ -18,7 +18,10 @@ permissions:
 
 jobs:
   sizes:
-    runs-on: ubuntu-latest
+    # Versione del sistema FISSATA (non "latest"): tra il 26 e il 28 ottobre "ubuntu-latest" è diventato Ubuntu 26.04, che Playwright 1.56.1 non
+    # supporta ("Playwright does not support chromium on ubuntu26.04-x64"): l'installazione dei browser falliva e il controllo diventava
+    # rosso senza aver controllato niente. Sulla 24.04 le prove girano come prima (Chromium 141, Firefox 142, WebKit 26).
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -38,7 +41,7 @@ jobs:
         run: |
           node watch_images.js --once
           mkdir _site
-          cp -r index.html 404.html css js fonts icons images testi _site/
+          cp -r index.html 404.html favicon.ico css js fonts icons images testi _site/
           touch _site/.nojekyll
           V="${GITHUB_SHA::8}"
           sed -i "s/?v=dev/?v=${V}/g; s/SITE_VERSION = \"dev\"/SITE_VERSION = \"${V}\"/" _site/index.html
