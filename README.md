@@ -237,7 +237,7 @@ Richiesta: «controllo generale per vedere se il sito è pronto per essere pubbl
 2. Se nella cartella vecchia ci sono modifiche non ancora salvate (in GitHub Desktop compaiono a sinistra), copia a mano i file modificati in un posto sicuro: dopo la riscrittura un «c2m» dalla cartella vecchia non arriva più su GitHub.
 3. Rinomina la cartella vecchia (per esempio «Website-vecchia»); non cancellarla subito.
 4. In GitHub Desktop togli il vecchio repository dall'elenco (tasto destro → Remove), poi File → Clone repository → `lorenzoromani367/Website` e scegli come cartella quella di prima (ora libera).
-5. Dalla cartella vecchia copia nella nuova la cartella nascosta `.state-backups` (nel Finder: Cmd + Maiusc + punto per vedere i file nascosti) e, se le vuoi ancora, le 5 foto sciolte tolte il 26 ottobre (nella nuova cartella non ci sono; restano nella cronologia).
+5. **Facoltativo**: dalla cartella vecchia copia nella nuova la cartella nascosta `.state-backups` (nel Finder: Cmd + Maiusc + punto per vedere i file nascosti; se non si riesce, si salta). Contiene solo le copie di sicurezza che il server locale fa a ogni salvataggio della modalità modifica (le ultime 40, una al giorno per 90 giorni, quelle di prima di una cancellazione grossa) e serve soltanto per tornare indietro a un salvataggio vecchio: il sito non ne ha bisogno e la cartella nuova ne crea di nuove da sola. Finché si tiene «Website-vecchia» niente si perde. Se vuoi, copia anche le 5 foto sciolte tolte il 26 ottobre (nella nuova cartella non ci sono; restano nella cronologia).
 6. Avvia `Start_Website.command` dalla cartella nuova.
 7. Quando tutto funziona da qualche giorno, cancella la cartella vecchia: contiene ancora i vecchi commit, quindi il numero.
 
