@@ -337,8 +337,8 @@ images: [
     name: "Bar",
     // Due foto, senza didascalie (le scrivi tu dalla modalità modifica).
     images: [
-      { caption: "", src: "images/bar/bar-1.jpg", align: "left", offset: { x: 0, y: 52 }, width: "420px", mobile: { width: "280px" } },
-      { caption: "", src: "images/bar/bar-2.jpg", align: "left", offset: { x: 0, y: 52 }, width: "420px", mobile: { width: "280px" } }
+      { caption: "", src: "images/bar/bar-1.jpg", align: "left", offset: { x: 0, y: 52 }, width: "420px", mobile: { width: "280px" }, zoomBox: { width: "859.578px", height: "916.76px" } },
+      { caption: "", src: "images/bar/bar-2.jpg", align: "left", offset: { x: 0, y: 52 }, width: "420px", mobile: { width: "280px" }, zoomBox: { width: "866.266px", height: "916.76px" } }
     ],
   }
 ];

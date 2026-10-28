@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 156,
-  "updatedAt": "2026-10-24T12:43:28.264Z",
+  "version": 159,
+  "updatedAt": "2026-10-28T07:38:15.012Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -361,6 +361,9 @@ window.SITE_STATE = {
         }
       ]
     },
+    "site-home-hidden-v1": [
+      "p:bar"
+    ],
     "site-layout-scope-migration-v1": 1,
     "site-order-overrides-v1": {
       "project.mediality.imageOrder": [
@@ -656,6 +659,22 @@ window.SITE_STATE = {
       "zoom:images/homes/inmates.jpg": {
         "width": "1519.8px",
         "height": "804.832px"
+      },
+      "project.bar.zoom.1": {
+        "width": "866.266px",
+        "height": "916.76px"
+      },
+      "zoom:images/bar/bar-2.jpg": {
+        "width": "866.266px",
+        "height": "916.76px"
+      },
+      "project.bar.zoom.0": {
+        "width": "859.578px",
+        "height": "916.76px"
+      },
+      "zoom:images/bar/bar-1.jpg": {
+        "width": "859.578px",
+        "height": "916.76px"
       }
     },
     "site-size-overrides-v1:m": {
