@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  pages: read
 
 jobs:
   dominio:
@@ -23,6 +24,8 @@ jobs:
         env:
           DOMAIN: ${{ inputs.domain }}
           SITE: https://lorenzoromani367.github.io/Website/
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           set +e
           # il nome arriva da una casella di testo: si accettano solo lettere, cifre, punti e trattini
@@ -51,6 +54,15 @@ jobs:
             if [ "$ok" = yes ]; then echo "**$DOMAIN punta ai quattro indirizzi di GitHub Pages: giusto.**"; else echo "**$DOMAIN NON punta (solo) ai quattro indirizzi di GitHub Pages ($GITHUB_IPS).**"; fi
             W=$(dig +short CNAME "www.$DOMAIN" @1.1.1.1 | tr '\n' ' ')
             case "$W" in *lorenzoromani367.github.io.*) echo "**www.$DOMAIN: CNAME verso lorenzoromani367.github.io: giusto.**" ;; *) echo "**www.$DOMAIN: manca il CNAME verso lorenzoromani367.github.io (risposta: ${W:-nessuna}).**" ;; esac
+            echo
+            echo "## Come GitHub vede la configurazione di Pages (Settings -> Pages)"
+            echo '```'
+            api() { curl -sS -m 20 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/$REPO/$1"; }
+            echo "-- impostazioni"
+            api pages | jq '{dominio_proprio: .cname, indirizzo: .html_url, https_forzato: .https_enforced, certificato: .https_certificate, stato_dominio: .protected_domain_state, tipo_pubblicazione: .build_type, errore: .message}' 2>&1 | head -40
+            echo "-- controllo DNS fatto da GitHub"
+            api pages/health | jq '.' 2>&1 | head -60
+            echo '```'
             echo
             echo "## Cosa risponde (senza seguire i rimandi, poi seguendoli)"
             echo '```'
