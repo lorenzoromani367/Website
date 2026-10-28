@@ -1,0 +1,71 @@
+name: Controllo del dominio (a mano)
+
+# Mostra, visto da fuori (dai computer di GitHub), a cosa punta un dominio proprio e cosa risponde: serve mentre lo si collega a GitHub Pages
+# (record DNS su Spaceship, "Custom domain" in Settings -> Pages) e dopo, per vedere se il certificato HTTPS è arrivato.
+# Non modifica niente e non pubblica niente. Si lancia a mano: GitHub -> Actions -> "Controllo del dominio (a mano)" -> Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Dominio da controllare, senza https:// (es. lorenzoromani.cc)"
+        required: true
+        default: "lorenzoromani.cc"
+
+permissions:
+  contents: read
+
+jobs:
+  dominio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Cosa vede il mondo
+        env:
+          DOMAIN: ${{ inputs.domain }}
+          SITE: https://lorenzoromani367.github.io/Website/
+        run: |
+          set +e
+          # il nome arriva da una casella di testo: si accettano solo lettere, cifre, punti e trattini
+          if ! printf '%s' "$DOMAIN" | grep -Eq '^[A-Za-z0-9.-]+$'; then echo "Nome di dominio non valido: $DOMAIN"; exit 1; fi
+          command -v dig >/dev/null || sudo apt-get install -y -qq dnsutils >/dev/null 2>&1
+          GITHUB_IPS="185.199.108.153 185.199.109.153 185.199.110.153 185.199.111.153"
+          {
+            echo "# Controllo del dominio $DOMAIN"
+            echo
+            echo "## DNS (domanda posta a un server pubblico, 1.1.1.1)"
+            echo '```'
+            for t in A AAAA CNAME NS TXT CAA; do
+              out=$(dig +short "$t" "$DOMAIN" @1.1.1.1 | sort | tr '\n' ' ')
+              echo "$t  $DOMAIN  ->  ${out:-(nessuna risposta)}"
+            done
+            for t in A CNAME; do
+              out=$(dig +short "$t" "www.$DOMAIN" @1.1.1.1 | sort | tr '\n' ' ')
+              echo "$t  www.$DOMAIN  ->  ${out:-(nessuna risposta)}"
+            done
+            echo '```'
+            echo
+            A=$(dig +short A "$DOMAIN" @1.1.1.1 | sort | tr '\n' ' ')
+            ok=yes; [ -n "$A" ] || ok=no
+            for ip in $A; do case " $GITHUB_IPS " in *" $ip "*) ;; *) ok=no ;; esac; done
+            for ip in $GITHUB_IPS; do case " $A" in *" $ip "*) ;; *) ok=no ;; esac; done
+            if [ "$ok" = yes ]; then echo "**$DOMAIN punta ai quattro indirizzi di GitHub Pages: giusto.**"; else echo "**$DOMAIN NON punta (solo) ai quattro indirizzi di GitHub Pages ($GITHUB_IPS).**"; fi
+            W=$(dig +short CNAME "www.$DOMAIN" @1.1.1.1 | tr '\n' ' ')
+            case "$W" in *lorenzoromani367.github.io.*) echo "**www.$DOMAIN: CNAME verso lorenzoromani367.github.io: giusto.**" ;; *) echo "**www.$DOMAIN: manca il CNAME verso lorenzoromani367.github.io (risposta: ${W:-nessuna}).**" ;; esac
+            echo
+            echo "## Cosa risponde (senza seguire i rimandi, poi seguendoli)"
+            echo '```'
+            for u in "http://$DOMAIN/" "https://$DOMAIN/" "http://www.$DOMAIN/" "https://www.$DOMAIN/" "$SITE"; do
+              echo "--- $u"
+              curl -sS -m 20 -o /dev/null -w "senza seguire: codice %{http_code}, rimanda a: %{redirect_url}\n" "$u" 2>&1 | head -3
+              curl -sS -m 20 -L --max-redirs 5 -o /dev/null -w "seguendo i rimandi: codice %{http_code}, indirizzo finale: %{url_effective}\n" "$u" 2>&1 | head -3
+            done
+            echo '```'
+            echo
+            echo "## Il sito si vede? (cerca il titolo della home nella pagina finale)"
+            echo '```'
+            for u in "https://$DOMAIN/" "http://$DOMAIN/" "$SITE"; do
+              t=$(curl -sS -m 20 -L --max-redirs 5 "$u" 2>&1 | grep -o '<title>[^<]*</title>' | head -1)
+              echo "$u  ->  ${t:-(nessun titolo: non è la pagina del sito)}"
+            done
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
