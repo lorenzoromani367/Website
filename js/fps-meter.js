@@ -167,7 +167,7 @@
     const ago = `${Math.max(0, Math.round((Date.now() - e.at) / 1000))} s fa`;
     if (!e.ran) return `${ago} · NON partito: ${e.why}`;
     if (e.mode === "tenuta") return `${ago} · barra tenuta ferma dov'era, a ${e.holdY} px dal bordo alto${e.why ? ` (${e.why})` : ""}`;
-    if (e.holdY > e.endY + 2) return `${ago} · barra ferma a ${e.holdY} px, sotto il bordo della finestra (${innerHeight} px): la foto più alta non ci sta insieme alla barra`;
+    if (e.holdY > e.endY + 2) return `${ago} · barra ferma a ${e.holdY} px, sotto il bordo della finestra (${innerHeight} px): con la barra in fondo la cima della foto più alta sarebbe tagliata di troppo`;
     return `${ago} · pagina portata in fondo, barra ferma a ${e.holdY} px dal bordo alto`;
   };
   const holdLines = (limit) => {
