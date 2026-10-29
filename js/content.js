@@ -7,7 +7,7 @@
 
    Come aggiungere una foto reale:
      images: [
-       { caption: "winery, sicily", src: "images/collusion/01.jpg" }
+       { caption: "winery, sicily", src: "images/complicity/01.jpg" }
      ]
    Finché "src" è null, app.js genera automaticamente un placeholder SVG
    colorato al posto della foto (vedi placeholderImg() in app.js).
@@ -102,7 +102,7 @@ const LAYOUT = {
 const PROJECTS = [
   {
     slug: "boudaries",
-    name: "Collusion",
+    name: "Complicity",
         // Nessuna "descriptionBox" qui: la dimensione/posizione di
     // quel blocco resta quella di default in LAYOUT sia per desktop che per mobile.
     // Ordine, didascalie e "mobile: {...}" aggiornati dall'export panel
@@ -114,7 +114,7 @@ const PROJECTS = [
     images: [
 {
 caption: "wire",
-src: "images/collusion/1 wire.JPG",
+src: "images/complicity/1 wire.JPG",
 mobile: { width: "280px" },
 captionOffset: { x: 101, y: 0 },
 width: "559.221px",
@@ -122,22 +122,22 @@ zoomBox: { width: "1109.31px", height: "916.76px" }
 },
 {
 caption: "hill",
-src: "images/collusion/2 hill.JPG",
+src: "images/complicity/2 hill.JPG",
 mobile: { width: "320px" },
 width: "560.086px",
 captionOffset: { x: 80, y: 380 },
 zoomBox: { width: "994.301px", height: "916.76px" }
 },
-{ caption: "field", src: "images/collusion/3 field.jpg", width: "440px", height: "622px", mobile: { width: "280px", height: "396px" }, zoomBox: { width: "1519.8px", height: "801.059px" } },
-{ caption: "sky", src: "images/collusion/4 sky.jpg", mobile: { width: "320px" }, width: "426.007px", captionOffset: { x: 88, y: 0 }, offset: { x: 0, y: 300 }, zoomBox: { width: "1519.8px", height: "916.76px" } },
-{ caption: "olympus", src: "images/collusion/5 olympus.jpg", width: "520px", height: "590px", mobile: { width: "300px", height: "340px" } },
-{ caption: "stage", src: "images/collusion/6 stage.JPG", mobile: { width: "300px" }, width: "565.492px", zoomBox: { width: "912.41px", height: "916.76px" } },
-{ caption: "tapestry", src: "images/collusion/7 tapestry.JPG", width: "480px", height: "568px", mobile: { width: "300px", height: "355px" } },
-{ caption: "decay", src: "images/collusion/8 decay.jpg", mobile: { width: "260px" }, offset: { x: 8, y: 300 }, width: "382.062px", captionOffset: { x: 74, y: 0 }, zoomBox: { width: "1519.8px", height: "679.489px" } },
-{ caption: "emst", src: "images/collusion/lines-13.jpg", width: "460px", height: "575px", captionOffset: { x: 100, y: 360 }, mobile: { width: "300px", height: "375px" } },
+{ caption: "field", src: "images/complicity/3 field.jpg", width: "440px", height: "622px", mobile: { width: "280px", height: "396px" }, zoomBox: { width: "1519.8px", height: "801.059px" } },
+{ caption: "sky", src: "images/complicity/4 sky.jpg", mobile: { width: "320px" }, width: "426.007px", captionOffset: { x: 88, y: 0 }, offset: { x: 0, y: 300 }, zoomBox: { width: "1519.8px", height: "916.76px" } },
+{ caption: "olympus", src: "images/complicity/5 olympus.jpg", width: "520px", height: "590px", mobile: { width: "300px", height: "340px" } },
+{ caption: "stage", src: "images/complicity/6 stage.JPG", mobile: { width: "300px" }, width: "565.492px", zoomBox: { width: "912.41px", height: "916.76px" } },
+{ caption: "tapestry", src: "images/complicity/7 tapestry.JPG", width: "480px", height: "568px", mobile: { width: "300px", height: "355px" } },
+{ caption: "decay", src: "images/complicity/8 decay.jpg", mobile: { width: "260px" }, offset: { x: 8, y: 300 }, width: "382.062px", captionOffset: { x: 74, y: 0 }, zoomBox: { width: "1519.8px", height: "679.489px" } },
+{ caption: "emst", src: "images/complicity/lines-13.jpg", width: "460px", height: "575px", captionOffset: { x: 100, y: 360 }, mobile: { width: "300px", height: "375px" } },
 {
 caption: "construction",
-src: "images/collusion/lines-7.jpg",
+src: "images/complicity/lines-7.jpg",
 mobile: { width: "320px", height: "363px" },
 }
 ],
