@@ -721,9 +721,12 @@ function noteUserScroll() {
     if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) return; // scrive, non scorre
     noteUserScroll();
   }, true);
-  // Trascinare la barra di scorrimento non manda né rotella né tasti: si riconosce da uno "scroll" che il sito non ha chiesto
+  // Trascinare la barra di scorrimento non manda né rotella né tasti: si riconosce da uno 'scroll' che il sito non ha chiesto.
+  // (L'evento arriva al fotogramma dopo quello in cui il sito ha spostato la pagina: se in mezzo c'è un blocco lungo, anche di mezzo
+  // secondo, deve ancora contare come del sito. Mentre il sito la sta spostando, chi trascina la barra lo vede comunque
+  // startBottomFraming, che a ogni fotogramma controlla che la pagina sia dov'era stata messa.)
   window.addEventListener("scroll", () => {
-    if (performance.now() - lastProgrammaticScrollAt > 250) noteUserScroll();
+    if (performance.now() - lastProgrammaticScrollAt > 600) noteUserScroll();
   }, { passive: true });
 })();
 
