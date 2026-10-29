@@ -90,6 +90,31 @@ const IS_AT_HOME = (() => {
     || /^10\.\d+\.\d+\.\d+$/.test(host) || /^192\.168\.\d+\.\d+$/.test(host) || /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(host);
 })();
 
+// Contatore di fluidità (js/fps-meter.js): si accende e si spegne con Opzione+Maiusc+F, o aprendo il sito con "?fps" in fondo
+// all'indirizzo. Il file si scarica solo in quel momento: per chi visita il sito normalmente non esiste. (Vivaldi nasconde ciò che sta
+// dopo il "?" nella barra degli indirizzi, ed è per questo che c'è anche la scorciatoia.)
+(() => {
+  let loading = false;
+  const toggle = (on) => {
+    if (window.__fpsMeterToggle) { window.__fpsMeterToggle(on); return; }
+    if (loading) return;
+    loading = true;
+    const script = document.createElement("script");
+    script.src = `js/fps-meter.js?v=${encodeURIComponent(window.SITE_VERSION || "dev")}`;
+    script.onload = () => { loading = false; if (window.__fpsMeterToggle) window.__fpsMeterToggle(true); };
+    script.onerror = () => { loading = false; };
+    document.head.appendChild(script);
+  };
+  document.addEventListener("keydown", (e) => {
+    if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.code === "KeyF") { e.preventDefault(); toggle(); }
+  });
+  try {
+    if (new URLSearchParams(location.search).has("fps")) toggle(true);
+  } catch (e) {
+    /* indirizzo non leggibile: niente contatore all'apertura */
+  }
+})();
+
 // Avviso in alto al centro, fatto con le sole funzioni del browser (non dipende dal resto del sito). Un clic lo chiude, o fa "onClick".
 function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
   try {
@@ -3998,6 +4023,29 @@ function measureMarqueeLoop(box, track, content, clone) {
   return { distance, startPos: (((distance - textOffset) % distance) + distance) % distance };
 }
 
+// Una curva "cubic-bezier(x1, y1, x2, y2)" di CSS (letta da una variabile del foglio di stile, o quella di riserva) come
+// quattro numeri.
+function cssCubicBezier(variableName, fallback) {
+  const text = getComputedStyle(document.documentElement).getPropertyValue(variableName);
+  const m = /cubic-bezier\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/.exec(text || "");
+  return m ? [+m[1], +m[2], +m[3], +m[4]] : fallback;
+}
+
+// A che punto del TEMPO (da 0 a 1) una transizione con questa curva ha percorso la frazione "progress" (da 0 a 1) della
+// strada: è la curva letta al contrario. Serve a sapere dopo quanto tempo, nello scorrimento tra le foto, la foto in
+// arrivo ha percorso abbastanza strada per cominciare a vedersi.
+function bezierTimeForProgress(curve, progress) {
+  const [x1, y1, x2, y2] = curve;
+  const at = (a, b, s) => 3 * (1 - s) * (1 - s) * s * a + 3 * (1 - s) * s * s * b + s * s * s;
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(y1, y2, mid) < progress) lo = mid; else hi = mid;
+  }
+  return at(x1, x2, (lo + hi) / 2);
+}
+
 function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav, galleryKey }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
@@ -4625,9 +4673,49 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let heldAt = 0;
 
   // Allungamento del riquadro quando la foto in arrivo è più alta (vedi updateViewportHeight): breve e continuo, non di colpo.
+  // VIEWPORT_GROW_MS / VIEWPORT_GROW_TRANSITION: la versione "veloce" (parte a tutta velocità e frena subito), usata solo
+  // quando la foto in arrivo si vede quasi subito e non c'è tempo per altro.
   const VIEWPORT_GROW_MS = 800;
   const VIEWPORT_GROW_TRANSITION = `height ${VIEWPORT_GROW_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+  // La versione normale parte piano (prima la barra con le frecce e il fondo della pagina saltavano di colpo: fino a 31 px
+  // in un solo fotogramma al primo istante), accelera e frena, e dura quanto serve per essere finita un attimo prima che la
+  // foto in arrivo cominci a vedersi (vedi growTransitionFor): né meno, perché sarebbe più brusca, né più, perché
+  // taglierebbe il fondo della foto che entra.
+  const VIEWPORT_GROW_MIN_MS = 300;
+  const VIEWPORT_GROW_MAX_MS = 1400;
+  const VIEWPORT_GROW_SAFETY = 0.95; // finisce al 95% del tempo che la foto impiega a cominciare a vedersi
+  const VIEWPORT_GROW_CURVE = "cubic-bezier(0.45, 0, 0.25, 1)";
   let viewportGrowTimer = null;
+
+  // Durata e curva dell'allungamento per una foto in arrivo ("destination": la figura, o il suo clone, verso cui sta
+  // partendo lo scorrimento). La foto in arrivo comincia a vedersi quando il binario ha percorso abbastanza strada perché
+  // il suo bordo più vicino (foto o didascalia, la più larga) passi il bordo del riquadro: con la curva dello scorrimento
+  // (la stessa del CSS, --transition-ease, su --transition-ms) si ricava QUANDO. Se si vede subito o non si riesce a
+  // calcolarlo resta l'allungamento veloce di prima.
+  function growTransitionFor(destination) {
+    const fast = { css: VIEWPORT_GROW_TRANSITION, ms: VIEWPORT_GROW_MS };
+    if (!destination || typeof destination.getBoundingClientRect !== "function") return fast;
+    const vp = viewport.getBoundingClientRect();
+    const dest = destination.getBoundingClientRect();
+    const dx = dest.left - vp.left; // > 0: la foto arriva da destra; < 0: da sinistra
+    const travel = Math.abs(dx);
+    if (!(travel > 1) || !(vp.width > 0)) return fast;
+    let nearest = dx > 0 ? Infinity : -Infinity; // il bordo del contenuto in arrivo che per primo entra nel riquadro
+    destination.querySelectorAll(".photo-frame, .caption-box, .resize-handle, .move-handle").forEach((node) => {
+      const r = node.getBoundingClientRect();
+      if (!(r.width > 0)) return;
+      nearest = dx > 0 ? Math.min(nearest, r.left) : Math.max(nearest, r.right);
+    });
+    if (!Number.isFinite(nearest)) return fast;
+    const gap = dx > 0 ? nearest - vp.right : vp.left - nearest; // strada ancora da fare prima che qualcosa si veda
+    if (!(gap > 0)) return fast;
+    const slideMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--transition-ms")) || TRANSITION_MS;
+    const slideCurve = cssCubicBezier("--transition-ease", [0.25, 0.1, 0.25, 1]);
+    const visibleAfterMs = slideMs * bezierTimeForProgress(slideCurve, Math.min(1, gap / travel));
+    const ms = Math.min(VIEWPORT_GROW_MAX_MS, VIEWPORT_GROW_SAFETY * visibleAfterMs);
+    if (!(ms >= VIEWPORT_GROW_MIN_MS)) return fast;
+    return { css: `height ${Math.round(ms)}ms ${VIEWPORT_GROW_CURVE}`, ms: Math.round(ms) };
+  }
 
   // "glide": vero SOLO quando l'altezza cambia perché sta partendo uno scorrimento tra le foto (vedi applyPosition): lì,
   // se la foto in arrivo è più alta, il riquadro si allunga in modo continuo. Per tutto il resto (trascinare una
@@ -4660,9 +4748,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       // entra finché l'altezza non recupera (confermato: subito dopo l'inizio di una transizione verso una foto molto più
       // alta, il riquadro può restare centinaia di px più basso del necessario). Prima si allungava di colpo: la barra con
       // le frecce e il numero, e il fondo della pagina, SALTAVANO di colpo di qualche decina di px (fino a 100) nello
-      // stesso istante in cui parte lo scorrimento. Adesso si allunga in modo continuo (meno di un secondo, frenando alla
-      // fine; è già al 96% a metà strada): la foto in arrivo, in quel tempo, è ancora quasi tutta fuori dal riquadro (la
-      // curva dello scorrimento parte piano), quindi non se ne taglia nulla di visibile.
+      // stesso istante in cui parte lo scorrimento. Adesso si allunga in modo continuo, partendo piano e frenando alla fine,
+      // e finisce un attimo prima che la foto in arrivo cominci a vedersi (durata calcolata da growTransitionFor: da 0,3 a
+      // 1,4 s secondo la foto): fino a quel momento la foto è tutta fuori dal riquadro, quindi non se ne taglia nulla.
       // Il primo disegno della pagina (prima che le foto siano arrivate) resta istantaneo: lì non c'è nulla da animare.
       if (!glide || !firstLayoutSettled) {
         const prevTransition = viewport.style.transition;
@@ -4671,10 +4759,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         viewport.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
         viewport.style.transition = prevTransition;
       } else {
-        viewport.style.transition = VIEWPORT_GROW_TRANSITION;
+        const grow = growTransitionFor(options && options.destination);
+        viewport.style.transition = grow.css;
         viewport.style.height = `${newHeightPx}px`;
         clearTimeout(viewportGrowTimer);
-        viewportGrowTimer = setTimeout(() => { viewport.style.transition = ""; }, VIEWPORT_GROW_MS + 50);
+        viewportGrowTimer = setTimeout(() => { viewport.style.transition = ""; }, grow.ms + 50);
       }
     } else {
       // Accorciarsi non taglia mai nulla: qui resta la transizione lenta del foglio di stile (la stessa dello scorrimento).
@@ -4698,7 +4787,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     } else {
       track.style.transform = `translateX(-${position * 100}%)`;
     }
-    updateViewportHeight({ glide: !instant });
+    updateViewportHeight({ glide: !instant, destination: track.children[position] });
   }
 
   // Chiudere il giro (dall'ultima foto alla prima, o viceversa) deve
