@@ -10,9 +10,9 @@
        - tasto "torna alla home": tre lineette, area sensibile al tocco di almeno 44 × 44 px (minimo di Apple per un tocco);
        - Core Archive: lo "0" in fondo sulla stessa linea verticale del titolo e alla stessa distanza dall'ultima parola
          che in alto c'è tra il "0" e il titolo;
-       - galleria di un progetto: quando scorre (freccia destra) la pagina si porta in fondo, dove stanno il numero e le frecce
-         (o, se la finestra è troppo bassa per la foto e la barra insieme, dove la cima della foto sta a 24 px dal bordo alto),
-         su computer; su telefono resta ferma (inquadratura in fondo, js/app_v58.js).
+       - galleria di un progetto, su computer: mentre la galleria scorre e la foto cambia altezza (foto più alta e più bassa) il numero con
+         le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
+         non si muove.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -218,12 +218,14 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
 }
 
 /* ------------------------------ inquadratura in fondo ------------------------------ */
-// Quando la galleria scorre (qui con la freccia destra) la pagina, su computer, si porta in fondo, dove stanno il numero e le frecce, ma
-// non oltre il punto in cui la cima della foto sta a 24 px dal bordo alto della finestra (se la finestra è troppo bassa per la foto e la
-// barra insieme la cima della foto non si taglia): startBottomFraming in js/app_v58.js. Su telefono la pagina resta ferma. Si usa una
-// pagina nuova: dopo un movimento della pagina fatto dall'utente (anche solo uno "scroll" mandato dal test) l'inquadratura aspetta 15 s
-// per non portare via la pagina a chi la sta leggendo.
+// Quando la galleria scorre la foto cambia altezza (quasi sempre) e con lei la pagina: su computer la barra col numero e le frecce deve restare
+// ferma sullo schermo, a muoversi deve essere la foto (startBarHold in js/app_v58.js: la pagina viene spostata a ogni fotogramma di quanto
+// basta). Si guarda la posizione della barra sullo schermo mentre cambia la foto: prima +62 px, poi +114, +60 e -177 (Complicity,
+// #/project/boudaries); non deve spostarsi di più di 3 px (1-2 px sono l'arrotondamento a pixel interi del browser). Su telefono la pagina
+// non si deve muovere. Si usa una pagina nuova: dopo un movimento della pagina fatto dall'utente (anche solo uno "scroll" mandato dal
+// test) l'inquadratura iniziale aspetta 15 s per non portare via la pagina a chi la sta leggendo.
 const FRAMING_ROUTE = '#/project/boudaries';
+const BAR_TOLERANCE_PX = 3;
 async function checkFraming(context, base) {
   const problems = [];
   const page = await context.newPage();
@@ -232,33 +234,79 @@ async function checkFraming(context, base) {
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
-    const read = () => page.evaluate(() => {
-      const frame = document.querySelector('.photo-track > figure.photo .photo-frame');
-      return { y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, top: frame ? frame.getBoundingClientRect().top : null, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length };
-    });
-    // "inquadrata": in fondo, oppure ferma dove la cima della foto sta a 24 px dal bordo alto (24 ± 4 px)
-    const framed = (st) => st.max - st.y <= 3 || (st.top !== null && Math.abs(st.top - 24) <= 4);
-    const describe = (st) => `è a ${Math.round(st.y)} px su ${Math.round(st.max)}, la cima della foto a ${Math.round(st.top)} px dal bordo alto della finestra`;
+    const read = () => page.evaluate(() => ({ y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
+    // posizione della barra sullo schermo, fotogramma per fotogramma, per "ms" millisecondi
+    const watchBar = (ms) => page.evaluate((duration) => new Promise((resolve) => {
+      const bar = document.querySelector('.gallerybar'); const t0 = performance.now(); const tops = []; const ys = [];
+      // (si legge DOPO che il fotogramma è pronto, con un timer subito dopo le funzioni di fotogramma: è quello che si vede, non lo stato a metà)
+      const tick = () => { setTimeout(() => { tops.push(bar.getBoundingClientRect().top); ys.push(window.scrollY); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => resolve({ min: Math.min(...tops), max: Math.max(...tops), last: tops[tops.length - 1], y0: ys[0], y1: ys[ys.length - 1] }), 60); };
+      requestAnimationFrame(tick);
+    }), ms);
     const before = await read();
-    if (before.photos < 2 || before.max <= 8) return problems; // una foto sola, o la pagina sta tutta nella finestra: niente da inquadrare
-    await page.keyboard.press('ArrowRight');
+    if (before.photos < 2 || before.max <= 8) return problems; // una foto sola, o la pagina sta tutta nella finestra: niente da tenere fermo
     if (context.__profile === 'telefono') {
+      await page.keyboard.press('ArrowRight');
       await page.waitForTimeout(2500);
       const after = await read();
-      if (Math.abs(after.y - before.y) > 3) problems.push(`su telefono la galleria che scorre ha mosso la pagina (da ${Math.round(before.y)} a ${Math.round(after.y)} px): l'inquadratura in fondo è solo per il computer`);
-    } else {
-      let now = before;
-      for (let i = 0; i < 40 && !framed(now); i++) { await page.waitForTimeout(150); now = await read(); }
-      if (!framed(now)) problems.push(`la galleria scorre ma la pagina non si inquadra (${describe(now)}): l'inquadratura in fondo non parte`);
-      else {
-        // la pagina cambia altezza per un altro secondo circa (la foto in arrivo è più alta o più bassa): deve restare inquadrata fino alla fine
-        await page.waitForTimeout(2500);
-        now = await read();
-        if (!framed(now)) problems.push(`la pagina si inquadra ma poi non ci resta mentre la foto cambia altezza (alla fine ${describe(now)})`);
-      }
+      if (Math.abs(after.y - before.y) > 3) problems.push(`su telefono la galleria che scorre ha mosso la pagina (da ${Math.round(before.y)} a ${Math.round(after.y)} px): la barra ferma è solo per il computer`);
+      return problems;
+    }
+    // 1) primo scorrimento (+62 px): la pagina scende fino alla posizione di serie; si aspetta che arrivi
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(2600);
+    const first = await read();
+    if (first.y < before.y + 20) { problems.push(`la galleria scorre ma la pagina non si porta alla posizione di serie (è a ${Math.round(first.y)} px, era a ${Math.round(before.y)} px)`); return problems; }
+    const base1 = (await watchBar(150)).last;
+    // 2) foto più alta (+114 px), poi (+60 px), poi più bassa (-177 px, sei secondi): la barra non si muove
+    const windows = [['foto più alta di 114 px', 2300], ['foto più alta di 60 px', 1800], ['foto più bassa di 177 px', 4200]];
+    for (let i = 0; i < windows.length; i++) {
+      const [label, ms] = windows[i];
+      await page.keyboard.press('ArrowRight');
+      const w = await watchBar(ms);
+      if (w.max - w.min > BAR_TOLERANCE_PX) problems.push(`con la ${label} il numero con le frecce si sposta sullo schermo di ${(w.max - w.min).toFixed(1)} px (deve restare fermo: massimo ${BAR_TOLERANCE_PX} px)`);
+      else if (Math.abs(w.last - base1) > BAR_TOLERANCE_PX) problems.push(`con la ${label} il numero con le frecce finisce ${(w.last - base1).toFixed(1)} px più in là di dov'era`);
+      if (Math.abs(w.y1 - w.y0) < 1 && label !== 'foto più alta di 60 px') problems.push(`con la ${label} la pagina non si è spostata: la barra è ferma per caso?`);
+      await page.waitForTimeout(700);
     }
   } catch (e) {
-    problems.push(`prova dell'inquadratura in fondo non riuscita: ${String(e.message).split('\n')[0]}`);
+    problems.push(`prova della barra ferma non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
+// Stessa prova, ma con la pagina già mossa dall'utente (rotella) in un punto in cui la barra si vede senza essere in fondo: lì la pagina non
+// deve andare da nessuna parte, ma la barra deve restare dov'è mentre la foto cambia altezza (era il caso che non funzionava: l'inquadratura
+// aspettava 15 s dall'ultimo movimento dell'utente e nel frattempo la barra saliva e scendeva con la foto).
+async function checkBarHoldAfterUserScroll(context, base) {
+  const problems = [];
+  if (context.__profile === 'telefono') return problems;
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(SETTLE_MS);
+    const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight, barTop: document.querySelector('.gallerybar').getBoundingClientRect().top + window.scrollY, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
+    if (geo.photos < 2 || geo.max <= 8) return problems;
+    const wanted = Math.max(0, Math.min(geo.max - 20, geo.barTop - geo.h + 100)); // la cima della barra 100 px sopra il bordo basso della finestra
+    await page.mouse.move(Math.round(geo.h / 2), 300);
+    await page.mouse.wheel(0, wanted);
+    await page.waitForTimeout(900);
+    await page.mouse.move(2, 2);
+    const at = await page.evaluate(() => ({ y: window.scrollY, bar: document.querySelector('.gallerybar').getBoundingClientRect().top, h: window.innerHeight }));
+    if (!(at.bar < at.h - 20)) return problems; // la rotella non ha portato la barra in vista (browser di prova): niente da controllare
+    const watching = page.evaluate((duration) => new Promise((resolve) => {
+      const bar = document.querySelector('.gallerybar'); const t0 = performance.now(); const tops = [];
+      const tick = () => { setTimeout(() => { tops.push(bar.getBoundingClientRect().top); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => resolve({ min: Math.min(...tops), max: Math.max(...tops) }), 60); };
+      requestAnimationFrame(tick);
+    }), 2500);
+    await page.waitForTimeout(150);
+    await page.keyboard.press('ArrowRight');
+    const w = await watching;
+    if (w.max - w.min > BAR_TOLERANCE_PX) problems.push(`con la pagina già mossa dall'utente (barra in vista, non in fondo) il numero con le frecce si sposta sullo schermo di ${(w.max - w.min).toFixed(1)} px mentre la foto cambia altezza (deve restare fermo: massimo ${BAR_TOLERANCE_PX} px)`);
+  } catch (e) {
+    problems.push(`prova della barra ferma con la pagina mossa dall'utente non riuscita: ${String(e.message).split('\n')[0]}`);
   }
   await page.close();
   return problems;
@@ -281,7 +329,7 @@ async function runEngine(engine, base, origin, routes) {
       const withShot = profile.shots && SHOT_ROUTES.includes(route);
       const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName.replace(/\s+/g, '-')}__${engine}.jpg`);
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
-      if (route === FRAMING_ROUTE) r.problems.push(...await checkFraming(context, base));
+      if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); }
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();
@@ -399,7 +447,7 @@ function summary(all, diffs, started, visual) {
   if (problems.length) {
     lines.push('## ❌ Problemi', '');
     for (const { e, r } of problems) for (const p of r.problems) lines.push(`- **${LABEL[e]}**, ${r.profile}, \`${r.route}\`: ${p}`);
-  } else lines.push('## ✅ Nessun problema', '', 'Nessun errore JavaScript, nessun file mancante, nessuna pagina più larga dello schermo, tasto home sempre toccabile, Core Archive in regola, galleria che porta la pagina in fondo (solo su computer).');
+  } else lines.push('## ✅ Nessun problema', '', 'Nessun errore JavaScript, nessun file mancante, nessuna pagina più larga dello schermo, tasto home sempre toccabile, Core Archive in regola, numero e frecce della galleria fermi sullo schermo mentre la foto cambia altezza (solo su computer).');
   lines.push('');
   if (all.length > 1) {
     lines.push('## Differenze tra i motori (avvisi)', '');

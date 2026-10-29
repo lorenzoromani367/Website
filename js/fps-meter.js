@@ -10,6 +10,8 @@
      tornata in primo piano, rotella, tasto, clic);
    - i "lavori lunghi del sito": quando il browser si blocca più di 50 ms a eseguire il sito (funzione e file responsabili, se il browser lo
      dice: Chrome sì). Se c'è un buco ma nessun lavoro lungo, il tempo non l'ha perso il sito: l'ha perso la scheda grafica o il sistema.
+   - «Barra ferma»: se, a ogni scorrimento della galleria, il numero con le frecce è stato tenuto fermo sullo schermo e, se no, perché
+     (riduci movimento, schermo tattile, modalità modifica, pagina mossa da poco...). Lo scrive il sito in window.__framingLog.
    "Copia rapporto" mette tutto negli appunti, da incollare in chat. */
 (() => {
   if (window.__fpsMeterToggle) return;
@@ -159,6 +161,24 @@
     return `${fmt(w.dur)}${parts.length ? ` (${parts.join(" · ")})` : ""} · ${describeContext(w.ctx)}`;
   };
 
+  // «Barra ferma»: ultimi scorrimenti della galleria, come li ha registrati il sito (vedi logFraming in app_v58.js)
+  const media = (query) => { try { return window.matchMedia(query).matches; } catch (e) { return false; } };
+  const describeHold = (e) => {
+    const ago = `${Math.max(0, Math.round((Date.now() - e.at) / 1000))} s fa`;
+    if (!e.ran) return `${ago} · NON partito: ${e.why}`;
+    if (e.mode === "tenuta") return `${ago} · barra tenuta ferma dov'era, a ${e.holdY} px dal bordo alto (${e.why})`;
+    if (e.holdY > e.endY + 2) return `${ago} · barra ferma a ${e.holdY} px, sotto il bordo della finestra (${innerHeight} px): la foto più alta non ci sta insieme alla barra`;
+    return `${ago} · pagina portata in fondo, barra ferma a ${e.holdY} px dal bordo alto`;
+  };
+  const holdLines = (limit) => {
+    const log = window.__framingLog;
+    const conditions = `riduci movimento: ${media("(prefers-reduced-motion: reduce)") ? "SÌ" : "no"} · schermo tattile: ${media("(pointer: coarse)") ? "SÌ" : "no"} · modalità modifica: ${document.body.classList.contains("edit-mode") ? "SÌ" : "no"}`;
+    if (!Array.isArray(log)) return ["Barra ferma: questa pagina non ha il codice nuovo (ricaricare con Cmd+Maiusc+R)", conditions];
+    const lines = [log.length ? `Barra ferma, ultimi scorrimenti della galleria (${log.length}):` : "Barra ferma: nessuno scorrimento della galleria da quando la pagina è aperta", conditions];
+    log.slice(-limit).reverse().forEach((e) => lines.push(`- ${describeHold(e)} (${e.hash || "#/"})`));
+    return lines;
+  };
+
   const report = () => {
     const s = summary();
     const lines = [
@@ -179,6 +199,7 @@
       lines.push("Ultimi:");
       work.slice(-10).forEach((w) => lines.push(`- ${describeWork(w)} (${w.hash || "#/"})`));
     }
+    holdLines(8).forEach((line) => lines.push(line));
     return lines.join("\n");
   };
 
@@ -199,6 +220,7 @@
       rows.push("Ultimo lavoro lungo:");
       rows.push(` ${describeWork(work[work.length - 1])}`);
     }
+    holdLines(2).forEach((line) => rows.push(line));
     textEl.textContent = rows.join("\n");
   };
 
