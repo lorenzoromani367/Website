@@ -9,7 +9,10 @@
        - la pagina si disegna (c'è del testo) e non è mai più larga dello schermo;
        - tasto "torna alla home": tre lineette, area sensibile al tocco di almeno 44 × 44 px (minimo di Apple per un tocco);
        - Core Archive: lo "0" in fondo sulla stessa linea verticale del titolo e alla stessa distanza dall'ultima parola
-         che in alto c'è tra il "0" e il titolo.
+         che in alto c'è tra il "0" e il titolo;
+       - galleria di un progetto: quando scorre (freccia destra) la pagina si porta in fondo, dove stanno il numero e le frecce
+         (o, se la finestra è troppo bassa per la foto e la barra insieme, dove la cima della foto sta a 24 px dal bordo alto),
+         su computer; su telefono resta ferma (inquadratura in fondo, js/app_v58.js).
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -214,6 +217,53 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
   return { problems, metrics };
 }
 
+/* ------------------------------ inquadratura in fondo ------------------------------ */
+// Quando la galleria scorre (qui con la freccia destra) la pagina, su computer, si porta in fondo, dove stanno il numero e le frecce, ma
+// non oltre il punto in cui la cima della foto sta a 24 px dal bordo alto della finestra (se la finestra è troppo bassa per la foto e la
+// barra insieme la cima della foto non si taglia): startBottomFraming in js/app_v58.js. Su telefono la pagina resta ferma. Si usa una
+// pagina nuova: dopo un movimento della pagina fatto dall'utente (anche solo uno "scroll" mandato dal test) l'inquadratura aspetta 15 s
+// per non portare via la pagina a chi la sta leggendo.
+const FRAMING_ROUTE = '#/project/boudaries';
+async function checkFraming(context, base) {
+  const problems = [];
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(SETTLE_MS);
+    const read = () => page.evaluate(() => {
+      const frame = document.querySelector('.photo-track > figure.photo .photo-frame');
+      return { y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, top: frame ? frame.getBoundingClientRect().top : null, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length };
+    });
+    // "inquadrata": in fondo, oppure ferma dove la cima della foto sta a 24 px dal bordo alto (24 ± 4 px)
+    const framed = (st) => st.max - st.y <= 3 || (st.top !== null && Math.abs(st.top - 24) <= 4);
+    const describe = (st) => `è a ${Math.round(st.y)} px su ${Math.round(st.max)}, la cima della foto a ${Math.round(st.top)} px dal bordo alto della finestra`;
+    const before = await read();
+    if (before.photos < 2 || before.max <= 8) return problems; // una foto sola, o la pagina sta tutta nella finestra: niente da inquadrare
+    await page.keyboard.press('ArrowRight');
+    if (context.__profile === 'telefono') {
+      await page.waitForTimeout(2500);
+      const after = await read();
+      if (Math.abs(after.y - before.y) > 3) problems.push(`su telefono la galleria che scorre ha mosso la pagina (da ${Math.round(before.y)} a ${Math.round(after.y)} px): l'inquadratura in fondo è solo per il computer`);
+    } else {
+      let now = before;
+      for (let i = 0; i < 40 && !framed(now); i++) { await page.waitForTimeout(150); now = await read(); }
+      if (!framed(now)) problems.push(`la galleria scorre ma la pagina non si inquadra (${describe(now)}): l'inquadratura in fondo non parte`);
+      else {
+        // la pagina cambia altezza per un altro secondo circa (la foto in arrivo è più alta o più bassa): deve restare inquadrata fino alla fine
+        await page.waitForTimeout(2500);
+        now = await read();
+        if (!framed(now)) problems.push(`la pagina si inquadra ma poi non ci resta mentre la foto cambia altezza (alla fine ${describe(now)})`);
+      }
+    }
+  } catch (e) {
+    problems.push(`prova dell'inquadratura in fondo non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 /* ------------------------------ un motore intero ------------------------------ */
 async function runEngine(engine, base, origin, routes) {
   const variant = VARIANTS[engine] || { engine };
@@ -231,6 +281,7 @@ async function runEngine(engine, base, origin, routes) {
       const withShot = profile.shots && SHOT_ROUTES.includes(route);
       const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName.replace(/\s+/g, '-')}__${engine}.jpg`);
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
+      if (route === FRAMING_ROUTE) r.problems.push(...await checkFraming(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();
@@ -348,7 +399,7 @@ function summary(all, diffs, started, visual) {
   if (problems.length) {
     lines.push('## ❌ Problemi', '');
     for (const { e, r } of problems) for (const p of r.problems) lines.push(`- **${LABEL[e]}**, ${r.profile}, \`${r.route}\`: ${p}`);
-  } else lines.push('## ✅ Nessun problema', '', 'Nessun errore JavaScript, nessun file mancante, nessuna pagina più larga dello schermo, tasto home sempre toccabile, Core Archive in regola.');
+  } else lines.push('## ✅ Nessun problema', '', 'Nessun errore JavaScript, nessun file mancante, nessuna pagina più larga dello schermo, tasto home sempre toccabile, Core Archive in regola, galleria che porta la pagina in fondo (solo su computer).');
   lines.push('');
   if (all.length > 1) {
     lines.push('## Differenze tra i motori (avvisi)', '');

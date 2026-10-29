@@ -699,6 +699,34 @@ document.addEventListener("touchstart", noteTouch, { passive: true, capture: tru
 document.addEventListener("touchend", noteTouch, { passive: true, capture: true });
 function isTouchEcho() { return performance.now() - lastTouchAt < 1000; }
 
+// Chi muove la pagina? Serve all'inquadratura in fondo (startBottomFraming, in renderGallery): non deve mai portare via la pagina a chi la
+// sta muovendo (leggere il testo in alto, guardare altro). Si ricorda quando l'ha mossa per ultimo l'utente (rotella, tasti, tocco,
+// barra di scorrimento) e chi la sta portando in fondo si ferma appena l'utente la tocca. I movimenti fatti dal sito stesso (cambio
+// pagina, inquadratura) si segnano con noteProgrammaticScroll(): i loro eventi "scroll" non passano per movimenti dell'utente.
+let lastUserScrollAt = -Infinity;
+let lastProgrammaticScrollAt = performance.now() + 1500; // (all'apertura il browser può rimettere la pagina dov'era: non è l'utente)
+const userScrollListeners = new Set();
+function noteProgrammaticScroll(extraMs = 0) { lastProgrammaticScrollAt = performance.now() + extraMs; }
+function noteUserScroll() {
+  lastUserScrollAt = performance.now();
+  userScrollListeners.forEach((listener) => listener());
+}
+(() => {
+  const SCROLL_KEYS = new Set([" ", "Spacebar", "PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown"]);
+  window.addEventListener("wheel", noteUserScroll, { passive: true, capture: true });
+  window.addEventListener("touchmove", noteUserScroll, { passive: true, capture: true });
+  window.addEventListener("keydown", (e) => {
+    if (!SCROLL_KEYS.has(e.key)) return;
+    const target = e.target;
+    if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) return; // scrive, non scorre
+    noteUserScroll();
+  }, true);
+  // Trascinare la barra di scorrimento non manda né rotella né tasti: si riconosce da uno "scroll" che il sito non ha chiesto
+  window.addEventListener("scroll", () => {
+    if (performance.now() - lastProgrammaticScrollAt > 250) noteUserScroll();
+  }, { passive: true });
+})();
+
 // Vero anche dentro il riquadro di anteprima mobile (vedi openMobilePreview
 // più sotto): lì l'iframe ha davvero quella larghezza, non è solo un
 // restringimento visivo, quindi "window.innerWidth" lì dentro riflette la
@@ -4808,6 +4836,110 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     return clone;
   }
 
+  /* ---- Inquadratura in fondo alla pagina (solo computer) ----
+     Quando la galleria scorre, la pagina si porta in fondo, dove stanno il numero e le frecce, e ci resta agganciata finché l'altezza
+     della pagina cambia (foto più alta o più bassa): la barra sta ferma sullo schermo e la foto sale o scende insieme alla pagina.
+     Prima lo vedeva solo chi era già in fondo e passava a una foto più bassa (il browser lo teneva da solo agganciato al fondo e la
+     foto scendeva); con una foto più alta la vista non seguiva e la barra scendeva fuori dalla finestra.
+     Parte a ogni scorrimento (automatico, con le frecce o con un clic ai lati) MA non porta via la pagina a chi la sta muovendo: se
+     l'utente l'ha mossa (rotella, tasti, barra di scorrimento) da meno di FRAME_QUIET_MS non fa niente, a meno che sia già in fondo
+     (lì aggancia e basta). Si ferma subito appena l'utente muove la pagina, si ingrandisce una foto o si entra in modifica. Non c'è
+     su telefono, su schermi tattili (il dito la muove già da solo) e con "riduci movimento" attivo.
+     La foto prima della barra: se la finestra è troppo bassa per la foto e la barra insieme (portatili: la foto è alta fino a 1000 px),
+     portare la pagina in fondo taglierebbe la cima della foto. Allora ci si ferma prima, dove la cima della foto sta a
+     FRAME_TOP_MARGIN dal bordo alto della finestra (la barra resta più giù, da scorrere). Lo stesso vale mentre la pagina cresce:
+     si segue il fondo finché non arriva a quel punto, poi si sta fermi lì. Chi ha appena portato la pagina in fondo (meno di
+     FRAME_QUIET_MS fa) ci resta: l'ha scelto lui.
+     Fluidità: niente animazioni CSS né scorrimento "smooth" del browser, che si ricomincerebbero a ogni fotogramma mentre l'altezza
+     cambia: a ogni fotogramma (prima del disegno, dopo che le transizioni sono state aggiornate) si calcola dov'è il fondo adesso e
+     ci si mette; i primi ~0,6-1,1 s sono una discesa con partenza e arrivo dolci, poi si resta agganciati al fondo vero (quello
+     che il browser stesso considera l'ultimo punto possibile: sugli schermi retina anche mezzo pixel). */
+  const FRAME_QUIET_MS = 15000; // un po' più del ciclo dell'autoplay (12 s): chi scorre in su a leggere non viene riportato giù al giro dopo
+  const FRAME_APPROACH_MIN_MS = 600;
+  const FRAME_APPROACH_MAX_MS = 1100;
+  const FRAME_PHOTO_FIRST = true; // false: sempre fino in fondo, anche se la cima di una foto alta resta fuori dalla finestra
+  const FRAME_TOP_MARGIN = 24; // px tra il bordo alto della finestra e la cima della foto, quando la foto non ci sta insieme alla barra
+  let framing = null;
+
+  const pageMaxScroll = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  // Il punto della pagina da cui la foto in arrivo si vede dalla cima (con un po' di margine): più giù di qui se ne taglierebbe l'alto.
+  // La cima della foto non si muove mentre l'altezza del riquadro cambia (cambia solo quel che sta sotto).
+  const photoTopLimit = () => {
+    const frame = figures[current] && figures[current].querySelector(".photo-frame");
+    const top = (frame || viewport).getBoundingClientRect().top + window.scrollY;
+    return Math.max(0, top - FRAME_TOP_MARGIN);
+  };
+  const setPageScroll = (y) => {
+    noteProgrammaticScroll();
+    try { window.scrollTo({ top: y, left: window.scrollX, behavior: "instant" }); } catch (e) { window.scrollTo(window.scrollX, y); }
+  };
+  const viewportHeightAnimating = () => typeof viewport.getAnimations === "function"
+    && viewport.getAnimations().some((animation) => animation.playState === "running" && /height/.test(String(animation.transitionProperty || "")));
+
+  function canFrameBottom() {
+    if (figures.length < 2 || lightboxHold || isEditMode() || isMobileViewport() || document.hidden) return false;
+    if (typeof window.matchMedia === "function" && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(prefers-reduced-motion: reduce)").matches)) return false;
+    const max = pageMaxScroll();
+    if (!(max > 2)) return false; // la pagina sta tutta nella finestra: niente da scorrere
+    const atBottom = max - window.scrollY <= 2.5;
+    return atBottom || performance.now() - lastUserScrollAt >= FRAME_QUIET_MS;
+  }
+
+  // Mentre si inquadra, solo noi muoviamo la pagina: il browser non deve spostarla per conto suo ("overflow-anchor", l'ancoraggio dello
+  // scorrimento di Chrome e Firefox, che tiene ferma la parte che si sta guardando quando sopra cambia l'altezza) o si confonderebbe con
+  // il movimento dell'utente.
+  const setPageAnchoring = (on) => { document.documentElement.style.overflowAnchor = on ? "" : "none"; };
+
+  function stopBottomFraming() {
+    if (!framing) return;
+    cancelAnimationFrame(framing.raf);
+    framing = null;
+    setPageAnchoring(true);
+  }
+  userScrollListeners.add(stopBottomFraming);
+
+  function startBottomFraming() {
+    if (!canFrameBottom()) return;
+    stopBottomFraming(); // un nuovo scorrimento riparte da dove si trova la vista adesso
+    const startY = window.scrollY;
+    const startMax = pageMaxScroll();
+    // Pagina ferma da un pezzo: inquadratura di serie (in fondo, ma non oltre la cima della foto). Mossa da poco e ora in fondo: l'ha
+    // scelto lui, ci resta (sotto una foto alta può voler vedere la barra).
+    const keepPhotoTop = FRAME_PHOTO_FIRST && performance.now() - lastUserScrollAt >= FRAME_QUIET_MS;
+    const startTarget = keepPhotoTop ? Math.min(startMax, photoTopLimit()) : startMax;
+    const distance = Math.abs(startTarget - startY);
+    const state = {
+      startY,
+      keepPhotoTop,
+      startedAt: performance.now(),
+      approachMs: distance < 4 ? 0 : Math.min(FRAME_APPROACH_MAX_MS, Math.max(FRAME_APPROACH_MIN_MS, 500 + distance * 0.5)),
+      lastY: startY, // dove l'abbiamo messa l'ultima volta (come l'ha accettata il browser)
+      raf: 0,
+    };
+    framing = state;
+    setPageAnchoring(false);
+    const step = (now) => {
+      if (framing !== state) return;
+      const max = pageMaxScroll(); // (forza il calcolo della pagina di questo fotogramma, che comunque servirebbe)
+      // Qualcuno ha mosso la pagina senza rotella né tasti (barra di scorrimento)? Dove dovrebbe essere: dov'era, o più su se la
+      // pagina si è accorciata (il browser la ferma da solo al nuovo fondo).
+      if (Math.abs(window.scrollY - Math.min(state.lastY, max)) > 2.5) { noteUserScroll(); return; }
+      const target = state.keepPhotoTop ? Math.min(max, photoTopLimit()) : max; // dove deve stare la pagina in questo fotogramma
+      const p = state.approachMs ? Math.min(1, (now - state.startedAt) / state.approachMs) : 1;
+      if (p < 1) {
+        const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // partenza e arrivo dolci
+        setPageScroll(state.startY + (target - state.startY) * eased);
+      } else {
+        // In fondo: oltre il fondo, il browser la porta all'ultimo punto possibile (anche mezzo pixel su retina). Fermata prima: proprio lì.
+        setPageScroll(target >= max - 0.5 ? max + 1000 : target);
+      }
+      state.lastY = window.scrollY;
+      if (p >= 1 && !viewportHeightAnimating()) { framing = null; setPageAnchoring(true); return; } // arrivata, e la pagina non cambia più altezza
+      state.raf = requestAnimationFrame(step);
+    };
+    state.raf = requestAnimationFrame(step);
+  }
+
   function goTo(i, { user = false } = {}) {
     if (isAnimating) return;
     if (!figures.length) return;
@@ -4872,6 +5004,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     }
 
     if (user) restartAutoplay();
+    startBottomFraming(); // la pagina si porta in fondo (e ci resta agganciata finché l'altezza cambia): vedi sopra
   }
 
   function scheduleNext() {
@@ -4908,7 +5041,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
 
   const onEditModeToggled = () => {
-    if (isEditMode()) clearTimeout(autoplayTimer);
+    if (isEditMode()) { clearTimeout(autoplayTimer); stopBottomFraming(); }
     else if (!paused) scheduleNext();
   };
   window.addEventListener("edit-mode-toggled", onEditModeToggled);
@@ -4940,6 +5073,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   function holdGallery() {
     if (lightboxHold) return;
     lightboxHold = true;
+    stopBottomFraming(); // la pagina dietro la foto ingrandita non si muove più da sola
     heldAt = performance.now();
     clearTimeout(autoplayTimer);
     heldAnimations = [];
@@ -5181,6 +5315,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     window.removeEventListener("zoom-closed", releaseGallery);
     document.removeEventListener("keydown", onKeyDown);
     clearTimeout(autoplayTimer);
+    stopBottomFraming();
+    userScrollListeners.delete(stopBottomFraming);
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
     cancelAnimationFrame(marqueeRafId);
     document.removeEventListener("pointermove", onMarqueeDragMove);
@@ -5673,6 +5809,7 @@ async function renderRoute() {
     showFatalError(error);
   }
 
+  noteProgrammaticScroll(1500); // anche il browser, a volte, rimette la pagina dov'era appena dopo il disegno: non è l'utente
   window.scrollTo(0, 0);
 }
 
