@@ -4,12 +4,18 @@
 
    In alto a sinistra mostra:
    - quanti fotogrammi al secondo sta disegnando il browser adesso (60 su uno schermo normale, 120 su uno veloce, meno se il Mac limita
-     le animazioni, per esempio in risparmio energetico) e il fotogramma più lento degli ultimi 10 secondi;
-   - quanti "buchi" ci sono stati da quando è acceso (un buco è un fotogramma arrivato dopo quasi il doppio del tempo normale: a
-     occhio è un singhiozzo) e gli ultimi, con quanto tempo dopo l'inizio dell'ultimo scorrimento della galleria sono capitati.
-   "Copia" mette il rapporto negli appunti, da incollare in chat. */
+     le animazioni, per esempio in risparmio energetico), il fotogramma più lento degli ultimi 10 secondi e il più lento da quando è acceso;
+   - quanti "buchi" ci sono stati (un buco è un fotogramma arrivato dopo quasi il doppio del tempo normale: a occhio è un singhiozzo) e gli
+     ultimi, ciascuno con ciò che era appena successo (inizio di uno scorrimento della galleria, cambio pagina, finestra ridimensionata o
+     tornata in primo piano, rotella, tasto, clic);
+   - i "lavori lunghi del sito": quando il browser si blocca più di 50 ms a eseguire il sito (funzione e file responsabili, se il browser lo
+     dice: Chrome sì). Se c'è un buco ma nessun lavoro lungo, il tempo non l'ha perso il sito: l'ha perso la scheda grafica o il sistema.
+   "Copia rapporto" mette tutto negli appunti, da incollare in chat. */
 (() => {
   if (window.__fpsMeterToggle) return;
+
+  const WINDOW_MS = 10000; // quanto indietro si guarda per "il più lento degli ultimi 10 s"
+  const CONTEXT_MS = 7000; // entro quanto un evento (scorrimento, cambio pagina...) conta come "appena successo"
 
   let box = null;
   let textEl = null;
@@ -19,20 +25,58 @@
   let last = null; // istante dell'ultimo fotogramma
   let startedAt = 0;
   let frames = []; // [istante, durata] degli ultimi 10 secondi
-  let gaps = []; // buchi: { at, dt, since, hash }
+  let baseline = 16.7; // durata "normale" di un fotogramma, ricalcolata ogni tanto (vedi updateBaseline)
+  let sinceBaseline = 0;
+  let gaps = []; // buchi: { dt, ctx, hash }
   let gapCount = 0;
   let gapOver50 = 0;
   let gapOver100 = 0;
-  let slideAt = null; // istante in cui è partito l'ultimo scorrimento della galleria
+  let worstEver = null; // il fotogramma più lento da quando è acceso: { dt, ctx, hash }
+  let work = []; // lavori lunghi del sito: { dur, ctx, scripts, styleLayout, kind }
+  let workCount = 0;
+  let workSource = "non disponibile in questo browser";
+  let observers = [];
   let lastTransform = null;
-
-  const median = (list) => {
-    if (!list.length) return 16.7;
-    const sorted = list.slice().sort((a, b) => a - b);
-    return sorted[Math.floor(sorted.length / 2)];
+  // Gli ultimi eventi, per dire cosa era appena successo accanto a un buco
+  const marks = { slide: null, route: null, resize: null, focus: null, scroll: null, key: null, click: null };
+  const MARK_LABEL = {
+    slide: "dopo l'inizio dello scorrimento della galleria",
+    route: "dopo il cambio pagina",
+    resize: "dopo che la finestra è stata ridimensionata",
+    focus: "dopo che la finestra è tornata in primo piano",
+    scroll: "dopo la rotella",
+    key: "dopo un tasto",
+    click: "dopo un clic",
   };
+
   const fmt = (ms) => `${Math.round(ms)} ms`;
   const secs = (ms) => `${(ms / 1000).toFixed(1).replace(".", ",")} s`;
+  const percentile = (list, p) => {
+    if (!list.length) return null;
+    const sorted = list.slice().sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+  };
+
+  // La durata "normale" di un fotogramma è la più bassa che si vede spesso (il 25° percentile degli ultimi 10 s), non la mediana degli
+  // ultimi fotogrammi: se per qualche secondo il browser va a 8 fotogrammi al secondo la mediana sale e i fotogrammi lenti non sembrano
+  // più buchi (è successo nel primo rapporto: il più lento era 163 ms e i buchi contati erano 0).
+  const updateBaseline = () => {
+    const p = percentile(frames.map((f) => f[1]), 0.25);
+    if (p != null && frames.length >= 30) baseline = p;
+  };
+
+  // Cosa era appena successo prima dell'istante "ts": l'evento più vicino tra quelli ricordati
+  const contextAt = (ts) => {
+    let best = null;
+    Object.keys(marks).forEach((key) => {
+      if (marks[key] == null) return;
+      const delta = ts - marks[key];
+      if (delta < -50 || delta > CONTEXT_MS) return;
+      if (!best || Math.abs(delta) < Math.abs(best.delta)) best = { key, delta: Math.max(0, delta) };
+    });
+    return best;
+  };
+  const describeContext = (ctx) => (ctx ? `${secs(ctx.delta)} ${MARK_LABEL[ctx.key]}` : "senza niente di vicino (galleria ferma)");
 
   const tick = (ts) => {
     rafId = requestAnimationFrame(tick);
@@ -40,26 +84,63 @@
       const dt = ts - last;
       if (dt > 0 && dt < 1000) {
         frames.push([ts, dt]);
-        const recent = frames.slice(-120).map((f) => f[1]);
-        const normal = median(recent);
-        if (recent.length >= 30 && dt > Math.max(1.9 * normal, normal + 8)) {
+        if (++sinceBaseline >= 30) { sinceBaseline = 0; updateBaseline(); }
+        if (!worstEver || dt > worstEver.dt) worstEver = { dt, ctx: contextAt(ts), hash: location.hash };
+        if (frames.length >= 30 && dt > Math.max(1.9 * baseline, baseline + 8)) {
           gapCount++;
           if (dt > 50) gapOver50++;
           if (dt > 100) gapOver100++;
-          gaps.push({ at: ts - startedAt, dt, since: slideAt != null && ts - slideAt < 7000 ? ts - slideAt : null, hash: location.hash });
+          gaps.push({ dt, ctx: contextAt(ts), hash: location.hash });
           if (gaps.length > 40) gaps.shift();
         }
       }
     }
     last = ts;
-    while (frames.length && ts - frames[0][0] > 10000) frames.shift();
+    while (frames.length && ts - frames[0][0] > WINDOW_MS) frames.shift();
     // inizio di uno scorrimento tra le foto: la galleria cambia la "transform" del suo binario
     const track = document.querySelector(".photo-track");
     if (track) {
       const value = track.style.transform;
-      if (value !== lastTransform) { if (lastTransform !== null) slideAt = ts; lastTransform = value; }
+      if (value !== lastTransform) { if (lastTransform !== null) marks.slide = ts; lastTransform = value; }
     } else {
       lastTransform = null;
+    }
+  };
+
+  // Lavori lunghi del sito. "long-animation-frame" (Chrome 123 in poi) dice anche quale funzione di quale file; "longtask" dice solo
+  // quanto è durato il blocco. Si usa il primo se c'è.
+  const addWork = (kind, entry) => {
+    workCount++;
+    const end = entry.startTime + entry.duration;
+    const scripts = (entry.scripts || [])
+      .slice()
+      .sort((a, b) => b.duration - a.duration)
+      .slice(0, 3)
+      .map((s) => {
+        const file = String(s.sourceURL || "").split("?")[0].split("/").pop();
+        const name = s.sourceFunctionName || s.invoker || "(anonima)";
+        return `${name}${file ? ` in ${file}${s.sourceCharPosition >= 0 ? `:${s.sourceCharPosition}` : ""}` : ""} ${fmt(s.duration)}`;
+      });
+    work.push({
+      kind,
+      dur: entry.duration,
+      blocking: entry.blockingDuration,
+      styleLayout: entry.styleAndLayoutStart ? Math.max(0, end - entry.styleAndLayoutStart) : null,
+      render: entry.renderStart ? Math.max(0, end - entry.renderStart) : null,
+      scripts,
+      ctx: contextAt(entry.startTime),
+      hash: location.hash,
+    });
+    if (work.length > 30) work.shift();
+  };
+  const watch = (type, kind) => {
+    try {
+      const observer = new PerformanceObserver((list) => list.getEntries().forEach((entry) => addWork(kind, entry)));
+      observer.observe({ type, buffered: false });
+      observers.push(observer);
+      return true;
+    } catch (e) {
+      return false;
     }
   };
 
@@ -67,11 +148,16 @@
     const now = performance.now();
     const lastSecond = frames.filter((f) => now - f[0] <= 1000).length;
     const worst = frames.length ? Math.max(...frames.map((f) => f[1])) : 0;
-    const normal = median(frames.slice(-120).map((f) => f[1]));
-    return { lastSecond, worst, normal, hz: Math.round(1000 / normal), seconds: (now - startedAt) / 1000 };
+    return { lastSecond, worst, hz: Math.round(1000 / baseline), seconds: (now - startedAt) / 1000 };
   };
 
-  const describeGap = (g) => `${fmt(g.dt)} · ${g.since != null ? `${secs(g.since)} dopo l'inizio dello scorrimento` : "mentre la galleria era ferma"}`;
+  const describeGap = (g) => `${fmt(g.dt)} · ${describeContext(g.ctx)}`;
+  const describeWork = (w) => {
+    const parts = [];
+    if (w.scripts.length) parts.push(`script: ${w.scripts.join("; ")}`);
+    if (w.styleLayout != null && w.styleLayout >= 5) parts.push(`stile e layout ${fmt(w.styleLayout)}`);
+    return `${fmt(w.dur)}${parts.length ? ` (${parts.join(" · ")})` : ""} · ${describeContext(w.ctx)}`;
+  };
 
   const report = () => {
     const s = summary();
@@ -81,11 +167,17 @@
       `Finestra: ${innerWidth}×${innerHeight}, densità ${window.devicePixelRatio}×, circa ${s.hz} Hz`,
       `Pagina: ${location.hash || "#/"}`,
       `Acceso da ${Math.round(s.seconds)} s. Ora ${s.lastSecond} fotogrammi/s; il più lento degli ultimi 10 s: ${fmt(s.worst)}`,
+      worstEver ? `Il più lento da quando è acceso: ${describeGap(worstEver)} (${worstEver.hash || "#/"})` : "Il più lento da quando è acceso: -",
       `Buchi: ${gapCount} (oltre 50 ms: ${gapOver50}; oltre 100 ms: ${gapOver100})`,
     ];
     if (gaps.length) {
       lines.push("Ultimi buchi:");
       gaps.slice(-15).forEach((g) => lines.push(`- ${describeGap(g)} (${g.hash || "#/"})`));
+    }
+    lines.push(`Lavori lunghi del sito, oltre 50 ms: ${workCount} (misura: ${workSource})`);
+    if (work.length) {
+      lines.push("Ultimi:");
+      work.slice(-10).forEach((w) => lines.push(`- ${describeWork(w)} (${w.hash || "#/"})`));
     }
     return lines.join("\n");
   };
@@ -95,13 +187,17 @@
     const s = summary();
     const rows = [
       `Fluidità: ${s.lastSecond} fotogrammi/s (schermo ~${s.hz} Hz)`,
-      `Il più lento degli ultimi 10 s: ${fmt(s.worst)}`,
-      `Buchi da quando è acceso (${Math.round(s.seconds)} s): ${gapCount}`,
-      `   oltre 50 ms: ${gapOver50} · oltre 100 ms: ${gapOver100}`,
+      `Il più lento: ${fmt(s.worst)} negli ultimi 10 s, ${worstEver ? fmt(worstEver.dt) : "-"} in tutto`,
+      `Buchi (${Math.round(s.seconds)} s): ${gapCount} · oltre 50 ms: ${gapOver50} · oltre 100 ms: ${gapOver100}`,
+      `Lavori lunghi del sito: ${workCount}`,
     ];
     if (gaps.length) {
-      rows.push("Ultimi:");
-      gaps.slice(-4).reverse().forEach((g) => rows.push(` ${describeGap(g)}`));
+      rows.push("Ultimi buchi:");
+      gaps.slice(-3).reverse().forEach((g) => rows.push(` ${describeGap(g)}`));
+    }
+    if (work.length) {
+      rows.push("Ultimo lavoro lungo:");
+      rows.push(` ${describeWork(work[work.length - 1])}`);
     }
     textEl.textContent = rows.join("\n");
   };
@@ -125,19 +221,51 @@
     setTimeout(() => { button.textContent = "Copia rapporto"; }, 1800);
   };
 
+  const resetNumbers = () => {
+    frames = [];
+    gaps = [];
+    gapCount = gapOver50 = gapOver100 = 0;
+    worstEver = null;
+    work = [];
+    workCount = 0;
+    sinceBaseline = 0;
+    startedAt = performance.now();
+  };
+
+  // eventi che spiegano un buco: si ricorda solo quando sono successi
+  const onHash = () => { marks.route = performance.now(); };
+  const onResize = () => { marks.resize = performance.now(); };
+  const onFocus = () => { marks.focus = performance.now(); };
+  const onWheel = () => { marks.scroll = performance.now(); };
+  const onKey = () => { marks.key = performance.now(); };
+  const onClick = () => { marks.click = performance.now(); };
+  // tornando su questa scheda dopo un po', il primo fotogramma arriva "in ritardo" per forza: non è un buco
+  const onVisibility = () => { last = null; };
+  const listeners = [
+    [window, "hashchange", onHash, {}],
+    [window, "resize", onResize, {}],
+    [window, "focus", onFocus, {}],
+    [window, "wheel", onWheel, { passive: true, capture: true }],
+    [document, "keydown", onKey, { capture: true }],
+    [document, "pointerdown", onClick, { capture: true }],
+    [document, "visibilitychange", onVisibility, {}],
+  ];
+
   const start = () => {
     if (running) return;
     running = true;
     last = null;
-    startedAt = performance.now();
-    frames = [];
-    gaps = [];
-    gapCount = gapOver50 = gapOver100 = 0;
-    slideAt = null;
     lastTransform = null;
+    baseline = 16.7;
+    Object.keys(marks).forEach((key) => { marks[key] = null; });
+    resetNumbers();
+    observers = [];
+    if (watch("long-animation-frame", "frame")) workSource = "long-animation-frame, con la funzione responsabile";
+    else if (watch("longtask", "task")) workSource = "longtask, solo la durata";
+    else workSource = "non disponibile in questo browser";
     box = document.createElement("div");
     box.setAttribute("data-fps-meter", "");
-    box.style.cssText = "position: fixed; top: 8px; left: 8px; z-index: 100002; background: rgba(20, 20, 20, 0.86); color: #f2f0e6; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; padding: 8px 10px; border-radius: 6px; max-width: min(340px, calc(100vw - 16px)); box-sizing: border-box; pointer-events: none;";
+    box.style.cssText = "position: fixed; top: 8px; left: 8px; z-index: 100002; background: rgba(20, 20, 20, 0.86); color: #f2f0e6; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; padding: 8px 10px; border-radius: 6px; max-width: min(380px, calc(100vw - 16px)); box-sizing: border-box; pointer-events: none;";
     textEl = document.createElement("div");
     textEl.style.whiteSpace = "pre-wrap";
     const buttons = document.createElement("div");
@@ -152,7 +280,7 @@
     reset.type = "button";
     reset.textContent = "Azzera";
     reset.style.cssText = style;
-    reset.addEventListener("click", () => { frames = []; gaps = []; gapCount = gapOver50 = gapOver100 = 0; startedAt = performance.now(); render(); });
+    reset.addEventListener("click", () => { resetNumbers(); render(); });
     const close = document.createElement("button");
     close.type = "button";
     close.textContent = "Chiudi";
@@ -161,9 +289,9 @@
     buttons.append(copy, reset, close);
     box.append(textEl, buttons);
     document.body.appendChild(box);
+    listeners.forEach(([target, type, handler, options]) => target.addEventListener(type, handler, options));
     rafId = requestAnimationFrame(tick);
     timer = setInterval(render, 400);
-    document.addEventListener("visibilitychange", onVisibility);
     render();
   };
 
@@ -172,13 +300,12 @@
     running = false;
     cancelAnimationFrame(rafId);
     clearInterval(timer);
-    document.removeEventListener("visibilitychange", onVisibility);
+    listeners.forEach(([target, type, handler, options]) => target.removeEventListener(type, handler, options));
+    observers.forEach((observer) => { try { observer.disconnect(); } catch (e) { /* già staccato */ } });
+    observers = [];
     if (box) box.remove();
     box = textEl = null;
   };
-
-  // tornando su questa scheda dopo un po', il primo fotogramma arriva "in ritardo" per forza: non è un buco
-  const onVisibility = () => { last = null; };
 
   window.__fpsMeterToggle = (on) => { const want = on === undefined ? !running : Boolean(on); if (want) start(); else stop(); };
 })();
