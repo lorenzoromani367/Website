@@ -159,7 +159,7 @@ images: [
     slug: "stills",
     name: "Stills",
         images: [
-      { caption: "J. Kronester Bavaria Tea Settt", src: "images/stills/stills-1.jpg" },
+      { caption: "J. Kronester Bavaria Tea Settt", src: "images/stills/stills-1.jpg", captionOffset: { x: 54, y: 0 } },
       { caption: "pot and bowl", src: "images/stills/stills-2.jpg", width: "562.798px" },
       { caption: "furla men’s bag", src: "images/stills/stills-3.jpg", width: "408.808px" },
       { caption: "apples", src: "images/stills/stills-4.jpg" },

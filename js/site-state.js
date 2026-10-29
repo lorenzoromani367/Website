@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 159,
-  "updatedAt": "2026-10-28T07:38:15.012Z",
+  "version": 162,
+  "updatedAt": "2026-10-29T08:10:20.661Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -384,6 +384,29 @@ window.SITE_STATE = {
         6,
         7,
         8
+      ],
+      "project.stills.imageOrder": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        17,
+        16,
+        15,
+        18,
+        19,
+        20
       ]
     },
     "site-position-overrides-v1:d": {
@@ -454,6 +477,10 @@ window.SITE_STATE = {
       "project.boudaries.imagePos.9": {
         "x": -0.296875,
         "y": 300
+      },
+      "project.stills.captionPos.0": {
+        "x": 53.98046875,
+        "y": 0
       }
     },
     "site-position-overrides-v1:m": {
@@ -675,6 +702,10 @@ window.SITE_STATE = {
       "zoom:images/bar/bar-1.jpg": {
         "width": "859.578px",
         "height": "916.76px"
+      },
+      "project.stills.image.19": {
+        "width": "596.809px",
+        "height": ""
       }
     },
     "site-size-overrides-v1:m": {
