@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 162,
-  "updatedAt": "2026-10-29T08:10:20.661Z",
+  "version": 173,
+  "updatedAt": "2026-10-29T10:10:42.711Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -335,7 +335,9 @@ window.SITE_STATE = {
       "project.whitening.captionText.@whitening/smile.jpg": "smile",
       "project.boudaries.captionText.@boudaries/lines-1-2.jpg": "window",
       "project.mediality.captionText.@mediality/senza titolo-1.jpg": "free",
-      "project.stills.captionText.@stills/upside down.jpg": "upside down, vase"
+      "project.stills.captionText.@stills/upside down.jpg": "upside down, vase",
+      "project.stills.captionText.@stills/stills-11.jpg": "mercedes back seat",
+      "project.stills.captionText.@stills/stills-10.jpg": "jewelry store, rabat"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -400,13 +402,28 @@ window.SITE_STATE = {
         11,
         12,
         13,
-        14,
         17,
+        14,
         16,
-        15,
         18,
+        15,
         19,
-        20
+        20,
+        21
+      ],
+      "project.boudaries.imageOrder": [
+        0,
+        1,
+        2,
+        3,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
       ]
     },
     "site-position-overrides-v1:d": {
@@ -496,6 +513,9 @@ window.SITE_STATE = {
     "site-removed-images-v1": {
       "project.stills": [
         "src:images/stills/senza titolo-1.JPG"
+      ],
+      "project.boudaries": [
+        "src:images/boudaries/6 stage.JPG"
       ]
     },
     "site-size-overrides-v1:d": {
@@ -704,7 +724,35 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "project.stills.image.19": {
-        "width": "596.809px",
+        "width": "481.755px",
+        "height": ""
+      },
+      "project.boudaries.image.12": {
+        "width": "463.961px",
+        "height": ""
+      },
+      "project.stills.image.20": {
+        "width": "566.958px",
+        "height": ""
+      },
+      "project.stills.zoom.20": {
+        "width": "1036.66px",
+        "height": "916.76px"
+      },
+      "zoom:images/stills/stills-17.jpg": {
+        "width": "1036.66px",
+        "height": "916.76px"
+      },
+      "project.stills.zoom.16": {
+        "width": "1519.8px",
+        "height": "749.334px"
+      },
+      "zoom:images/stills/turbojet motor glider.jpg": {
+        "width": "1519.8px",
+        "height": "749.334px"
+      },
+      "project.stills.image.17": {
+        "width": "604.919px",
         "height": ""
       }
     },
