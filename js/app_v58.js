@@ -4862,8 +4862,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
      - la barra NON si vede (la pagina è in cima a leggere il testo, o appena aperta): se la pagina è ferma da FRAME_QUIET_MS (e non c'è
        «riduci movimento», né la modalità modifica) è l'inquadratura di serie: la pagina scende (0,6-1,1 s, partenza e arrivo dolci) fino a
        mettere la barra in fondo alla finestra, e da lì la barra non si muove più. Se la foto più alta della galleria non ci sta insieme alla
-       barra (finestre basse o foto molto alte) la barra sta un po' più in basso, sotto il bordo, così la cima delle foto non si taglia mai
-       (FRAME_PHOTO_FIRST; con false la barra sta sempre in fondo e si taglia la cima delle foto alte): la stessa posizione per ogni foto.
+       barra la cima di quella foto può restare fuori dalla finestra, fino a FRAME_MAX_TOP_CUT px; se ne resterebbe fuori di più (finestre basse,
+       foto molto alte) la foto ha la precedenza e la barra sta più in basso, sotto il bordo, nel punto in cui la cima della foto più alta sta a
+       FRAME_TOP_MARGIN dal bordo alto (FRAME_PHOTO_FIRST; con false la barra sta sempre in fondo): la stessa posizione per ogni foto.
        Se l'utente ha mosso la pagina da meno di FRAME_QUIET_MS non si fa niente.
      Mentre l'utente muove la pagina (rotella con la sua coda di inerzia, barra di scorrimento, mouse premuto) non la si tocca; quando smette
      (USER_INPUT_SETTLE_MS, e la pagina ha smesso di muoversi) la barra si tiene dove l'ha lasciata, se si vede. Si ferma del tutto se si ingrandisce una foto, si entra in modifica
@@ -4879,7 +4880,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const FRAME_APPROACH_MIN_MS = 600;
   const FRAME_APPROACH_MAX_MS = 1100;
   const FRAME_PHOTO_FIRST = true; // false: la barra sta sempre in fondo, anche se la cima di una foto alta resta fuori dalla finestra
-  const FRAME_TOP_MARGIN = 24; // px tra il bordo alto della finestra e la cima della foto più alta, quando non ci sta insieme alla barra
+  const FRAME_MAX_TOP_CUT = 200; // px di cima della foto più alta che possono restare fuori dalla finestra pur di avere la barra in fondo
+  const FRAME_TOP_MARGIN = 24; // px tra il bordo alto della finestra e la cima della foto più alta, quando la foto ha la precedenza
   let framing = null;
 
   const pageMaxScroll = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
@@ -4957,7 +4959,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     } else {
       why = isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : !quiet ? "pagina mossa da poco" : "";
       if (why) { logFraming({ ran: false, why: `la barra non si vede (${why}): niente da tenere fermo` }); return; }
-      holdY = FRAME_PHOTO_FIRST ? Math.max(endY, barYForTallestPhoto()) : endY; // inquadratura di serie
+      // Inquadratura di serie: la barra in fondo alla finestra. Se per questo la cima della foto più alta resterebbe fuori dalla finestra per più
+      // di FRAME_MAX_TOP_CUT px (portatili, foto molto alte) la foto ha la precedenza: la barra sta più in basso, sotto il bordo.
+      holdY = endY;
+      if (FRAME_PHOTO_FIRST) {
+        const photoY = barYForTallestPhoto();
+        if (photoY - FRAME_TOP_MARGIN - endY > FRAME_MAX_TOP_CUT) holdY = photoY;
+      }
       mode = "discesa";
     }
     const distance = Math.abs(Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - holdY)) - startY);
