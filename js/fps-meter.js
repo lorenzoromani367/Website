@@ -3,8 +3,8 @@
    visita il sito non lo carica nemmeno: lo scarica app_v58.js solo in quel momento.
 
    In alto a sinistra mostra:
-   - quanti fotogrammi al secondo sta disegnando il browser adesso (60 su uno schermo normale, 120 su uno veloce, 30 se il Mac è in
-     risparmio energetico) e il fotogramma più lento degli ultimi 10 secondi;
+   - quanti fotogrammi al secondo sta disegnando il browser adesso (60 su uno schermo normale, 120 su uno veloce, meno se il Mac limita
+     le animazioni, per esempio in risparmio energetico) e il fotogramma più lento degli ultimi 10 secondi;
    - quanti "buchi" ci sono stati da quando è acceso (un buco è un fotogramma arrivato dopo quasi il doppio del tempo normale: a
      occhio è un singhiozzo) e gli ultimi, con quanto tempo dopo l'inizio dell'ultimo scorrimento della galleria sono capitati.
    "Copia" mette il rapporto negli appunti, da incollare in chat. */
