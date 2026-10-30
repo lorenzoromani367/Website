@@ -346,11 +346,15 @@ async function checkPhotoRise(context, base) {
 //   - gesto in su a metà discesa: la ferma, e la pagina resta dov'è;
 //   - rotella «non annullabile»: Chrome non lascia annullare lo scatto che segue uno non annullato, per il resto del gesto. Qui si finge (la proprietà
 //     «cancelable» dello scatto diventa falsa e preventDefault non fa niente): la pagina scorre da sola mentre la discesa del sito scrive la posizione;
-//   - modalità modifica e «riduci movimento»: prima bloccavano tutto (in modifica la discesa ora c'è; con «riduci movimento» la pagina va subito
-//     all'inquadratura, senza discesa da vedere).
+//   - modalità modifica e «riduci movimento»: prima bloccavano tutto, o con «riduci movimento» saltavano in fondo in un solo fotogramma (sul Mac del
+//     proprietario, con quell'impostazione attiva, era «velocissimo, uno scatto»). Ora la discesa è la stessa di sempre, piano, come la galleria
+//     (che «riduci movimento» non tocca).
 const ASSIST_START_MS = 300;
 const ASSIST_STALL_MS = 250;
+const ASSIST_PEAK_WINDOW_MS = 400; // la velocità della discesa si misura su almeno così tanto: un blocco di 100-200 ms del computer, col recupero in un fotogramma, non è una velocità
 const ASSIST_PEAK_PX_S = 600; // la galleria con la sua curva su 6 s: 314 px/s per 823 px (2,3 volte la media), fino a ~440 se si sovrappone uno scorrimento automatico della galleria (misurato su Firefox); la discesa veloce di prima: 2425
+const ASSIST_MIN_MS_PER_PX = 4; // la discesa dura come la galleria (circa 6,2 ms per px fino a 6 s): meno di 4 ms per px (al massimo 3 s) è troppo presto, anche in un solo fotogramma
+const ASSIST_MAX_STEP_PX = 120; // di quanto può muoversi la pagina tra due fotogrammi consecutivi (la discesa morbida: 6-15; un salto: centinaia)
 const ASSIST_ARRIVAL_PX = 12; // «arrivata»: a meno di così dal punto finale (la curva della galleria frena piano, gli ultimi pixel durano a lungo)
 const ASSIST_GLIDE_MIN_WAIT_MS = 6400; // la discesa dura fino a 6 s: prima di questo tempo non si dà per finita
 
@@ -372,7 +376,7 @@ const trackpadTail = () => {
 
 // Una prova sulla pagina già aperta: torna in cima, manda gli scatti con "send" e guarda, fotogramma per fotogramma, quando la pagina comincia a
 // muoversi, il tratto più lungo in cui sta ferma PRIMA di arrivare (dopo l'arrivo i resti nativi della coda del trackpad non c'entrano), la
-// velocità massima (sul tratto più breve di almeno PEAK_WINDOW_MS), dove arriva e dov'è il numero con le frecce. Si guarda finché la pagina non sta
+// velocità massima (sul tratto più breve di almeno ASSIST_PEAK_WINDOW_MS), dove arriva e dov'è il numero con le frecce. Si guarda finché la pagina non sta
 // ferma da 700 ms (e comunque almeno "minMs": la discesa dura fino a 6 s), al massimo 9,5 s. Restituisce null se la pagina non si è mossa per
 // niente (il browser di prova non manda la rotella).
 async function assistTry(page, send, { minMs = 0, maxMs = 9500 } = {}) {
@@ -408,13 +412,17 @@ async function assistTry(page, send, { minMs = 0, maxMs = 9500 } = {}) {
   if (!moving.length) return null;
   let stall = 0;
   for (let k = 1; k < moving.length; k++) stall = Math.max(stall, moving[k][0] - moving[k - 1][0]);
-  let peak = 0; let j = Math.max(0, upto.findIndex((r) => r[0] >= wheelAt));
-  for (let k = j + 1; k < upto.length; k++) { while (j + 1 < k && upto[k][0] - upto[j + 1][0] >= PEAK_WINDOW_MS) j++; const dt = upto[k][0] - upto[j][0]; if (dt >= PEAK_WINDOW_MS) peak = Math.max(peak, Math.abs(upto[k][1] - upto[j][1]) / dt * 1000); }
-  return { startMs: moving[0][0] - wheelAt, endMs: moving[moving.length - 1][0] - wheelAt, stall, peak, frames: moving.length, after };
+  const first = Math.max(0, upto.findIndex((r) => r[0] >= wheelAt));
+  const travelled = Math.abs(after.y - upto[first][1]);
+  let maxStep = 0;
+  for (let k = first + 1; k < upto.length; k++) maxStep = Math.max(maxStep, Math.abs(upto[k][1] - upto[k - 1][1]));
+  let peak = 0; let j = first;
+  for (let k = j + 1; k < upto.length; k++) { while (j + 1 < k && upto[k][0] - upto[j + 1][0] >= ASSIST_PEAK_WINDOW_MS) j++; const dt = upto[k][0] - upto[j][0]; if (dt >= ASSIST_PEAK_WINDOW_MS) peak = Math.max(peak, Math.abs(upto[k][1] - upto[j][1]) / dt * 1000); }
+  return { startMs: moving[0][0] - wheelAt, endMs: moving[moving.length - 1][0] - wheelAt, stall, peak, maxStep, travelled, frames: moving.length, after };
 }
 
 // Il verdetto di una prova di discesa: è partita, è arrivata dov'era l'inquadratura (barra dove dice il registro del sito), subito e di seguito
-function assistVerdict(label, m, problems, { instant = false } = {}) {
+function assistVerdict(label, m, problems) {
   if (!m) { problems.push(`${label}: la pagina non si è mossa`); return false; }
   const { after } = m;
   if (!after.log) problems.push(`${label}: la pagina non è stata accompagnata in fondo: ora è a ${Math.round(after.y)} px (il sito dice: ${after.note})`);
@@ -423,8 +431,9 @@ function assistVerdict(label, m, problems, { instant = false } = {}) {
   else {
     if (m.startMs > ASSIST_START_MS) problems.push(`${label}: dal primo scatto la pagina ci mette ${Math.round(m.startMs)} ms a muoversi (al massimo ${ASSIST_START_MS}): deve partire subito, senza pause`);
     if (m.stall > ASSIST_STALL_MS) problems.push(`${label}: la pagina sta ferma per ${Math.round(m.stall)} ms a metà strada (al massimo ${ASSIST_STALL_MS}): deve scendere di seguito, senza pause`);
-    if (instant && m.frames > 3) problems.push(`${label}: con «riduci movimento» la pagina deve andare all'inquadratura subito, senza discesa da vedere: invece ha fatto ${m.frames} spostamenti`);
-    if (!instant && m.peak > ASSIST_PEAK_PX_S) problems.push(`${label}: la pagina scende troppo veloce, fino a ${Math.round(m.peak)} px al secondo (al massimo ${ASSIST_PEAK_PX_S}): deve muoversi come la galleria, piano e morbida (assistGlideFor in js/app_v58.js)`);
+    if (m.travelled >= 200 && m.endMs < Math.min(3000, m.travelled * ASSIST_MIN_MS_PER_PX)) problems.push(`${label}: la pagina fa ${Math.round(m.travelled)} px in ${Math.round(m.endMs)} ms (almeno ${Math.round(Math.min(3000, m.travelled * ASSIST_MIN_MS_PER_PX))} ms): arriva di colpo, non piano come la galleria`);
+    if (m.maxStep > ASSIST_MAX_STEP_PX) problems.push(`${label}: tra due fotogrammi la pagina si sposta di ${Math.round(m.maxStep)} px (al massimo ${ASSIST_MAX_STEP_PX}): è un salto, non una discesa morbida`);
+    if (m.peak > ASSIST_PEAK_PX_S) problems.push(`${label}: la pagina scende troppo veloce, fino a ${Math.round(m.peak)} px al secondo (al massimo ${ASSIST_PEAK_PX_S}): deve muoversi come la galleria, piano e morbida (assistGlideFor in js/app_v58.js)`);
     if (after.glides > 1) problems.push(`${label}: la discesa è stata fermata a metà e rifatta partire ${after.glides} volte (deve essere una sola, di seguito)`);
     return true;
   }
@@ -453,13 +462,13 @@ async function checkAssist(context, base) {
     const up1 = await page.evaluate(() => window.scrollY);
     await page.waitForTimeout(2200);
     const up2 = await page.evaluate(() => window.scrollY);
-    console.log(`  [accompagnamento] ${context.__engine}: la pagina comincia a muoversi ${Math.round(m.startMs)} ms dopo il primo scatto, arriva dopo ${Math.round(m.endMs)} ms, tratto fermo più lungo ${Math.round(m.stall)} ms, al massimo ${Math.round(m.peak)} px/s (limite ${ASSIST_PEAK_PX_S}); arriva a ${Math.round(m.after.y)} px su ${Math.round(geo.max)} (barra a ${Math.round(m.after.bar)} px, registro ${m.after.log ? `holdY ${m.after.log.holdY}` : 'vuoto'}); in su: ${Math.round(up1)} → ${Math.round(up2)} px`);
+    console.log(`  [accompagnamento] ${context.__engine}: la pagina comincia a muoversi ${Math.round(m.startMs)} ms dopo il primo scatto, arriva dopo ${Math.round(m.endMs)} ms, tratto fermo più lungo ${Math.round(m.stall)} ms, al massimo ${Math.round(m.peak)} px/s (limite ${ASSIST_PEAK_PX_S}) e ${Math.round(m.maxStep)} px per fotogramma; arriva a ${Math.round(m.after.y)} px su ${Math.round(geo.max)} (barra a ${Math.round(m.after.bar)} px, registro ${m.after.log ? `holdY ${m.after.log.holdY}` : 'vuoto'}); in su: ${Math.round(up1)} → ${Math.round(up2)} px`);
     if (up1 <= m.after.y - 20 && Math.abs(up2 - up1) > BAR_TOLERANCE_PX) problems.push(`salendo con la rotella la pagina non è rimasta dove l'utente l'ha lasciata: da ${Math.round(up1)} a ${Math.round(up2)} px`);
 
     // I casi del Mac vero (vedi sopra). Ognuno riparte dalla cima, sulla stessa pagina.
     const summary = [];
     const tail = async () => { for (const [dx, dy] of trackpadTail()) { await page.mouse.wheel(dx, dy); await page.waitForTimeout(14); } };
-    const note = (name, r) => summary.push(r ? `${name}: parte dopo ${Math.round(r.startMs)} ms, ferma al massimo ${Math.round(r.stall)} ms, al massimo ${Math.round(r.peak)} px/s, arriva dopo ${Math.round(r.endMs)} ms` : `${name}: la pagina non si è mossa`);
+    const note = (name, r) => summary.push(r ? `${name}: parte dopo ${Math.round(r.startMs)} ms, ferma al massimo ${Math.round(r.stall)} ms, al massimo ${Math.round(r.peak)} px/s e ${Math.round(r.maxStep)} px per fotogramma, arriva dopo ${Math.round(r.endMs)} ms` : `${name}: la pagina non si è mossa`);
 
     const noisy = await assistTry(page, tail, { minMs: ASSIST_GLIDE_MIN_WAIT_MS });
     assistVerdict('con un gesto di trackpad vero (scatti nulli, di lato e di pochi pixel in su in mezzo)', noisy, problems); note('trackpad vero', noisy);
@@ -494,12 +503,12 @@ async function checkAssist(context, base) {
     await page.evaluate(() => { document.body.classList.remove('edit-mode'); window.dispatchEvent(new Event('edit-mode-toggled')); });
     assistVerdict('in modalità modifica', editing, problems); note('modifica', editing);
 
-    // «riduci movimento»: la pagina va subito all'inquadratura, senza discesa
+    // «riduci movimento»: la discesa è la stessa (piano, come la galleria): non un salto in un fotogramma
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.mouse.move(Math.round(geo.h / 2), 300);
-    const still = await assistTry(page, wheelTwice, { maxMs: 4000 });
+    const still = await assistTry(page, wheelTwice, { minMs: ASSIST_GLIDE_MIN_WAIT_MS });
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    assistVerdict('con «riduci movimento»', still, problems, { instant: true }); note('riduci movimento', still);
+    assistVerdict('con «riduci movimento»', still, problems); note('riduci movimento', still);
 
     console.log(`  [accompagnamento, altri casi] ${context.__engine}: ${summary.join(' · ')}`);
   } catch (e) {

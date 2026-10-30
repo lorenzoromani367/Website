@@ -133,6 +133,13 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
   }
 }
 
+// Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
+// computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
+// rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
+const SITE_BUILD = "discesa morbida 2";
+window.SITE_BUILD = SITE_BUILD;
+if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
+
 // Il sito del tuo computer aperto SENZA pulsanti di modifica (con "?visitor", o da un indirizzo di rete come quello per l'iPhone):
 // il titolo della scheda comincia con "Vista visitatore" e, su un computer, per qualche secondo compare nella pagina un avviso con
 // un clic per tornare alla modifica. Serve perché Vivaldi nella barra degli indirizzi nasconde tutto ciò che sta dopo il "?" (resta
@@ -5013,7 +5020,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // "accompany": non è uno scorrimento della galleria ma l'accompagnamento verso il fondo dopo che l'utente è sceso a metà pagina (vedi più sotto):
   // porta la pagina all'inquadratura di serie qualunque sia l'ora e anche se la barra si vede già, senza le condizioni dello scorrimento
   // (pagina ferma da 15 s...), che le ha già controllate chi lo chiama.
-  function startBarHold(before, { accompany = false, takeover = false, instant = false } = {}) {
+  function startBarHold(before, { accompany = false, takeover = false } = {}) {
     const blocker = barHoldBlocker({ singlePhoto: accompany });
     if (blocker) { logFraming({ ran: false, why: blocker, grow: growNote, assist: accompany }); return; }
     stopBarHold(); // un nuovo scorrimento riparte da dove si trova la vista adesso
@@ -5032,17 +5039,17 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       }
       holdY = framingHoldY(); // inquadratura di serie
       mode = "discesa";
-      if (instant) why = "riduci movimento: la pagina viene messa subito all'inquadratura, senza discesa";
     }
     const distance = Math.abs(Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - holdY)) - startY);
     // La discesa accompagnata si muove come la galleria: stessa curva e, per le strade lunghe, stessa durata (vedi assistGlideFor)
-    const glide = takeover && mode === "discesa" && distance >= 4 && !instant ? assistGlideFor(distance) : null;
+    const glide = takeover && mode === "discesa" && distance >= 4 ? assistGlideFor(distance) : null;
+    if (glide) assistLastGlide = { ms: Math.round(glide.ms), px: Math.round(distance), at: Date.now() };
     const state = {
       startY,
       holdY,
       mode,
       startedAt: performance.now(),
-      approachMs: mode === "tenuta" || distance < 4 || instant ? 0
+      approachMs: mode === "tenuta" || distance < 4 ? 0
         : glide ? glide.ms
         : Math.min(FRAME_APPROACH_MAX_MS, Math.max(FRAME_APPROACH_MIN_MS, 500 + distance * 0.5)),
       curve: glide ? glide.curve : null, // la curva della discesa accompagnata (null: quella di serie, partenza e arrivo dolci)
@@ -5120,8 +5127,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
        ferma subito la discesa; il tremolio di pochi pixel di un dito che si stacca, meno di ASSIST_UP_PX, non conta come «su»);
      - solo se la pagina sta prima dell'inquadratura: chi è già lì, o più in giù (per vedere la barra sotto il bordo), scorre come sempre;
      - non c'è dove non c'è l'inquadratura di serie (telefono, schermi tattili), con una foto ingrandita, a mouse premuto, con la rotella su un
-       elemento che scorre per conto suo, con Ctrl/Cmd/Maiusc (zoom, scorrimento di lato). C'è anche in modalità modifica. Con «riduci movimento»
-       la pagina non scende piano: viene messa subito all'inquadratura (niente movimento da vedere);
+       elemento che scorre per conto suo, con Ctrl/Cmd/Maiusc (zoom, scorrimento di lato). C'è anche in modalità modifica e con «riduci movimento»
+       attivo nel sistema: il sito non lo rispetta nemmeno per le transizioni della galleria (6 s), e la discesa è la stessa. (Una versione di
+       poche ore prima, con «riduci movimento», saltava in fondo in un solo fotogramma: sul Mac del proprietario era «uno scatto», e la
+       versione prima ancora non partiva proprio);
      - se uno scorrimento della galleria parte mentre la pagina scende, la discesa non si interrompe (goTo). */
   // La discesa accompagnata si muove ESATTAMENTE come la galleria: la stessa curva (--transition-ease) e, per le strade lunghe, la stessa durata
   // (--transition-ms, 6 s). Per le strade corte la durata scende con la strada (ASSIST_GLIDE_MS_PER_PX: 6 s per circa 800 px, cioè la stessa
@@ -5156,6 +5165,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let assistStartY = null; // strada 2: dov'era la pagina quando è cominciato il gesto
   let assistPeakY = null; // strada 2: il punto più in basso toccato dalla pagina nel gesto
   let assistTimer = null;
+  let assistLastGlide = null; // l'ultima discesa accompagnata: quanto dura e di quanti px (lo legge il contatore di fluidità)
 
   const assistBlocker = () => barHoldBlocker({ singlePhoto: true });
   const assistTargetY = () => Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - framingHoldY())); // dove sta la pagina all'inquadratura di serie
@@ -5172,7 +5182,6 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
 
   // Parte l'accompagnamento immediato, se si può e se la pagina è prima dell'inquadratura. Restituisce null se è partito, altrimenti il perché no.
-  // Con «riduci movimento» la pagina non scende piano: al primo fotogramma è già all'inquadratura (instant).
   function assistTakeOver() {
     const blocker = assistBlocker();
     if (blocker) {
@@ -5180,7 +5189,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       return blocker;
     }
     if (window.scrollY >= assistTargetY() - 4) return "la pagina è già all'inquadratura (o più in giù)";
-    startBarHold(snapshotBar(), { accompany: true, takeover: true, instant: prefersReducedMotion() });
+    startBarHold(snapshotBar(), { accompany: true, takeover: true });
     assistGlideAt = performance.now();
     return framing && framing.assist && framing.takeover ? null : "l'accompagnamento non è partito";
   }
@@ -5291,7 +5300,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   window.addEventListener("pointerup", onAssistPointerUp, { passive: true });
   window.addEventListener("touchmove", onAssistTouch, { passive: true });
   // Per il contatore di fluidità: l'accompagnamento è attivo adesso, o cosa lo ferma
-  const assistState = () => ({ blocker: assistBlocker(), y: Math.round(window.scrollY), target: Math.round(assistTargetY()), last: assistLastNote, stats: { ...assistStats } });
+  const assistState = () => ({ blocker: assistBlocker(), y: Math.round(window.scrollY), target: Math.round(assistTargetY()), last: assistLastNote, stats: { ...assistStats }, glide: assistLastGlide });
   window.__assistState = assistState;
 
   function goTo(i, { user = false } = {}) {

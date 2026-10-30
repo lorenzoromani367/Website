@@ -175,12 +175,13 @@
   };
   const holdLines = (limit) => {
     const log = window.__framingLog;
-    const conditions = `riduci movimento: ${media("(prefers-reduced-motion: reduce)") ? "SÌ" : "no"} · schermo tattile: ${media("(pointer: coarse)") ? "SÌ" : "no"} · modalità modifica: ${document.body.classList.contains("edit-mode") ? "SÌ" : "no"}`;
+    const conditions = `riduci movimento: ${media("(prefers-reduced-motion: reduce)") ? "SÌ (non cambia la discesa accompagnata)" : "no"} · schermo tattile: ${media("(pointer: coarse)") ? "SÌ" : "no"} · modalità modifica: ${document.body.classList.contains("edit-mode") ? "SÌ" : "no"}`;
     if (!Array.isArray(log)) return ["Barra ferma: questa pagina non ha il codice nuovo (ricaricare con Cmd+Maiusc+R)", conditions];
     // Accompagnamento verso il fondo (assistState in app_v58.js): attivo adesso, o cosa lo ferma
     const assist = typeof window.__assistState === "function" ? window.__assistState() : null;
     const assistLine = assist
       ? `Accompagnamento verso il fondo: ${assist.blocker ? `NON attivo adesso (${assist.blocker})` : `attivo (pagina a ${assist.y} px, l'inquadratura è a ${assist.target} px)`}. Ultima rotella o tasto: ${assist.last}`
+        + (assist.glide ? `. Ultima discesa accompagnata: ${assist.glide.ms} ms per ${assist.glide.px} px (${Math.round((Date.now() - assist.glide.at) / 1000)} s fa)` : ". Nessuna discesa accompagnata da quando la pagina è aperta")
         + (assist.stats ? `. Scatti di rotella visti dal sito: ${assist.stats.wheels} (${assist.stats.uncancelable} non annullabili), discese partite: ${assist.stats.taken}, scatti assorbiti: ${assist.stats.absorbed}${assist.stats.last ? `; l'ultimo: ${assist.stats.last}` : ""}` : "")
       : "Accompagnamento verso il fondo: non c'è in questa pagina (non è una galleria, o la pagina non ha il codice nuovo: ricaricare con Cmd+Maiusc+R)";
     const lines = [log.length ? `Barra ferma, ultimi scorrimenti della galleria (${log.length}):` : "Barra ferma: nessuno scorrimento della galleria da quando la pagina è aperta", conditions, assistLine];
@@ -193,6 +194,7 @@
     const lines = [
       `Rapporto di fluidità — ${new Date().toLocaleString("it-IT")}`,
       `Browser: ${navigator.userAgent}`,
+      `Versione del codice del sito: ${window.SITE_BUILD || "più vecchia di «discesa morbida 2» (il browser sta usando codice vecchio: ricaricare con Cmd+Maiusc+R)"}`,
       `Finestra: ${innerWidth}×${innerHeight}, densità ${window.devicePixelRatio}×, circa ${s.hz} Hz`,
       `Pagina: ${location.hash || "#/"}`,
       `Acceso da ${Math.round(s.seconds)} s. Ora ${s.lastSecond} fotogrammi/s; il più lento degli ultimi 10 s: ${fmt(s.worst)}`,
