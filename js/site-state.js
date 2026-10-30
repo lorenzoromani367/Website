@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 173,
-  "updatedAt": "2026-10-29T10:10:42.711Z",
+  "version": 221,
+  "updatedAt": "2026-10-30T04:59:20.676Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -337,7 +337,11 @@ window.SITE_STATE = {
       "project.mediality.captionText.@mediality/senza titolo-1.jpg": "free",
       "project.stills.captionText.@stills/upside down.jpg": "upside down, vase",
       "project.stills.captionText.@stills/stills-11.jpg": "mercedes back seat",
-      "project.stills.captionText.@stills/stills-10.jpg": "jewelry store, rabat"
+      "project.stills.captionText.@stills/stills-10.jpg": "jewelry store, rabat",
+      "project.cement.captionText.@cement/sunset-of-flower.jpg": "the sunset of flower \nX1 45 (part I)",
+      "project.sospension.captionText.@sospension/estrangement-4.jpg": "untitled (part of a series)",
+      "project.sospension.captionText.@sospension/estrangement-3.jpg": "untitled (part of a series)",
+      "project.sospension.captionText.@sospension/estrangement-1.jpg": "untitled (part of a series)"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -497,6 +501,14 @@ window.SITE_STATE = {
       },
       "project.stills.captionPos.0": {
         "x": 53.98046875,
+        "y": 0
+      },
+      "project.cement.captionPos.4": {
+        "x": 65.1015625,
+        "y": 0
+      },
+      "project.cement.captionPos.5": {
+        "x": 62.37890625,
         "y": 0
       }
     },
@@ -754,6 +766,106 @@ window.SITE_STATE = {
       "project.stills.image.17": {
         "width": "604.919px",
         "height": ""
+      },
+      "project.homes.image.6": {
+        "width": "500.574px",
+        "height": ""
+      },
+      "project.cement.image.0": {
+        "width": "361.643px",
+        "height": ""
+      },
+      "project.cement.zoom.0": {
+        "width": "1519.8px",
+        "height": "1010.61px"
+      },
+      "zoom:images/cement/dancing.jpg": {
+        "width": "1519.8px",
+        "height": "1010.61px"
+      },
+      "project.cement.image.3": {
+        "width": "509.062px",
+        "height": ""
+      },
+      "project.cement.image.4": {
+        "width": "328.849px",
+        "height": ""
+      },
+      "project.cement.zoom.4": {
+        "width": "1519.8px",
+        "height": "975.819px"
+      },
+      "zoom:images/cement/sunset-of-flower.jpg": {
+        "width": "1519.8px",
+        "height": "975.819px"
+      },
+      "project.cement.image.5": {
+        "width": "240.616px",
+        "height": ""
+      },
+      "project.cement.captionSize.@cement/youre-ugly-catherine.jpg": {
+        "width": "334.266px",
+        "height": ""
+      },
+      "project.cement.zoom.5": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "zoom:images/cement/youre-ugly-catherine.jpg": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "project.cement.image.1": {
+        "width": "475.543px",
+        "height": ""
+      },
+      "project.cement.image.2": {
+        "width": "427.123px",
+        "height": ""
+      },
+      "project.sospension.image.7": {
+        "width": "512.912px",
+        "height": ""
+      },
+      "project.sospension.image.8": {
+        "width": "512.004px",
+        "height": ""
+      },
+      "project.sospension.image.9": {
+        "width": "395.718px",
+        "height": ""
+      },
+      "project.maniac.image.3": {
+        "width": "332.13px",
+        "height": ""
+      },
+      "project.maniac.image.5": {
+        "width": "331.875px",
+        "height": ""
+      },
+      "project.mediality.image.0": {
+        "width": "386.195px",
+        "height": ""
+      },
+      "project.mediality.image.1": {
+        "width": "436.474px",
+        "height": ""
+      },
+      "project.mediality.image.3": {
+        "width": "405.511px",
+        "height": ""
+      },
+      "project.mediality.image.4": {
+        "width": "466.388px",
+        "height": ""
+      },
+      "project.mediality.zoom.4": {
+        "width": "1519.8px",
+        "height": "795.457px"
+      },
+      "zoom:images/mediality/mediality-5.jpg": {
+        "width": "1519.8px",
+        "height": "795.457px"
       }
     },
     "site-size-overrides-v1:m": {
