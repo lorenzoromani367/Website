@@ -228,13 +228,16 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
 const FRAMING_ROUTE = '#/project/boudaries';
 const BAR_TOLERANCE_PX = 3;
 // Posizione della barra e della pagina sullo schermo, fotogramma per fotogramma, per "ms" millisecondi. "peak": velocità massima della pagina
-// (pixel al secondo, su 4 fotogrammi), cioè con quale velocità sale o scende la foto quando la barra sta ferma.
-const watchPage = (page, ms) => page.evaluate((duration) => new Promise((resolve) => {
+// (pixel al secondo, sul tratto più breve di almeno PEAK_WINDOW_MS), cioè con quale velocità sale o scende la foto quando la barra sta ferma.
+// (Su 4 fotogrammi, come prima, i tempi irregolari di Firefox sulla macchina di GitHub davano a volte il doppio della velocità vera: 150 px al
+// secondo misurati contro i 79 di Chromium per lo stesso movimento. Su 100 ms l'errore dei tempi conta poco, e un salto vero si vede lo stesso.)
+const PEAK_WINDOW_MS = 100;
+const watchPage = (page, ms) => page.evaluate(([duration, windowMs]) => new Promise((resolve) => {
   const bar = document.querySelector('.gallerybar'); const t0 = performance.now(); const tops = []; const ys = []; const ts = [];
   // (si legge DOPO che il fotogramma è pronto, con un timer subito dopo le funzioni di fotogramma: è quello che si vede, non lo stato a metà)
-  const tick = () => { setTimeout(() => { tops.push(bar.getBoundingClientRect().top); ys.push(window.scrollY); ts.push(performance.now()); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => { let peak = 0; for (let k = 4; k < ys.length; k++) { const dt = ts[k] - ts[k - 4]; if (dt > 20) peak = Math.max(peak, Math.abs(ys[k] - ys[k - 4]) / dt * 1000); } resolve({ min: Math.min(...tops), max: Math.max(...tops), last: tops[tops.length - 1], y0: ys[0], y1: ys[ys.length - 1], peak }); }, 60); };
+  const tick = () => { setTimeout(() => { tops.push(bar.getBoundingClientRect().top); ys.push(window.scrollY); ts.push(performance.now()); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => { let peak = 0; let j = 0; for (let k = 1; k < ys.length; k++) { while (j + 1 < k && ts[k] - ts[j + 1] >= windowMs) j++; const dt = ts[k] - ts[j]; if (dt >= windowMs) peak = Math.max(peak, Math.abs(ys[k] - ys[j]) / dt * 1000); } resolve({ min: Math.min(...tops), max: Math.max(...tops), last: tops[tops.length - 1], y0: ys[0], y1: ys[ys.length - 1], peak }); }, 60); };
   requestAnimationFrame(tick);
-}), ms);
+}), [ms, PEAK_WINDOW_MS]);
 async function checkFraming(context, base) {
   const problems = [];
   const page = await context.newPage();
@@ -336,8 +339,82 @@ async function checkPhotoRise(context, base) {
 // fotogramma, quando la pagina comincia a muoversi dopo il primo scatto (al massimo ASSIST_START_MS), il tratto più lungo in cui sta ferma tra
 // l'inizio e l'arrivo (al massimo ASSIST_STALL_MS: una pausa vera sarebbe mezzo secondo) e dove arriva: il numero con le frecce deve stare dove dice il
 // registro del sito (holdY). Poi un scatto in su, e la pagina non deve più muoversi.
+// Poi gli stessi controlli nei casi in cui sul Mac vero la discesa si fermava o non partiva (il browser di prova li manda tutti puliti; quelli veri no):
+//   - «trackpad vero»: la spinta che si spegne con in mezzo scatti nulli, di lato e di pochi pixel in su (il tremolio di un dito): non devono fermare niente;
+//   - gesto in su a metà discesa: la ferma, e la pagina resta dov'è;
+//   - rotella «non annullabile»: Chrome non lascia annullare lo scatto che segue uno non annullato, per il resto del gesto. Qui si finge (la proprietà
+//     «cancelable» dello scatto diventa falsa e preventDefault non fa niente): la pagina scorre da sola mentre la discesa del sito scrive la posizione;
+//   - modalità modifica e «riduci movimento»: prima bloccavano tutto (in modifica la discesa ora c'è; con «riduci movimento» la pagina va subito
+//     all'inquadratura, senza discesa da vedere).
 const ASSIST_START_MS = 300;
 const ASSIST_STALL_MS = 250;
+
+// La coda di un gesto di trackpad come la manda un dito vero: la spinta che si spegne, con scatti di lato, nulli e di pochi pixel in su in mezzo
+const trackpadTail = () => {
+  const events = [[1, 3]];
+  for (let i = 0; i < 46; i++) {
+    events.push([0, Math.round(38 * Math.exp(-i / 11))]);
+    if (i === 6) events.push([0, -2]);
+    if (i === 11) events.push([3, 1]);
+    if (i === 16) events.push([1, -1]);
+    if (i === 21) events.push([0, 0]);
+    if (i === 27) events.push([-2, -3]);
+    if (i === 33) events.push([2, 0]);
+    if (i === 40) events.push([-1, 1]);
+  }
+  return events;
+};
+
+// Una prova sulla pagina già aperta: torna in cima, manda gli scatti con "send" e guarda, fotogramma per fotogramma, quando la pagina comincia a
+// muoversi, il tratto più lungo in cui sta ferma PRIMA di arrivare (dopo l'arrivo i resti nativi della coda del trackpad non c'entrano), dove
+// arriva e dov'è il numero con le frecce. Restituisce null se la pagina non si è mossa per niente (il browser di prova non manda la rotella).
+async function assistTry(page, send, sampleMs = 3000) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(700);
+  const startedAt = await page.evaluate(() => Date.now());
+  const sampling = page.evaluate((duration) => new Promise((resolve) => {
+    const t0 = performance.now(); const rows = [];
+    const tick = () => { setTimeout(() => rows.push([performance.now(), window.scrollY]), 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => resolve(rows), 80); };
+    requestAnimationFrame(tick);
+  }), sampleMs);
+  await page.waitForTimeout(200);
+  const wheelAt = await page.evaluate(() => performance.now());
+  await send();
+  const rows = await sampling;
+  await page.waitForTimeout(300);
+  const after = await page.evaluate((since) => {
+    const entries = (window.__framingLog || []).filter((e) => e.assist && e.at >= since);
+    const log = entries.slice(-1)[0] || null;
+    // quante volte è partita la discesa: una sola se non è stata fermata a metà e fatta ripartire (era ciò che facevano gli scatti nulli, di lato o in su)
+    return { y: window.scrollY, bar: document.querySelector('.gallerybar').getBoundingClientRect().top, log, glides: entries.filter((e) => e.ran).length, note: typeof window.__assistState === 'function' ? window.__assistState().last : '' };
+  }, startedAt);
+  let arrival = rows.findIndex((r) => r[0] >= wheelAt && Math.abs(r[1] - after.y) < 2);
+  if (arrival < 0) arrival = rows.length - 1;
+  const upto = rows.slice(0, arrival + 1);
+  const moving = upto.filter((r, i) => i > 0 && r[0] >= wheelAt && Math.abs(r[1] - upto[i - 1][1]) >= 0.4);
+  if (!moving.length) return null;
+  let stall = 0;
+  for (let k = 1; k < moving.length; k++) stall = Math.max(stall, moving[k][0] - moving[k - 1][0]);
+  return { startMs: moving[0][0] - wheelAt, endMs: moving[moving.length - 1][0] - wheelAt, stall, frames: moving.length, after };
+}
+
+// Il verdetto di una prova di discesa: è partita, è arrivata dov'era l'inquadratura (barra dove dice il registro del sito), subito e di seguito
+function assistVerdict(label, m, problems, { instant = false } = {}) {
+  if (!m) { problems.push(`${label}: la pagina non si è mossa`); return false; }
+  const { after } = m;
+  if (!after.log) problems.push(`${label}: la pagina non è stata accompagnata in fondo: ora è a ${Math.round(after.y)} px (il sito dice: ${after.note})`);
+  else if (!after.log.ran) problems.push(`${label}: la pagina non è stata accompagnata in fondo: ${after.log.why}`);
+  else if (Math.abs(after.bar - after.log.holdY) > BAR_TOLERANCE_PX) problems.push(`${label}: la pagina è stata accompagnata, ma il numero con le frecce è a ${Math.round(after.bar)} px dal bordo alto invece di ${after.log.holdY}`);
+  else {
+    if (m.startMs > ASSIST_START_MS) problems.push(`${label}: dal primo scatto la pagina ci mette ${Math.round(m.startMs)} ms a muoversi (al massimo ${ASSIST_START_MS}): deve partire subito, senza pause`);
+    if (m.stall > ASSIST_STALL_MS) problems.push(`${label}: la pagina sta ferma per ${Math.round(m.stall)} ms a metà strada (al massimo ${ASSIST_STALL_MS}): deve scendere di seguito, senza pause`);
+    if (instant && m.frames > 3) problems.push(`${label}: con «riduci movimento» la pagina deve andare all'inquadratura subito, senza discesa da vedere: invece ha fatto ${m.frames} spostamenti`);
+    if (after.glides > 1) problems.push(`${label}: la discesa è stata fermata a metà e rifatta partire ${after.glides} volte (deve essere una sola, di seguito)`);
+    return true;
+  }
+  return false;
+}
+
 async function checkAssist(context, base) {
   const problems = [];
   if (context.__profile !== 'computer') return problems; // una volta sola per motore (né il retina, uguale, né il telefono, dove non c'è)
@@ -350,44 +427,65 @@ async function checkAssist(context, base) {
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight }));
     if (geo.max <= 150) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la pagina scorre solo ${Math.round(geo.max)} px)`); return problems; }
     await page.mouse.move(Math.round(geo.h / 2), 300);
-    const sampling = page.evaluate(() => new Promise((resolve) => {
-      const t0 = performance.now(); const rows = [];
-      const tick = () => { setTimeout(() => rows.push([performance.now(), window.scrollY]), 0); if (performance.now() - t0 < 2800) requestAnimationFrame(tick); else setTimeout(() => resolve(rows), 80); };
-      requestAnimationFrame(tick);
-    }));
-    await page.waitForTimeout(200);
-    const wheelAt = await page.evaluate(() => performance.now());
-    await page.mouse.wheel(0, 100);
-    await page.waitForTimeout(80);
-    await page.mouse.wheel(0, 100);
-    const rows = await sampling;
-    const moving = rows.filter((r, i) => i > 0 && r[0] >= wheelAt && Math.abs(r[1] - rows[i - 1][1]) >= 0.4);
-    if (!moving.length) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la rotella non ha mosso la pagina)`); return problems; } // browser di prova: niente da controllare
-    let stall = 0;
-    for (let k = 1; k < moving.length; k++) stall = Math.max(stall, moving[k][0] - moving[k - 1][0]);
-    const startMs = moving[0][0] - wheelAt;
-    const endMs = moving[moving.length - 1][0] - wheelAt;
-    await page.waitForTimeout(400);
-    const after = await page.evaluate(() => {
-      const log = (window.__framingLog || []).filter((e) => e.assist).slice(-1)[0] || null;
-      return { y: window.scrollY, bar: document.querySelector('.gallerybar').getBoundingClientRect().top, log };
-    });
-    if (!after.log) problems.push(`scendendo con la rotella la pagina non è stata accompagnata in fondo: ora è a ${Math.round(after.y)} px`);
-    else if (!after.log.ran) problems.push(`scendendo con la rotella la pagina non è stata accompagnata in fondo: ${after.log.why}`);
-    else if (Math.abs(after.bar - after.log.holdY) > BAR_TOLERANCE_PX) problems.push(`scendendo con la rotella la pagina è stata accompagnata, ma il numero con le frecce è a ${Math.round(after.bar)} px dal bordo alto invece di ${after.log.holdY}`);
-    else {
-      if (startMs > ASSIST_START_MS) problems.push(`dal primo scatto di rotella la pagina ci mette ${Math.round(startMs)} ms a muoversi (al massimo ${ASSIST_START_MS}): deve partire subito, senza pause`);
-      if (stall > ASSIST_STALL_MS) problems.push(`scendendo con la rotella la pagina sta ferma per ${Math.round(stall)} ms a metà strada (al massimo ${ASSIST_STALL_MS}): deve scendere di seguito, senza pause`);
-    }
+    const wheelTwice = async () => { await page.mouse.wheel(0, 100); await page.waitForTimeout(80); await page.mouse.wheel(0, 100); };
+    const m = await assistTry(page, wheelTwice, 2800);
+    if (!m) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la rotella non ha mosso la pagina)`); return problems; } // browser di prova: niente da controllare
+    assistVerdict('scendendo con la rotella', m, problems);
     // salendo, la pagina resta dove l'utente la lascia
     await page.mouse.wheel(0, -150);
     await page.waitForTimeout(700);
     const up1 = await page.evaluate(() => window.scrollY);
     await page.waitForTimeout(2200);
     const up2 = await page.evaluate(() => window.scrollY);
-    console.log(`  [accompagnamento] ${context.__engine}: la pagina comincia a muoversi ${Math.round(startMs)} ms dopo il primo scatto, arriva dopo ${Math.round(endMs)} ms, tratto fermo più lungo ${Math.round(stall)} ms; arriva a ${Math.round(after.y)} px su ${Math.round(geo.max)} (barra a ${Math.round(after.bar)} px, registro ${after.log ? `holdY ${after.log.holdY}` : 'vuoto'}); in su: ${Math.round(up1)} → ${Math.round(up2)} px`);
-    if (up1 > after.y - 20) return problems; // la rotella in su non ha mosso la pagina: niente da controllare
-    if (Math.abs(up2 - up1) > BAR_TOLERANCE_PX) problems.push(`salendo con la rotella la pagina non è rimasta dove l'utente l'ha lasciata: da ${Math.round(up1)} a ${Math.round(up2)} px`);
+    console.log(`  [accompagnamento] ${context.__engine}: la pagina comincia a muoversi ${Math.round(m.startMs)} ms dopo il primo scatto, arriva dopo ${Math.round(m.endMs)} ms, tratto fermo più lungo ${Math.round(m.stall)} ms; arriva a ${Math.round(m.after.y)} px su ${Math.round(geo.max)} (barra a ${Math.round(m.after.bar)} px, registro ${m.after.log ? `holdY ${m.after.log.holdY}` : 'vuoto'}); in su: ${Math.round(up1)} → ${Math.round(up2)} px`);
+    if (up1 <= m.after.y - 20 && Math.abs(up2 - up1) > BAR_TOLERANCE_PX) problems.push(`salendo con la rotella la pagina non è rimasta dove l'utente l'ha lasciata: da ${Math.round(up1)} a ${Math.round(up2)} px`);
+
+    // I casi del Mac vero (vedi sopra). Ognuno riparte dalla cima, sulla stessa pagina.
+    const summary = [];
+    const tail = async () => { for (const [dx, dy] of trackpadTail()) { await page.mouse.wheel(dx, dy); await page.waitForTimeout(14); } };
+    const note = (name, r) => summary.push(r ? `${name}: parte dopo ${Math.round(r.startMs)} ms, ferma al massimo ${Math.round(r.stall)} ms, arriva dopo ${Math.round(r.endMs)} ms` : `${name}: la pagina non si è mossa`);
+
+    const noisy = await assistTry(page, tail, 3600);
+    assistVerdict('con un gesto di trackpad vero (scatti nulli, di lato e di pochi pixel in su in mezzo)', noisy, problems); note('trackpad vero', noisy);
+
+    // gesto in su a metà discesa: la ferma
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(700);
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(260);
+    await page.mouse.wheel(0, -120);
+    await page.waitForTimeout(1500);
+    const cut1 = await page.evaluate(() => window.scrollY);
+    await page.waitForTimeout(1200);
+    const cut2 = await page.evaluate(() => window.scrollY);
+    summary.push(`gesto in su a metà discesa: ferma a ${Math.round(cut1)} px (poi ${Math.round(cut2)}), fondo a ${Math.round(geo.max)} px`);
+    if (cut1 > geo.max - 60) problems.push(`un gesto verso l'alto a metà discesa non l'ha fermata: la pagina è arrivata a ${Math.round(cut1)} px su ${Math.round(geo.max)}`);
+    if (Math.abs(cut2 - cut1) > BAR_TOLERANCE_PX) problems.push(`dopo un gesto verso l'alto la pagina ha continuato a muoversi: da ${Math.round(cut1)} a ${Math.round(cut2)} px`);
+
+    // rotella non annullabile (si finge): la discesa parte lo stesso e arriva
+    await page.evaluate(() => {
+      Object.defineProperty(WheelEvent.prototype, 'cancelable', { get() { return false; }, configurable: true });
+      WheelEvent.prototype.preventDefault = function () {};
+    });
+    const stubborn = await assistTry(page, tail, 3600);
+    await page.evaluate(() => { delete WheelEvent.prototype.cancelable; delete WheelEvent.prototype.preventDefault; });
+    assistVerdict('con una rotella che il browser non lascia annullare', stubborn, problems); note('rotella non annullabile', stubborn);
+
+    // modalità modifica: la discesa c'è anche lì (il puntatore sta fuori dalla casella della descrizione, che in modifica scorre per conto suo)
+    await page.evaluate(() => { document.body.classList.add('edit-mode'); window.dispatchEvent(new Event('edit-mode-toggled')); });
+    await page.mouse.move(300, 300);
+    const editing = await assistTry(page, wheelTwice, 2800);
+    await page.evaluate(() => { document.body.classList.remove('edit-mode'); window.dispatchEvent(new Event('edit-mode-toggled')); });
+    assistVerdict('in modalità modifica', editing, problems); note('modifica', editing);
+
+    // «riduci movimento»: la pagina va subito all'inquadratura, senza discesa
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.mouse.move(Math.round(geo.h / 2), 300);
+    const still = await assistTry(page, wheelTwice, 1800);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    assistVerdict('con «riduci movimento»', still, problems, { instant: true }); note('riduci movimento', still);
+
+    console.log(`  [accompagnamento, altri casi] ${context.__engine}: ${summary.join(' · ')}`);
   } catch (e) {
     problems.push(`prova dell'accompagnamento verso il fondo non riuscita: ${String(e.message).split('\n')[0]}`);
   }
