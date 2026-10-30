@@ -12,7 +12,7 @@
          che in alto c'è tra il "0" e il titolo;
        - galleria di un progetto, su computer: mentre la galleria scorre e la foto cambia altezza (foto più alta e più bassa) il numero con
          le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
-         non si muove.
+         non si muove; in Mediality la foto non sale di scatto quando la successiva è molto più alta (al massimo 500 px al secondo).
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -226,6 +226,14 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
 // test) l'inquadratura iniziale aspetta 15 s per non portare via la pagina a chi la sta leggendo.
 const FRAMING_ROUTE = '#/project/boudaries';
 const BAR_TOLERANCE_PX = 3;
+// Posizione della barra e della pagina sullo schermo, fotogramma per fotogramma, per "ms" millisecondi. "peak": velocità massima della pagina
+// (pixel al secondo, su 4 fotogrammi), cioè con quale velocità sale o scende la foto quando la barra sta ferma.
+const watchPage = (page, ms) => page.evaluate((duration) => new Promise((resolve) => {
+  const bar = document.querySelector('.gallerybar'); const t0 = performance.now(); const tops = []; const ys = []; const ts = [];
+  // (si legge DOPO che il fotogramma è pronto, con un timer subito dopo le funzioni di fotogramma: è quello che si vede, non lo stato a metà)
+  const tick = () => { setTimeout(() => { tops.push(bar.getBoundingClientRect().top); ys.push(window.scrollY); ts.push(performance.now()); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => { let peak = 0; for (let k = 4; k < ys.length; k++) { const dt = ts[k] - ts[k - 4]; if (dt > 20) peak = Math.max(peak, Math.abs(ys[k] - ys[k - 4]) / dt * 1000); } resolve({ min: Math.min(...tops), max: Math.max(...tops), last: tops[tops.length - 1], y0: ys[0], y1: ys[ys.length - 1], peak }); }, 60); };
+  requestAnimationFrame(tick);
+}), ms);
 async function checkFraming(context, base) {
   const problems = [];
   const page = await context.newPage();
@@ -235,13 +243,7 @@ async function checkFraming(context, base) {
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
     const read = () => page.evaluate(() => ({ y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
-    // posizione della barra sullo schermo, fotogramma per fotogramma, per "ms" millisecondi
-    const watchBar = (ms) => page.evaluate((duration) => new Promise((resolve) => {
-      const bar = document.querySelector('.gallerybar'); const t0 = performance.now(); const tops = []; const ys = [];
-      // (si legge DOPO che il fotogramma è pronto, con un timer subito dopo le funzioni di fotogramma: è quello che si vede, non lo stato a metà)
-      const tick = () => { setTimeout(() => { tops.push(bar.getBoundingClientRect().top); ys.push(window.scrollY); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => resolve({ min: Math.min(...tops), max: Math.max(...tops), last: tops[tops.length - 1], y0: ys[0], y1: ys[ys.length - 1] }), 60); };
-      requestAnimationFrame(tick);
-    }), ms);
+    const watchBar = (ms) => watchPage(page, ms);
     const before = await read();
     if (before.photos < 2 || before.max <= 8) return problems; // una foto sola, o la pagina sta tutta nella finestra: niente da tenere fermo
     if (context.__profile === 'telefono') {
@@ -270,6 +272,37 @@ async function checkFraming(context, base) {
     }
   } catch (e) {
     problems.push(`prova della barra ferma non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
+// La foto non deve salire di scatto quando la successiva è molto più alta. Con la barra ferma, la pagina si sposta di quanto il riquadro si allunga:
+// in Mediality, a 1440 × 900, dalla foto 3 alla 4 sono +280 px. Dal 30 ottobre (growTransitionFor in js/app_v58.js) ci mette circa 1,1 s e la velocità
+// massima è circa 245 px al secondo; prima ci metteva 0,4 s, 700-860 px al secondo (misurato sui fotogrammi). Il limite sta in mezzo.
+const RISE_ROUTE = '#/project/mediality';
+const PHOTO_PEAK_PX_S = 500;
+async function checkPhotoRise(context, base) {
+  const problems = [];
+  if (context.__profile !== 'computer') return problems; // una volta sola per motore: né il retina (stesso risultato) né il telefono (la pagina non si muove)
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${RISE_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(SETTLE_MS);
+    const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
+    if (geo.photos < 4 || geo.max <= 8) return problems;
+    await page.keyboard.press('ArrowRight'); // 1 → 2: stessa altezza; la pagina scende alla posizione di serie
+    await page.waitForTimeout(2600);
+    await page.keyboard.press('ArrowRight'); // 2 → 3: più bassa (6 s)
+    await page.waitForTimeout(6700);
+    await page.keyboard.press('ArrowRight'); // 3 → 4: più alta di 280 px
+    const w = await watchPage(page, 3000);
+    if (Math.abs(w.y1 - w.y0) < 100) problems.push(`in Mediality, con la foto molto più alta in arrivo, la pagina non si è spostata abbastanza (${Math.round(Math.abs(w.y1 - w.y0))} px): la prova non ha misurato la salita`);
+    else if (w.peak > PHOTO_PEAK_PX_S) problems.push(`in Mediality, con la foto molto più alta in arrivo, la foto sale troppo di scatto: ${Math.round(w.peak)} px al secondo al massimo (deve restare sotto i ${PHOTO_PEAK_PX_S}: la salita dev'essere lenta e dolce, vedi growTransitionFor in js/app_v58.js)`);
+  } catch (e) {
+    problems.push(`prova della salita della foto non riuscita: ${String(e.message).split('\n')[0]}`);
   }
   await page.close();
   return problems;
@@ -330,6 +363,7 @@ async function runEngine(engine, base, origin, routes) {
       const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName.replace(/\s+/g, '-')}__${engine}.jpg`);
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
       if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); }
+      if (route === RISE_ROUTE) r.problems.push(...await checkPhotoRise(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();
@@ -447,7 +481,7 @@ function summary(all, diffs, started, visual) {
   if (problems.length) {
     lines.push('## ❌ Problemi', '');
     for (const { e, r } of problems) for (const p of r.problems) lines.push(`- **${LABEL[e]}**, ${r.profile}, \`${r.route}\`: ${p}`);
-  } else lines.push('## ✅ Nessun problema', '', 'Nessun errore JavaScript, nessun file mancante, nessuna pagina più larga dello schermo, tasto home sempre toccabile, Core Archive in regola, numero e frecce della galleria fermi sullo schermo mentre la foto cambia altezza (solo su computer).');
+  } else lines.push('## ✅ Nessun problema', '', 'Nessun errore JavaScript, nessun file mancante, nessuna pagina più larga dello schermo, tasto home sempre toccabile, Core Archive in regola, numero e frecce della galleria fermi sullo schermo mentre la foto cambia altezza e foto che sale piano, senza scatti (solo su computer).');
   lines.push('');
   if (all.length > 1) {
     lines.push('## Differenze tra i motori (avvisi)', '');
@@ -489,7 +523,7 @@ function summary(all, diffs, started, visual) {
     const { PROJECTS } = new Function(`${src}\n;return { PROJECTS };`)();
     routes = ['', '#/', ...PROJECTS.map((p) => `#/project/${p.slug}`), '#/archive', '#/about', '#/contacts', '#/zzz']; // '' = l'indirizzo del sito senza nient'altro, come lo scrive un visitatore
   } catch (e) { console.error('Non riesco a leggere l\'elenco dei progetti da content.js:', e.message); process.exit(2); }
-  if (QUICK) routes = routes.filter((r) => ['#/', '#/project/boudaries', '#/project/stills', '#/archive', '#/contacts', '#/zzz'].includes(r));
+  if (QUICK) routes = routes.filter((r) => ['#/', '#/project/boudaries', '#/project/mediality', '#/project/stills', '#/archive', '#/contacts', '#/zzz'].includes(r));
   console.log(`Sito: ${LIVE_URL ? 'VERO ' + LIVE_URL : SITE + ' (' + origin + ')'} — ${routes.length} pagine × ${Object.keys(PROFILES).length} formati × ${ENGINES.length} motori (${ENGINES.join(', ')})`);
   const all = await Promise.all(ENGINES.map((engine) => runEngine(engine, base, origin, routes).catch((e) => ({ engine, version: '?', results: [{ engine, profile: '-', route: '-', problems: [`il motore non è partito: ${String(e.message).split('\n')[0]}`], metrics: null, shot: null }] }))));
   if (server) server.close();
