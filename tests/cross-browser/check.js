@@ -12,7 +12,8 @@
          che in alto c'è tra il "0" e il titolo;
        - galleria di un progetto, su computer: mentre la galleria scorre e la foto cambia altezza (foto più alta e più bassa) il numero con
          le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
-         non si muove; in Mediality la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa).
+         non si muove; in Mediality la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa);
+         chi scende con la rotella e si ferma a metà pagina viene accompagnato in fondo, chi sale resta dove si ferma.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -328,6 +329,51 @@ async function checkPhotoRise(context, base) {
 // Stessa prova, ma con la pagina già mossa dall'utente (rotella) in un punto in cui la barra si vede senza essere in fondo: lì la pagina non
 // deve andare da nessuna parte, ma la barra deve restare dov'è mentre la foto cambia altezza (era il caso che non funzionava: l'inquadratura
 // aspettava 15 s dall'ultimo movimento dell'utente e nel frattempo la barra saliva e scendeva con la foto).
+// Chi scende per vedere le foto e si ferma a metà non resta lì: finito il gesto la pagina viene accompagnata in fondo (assistSettled in js/app_v58.js),
+// con la barra del numero e delle frecce all'inquadratura di serie. Verso l'alto no: chi sale resta dove si ferma. Si prova con la rotella, come
+// un utente: due scatti in giù dalla cima, poi un'attesa; la barra deve stare dove dice il registro del sito (holdY) e il registro deve dire che è
+// stata accompagnata; poi uno scatto in su, e la pagina non deve più muoversi.
+async function checkAssist(context, base) {
+  const problems = [];
+  if (context.__profile !== 'computer') return problems; // una volta sola per motore (né il retina, uguale, né il telefono, dove non c'è)
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(SETTLE_MS + 1200); // (nei primi 2 s il sito non conta i movimenti della pagina: il browser a volte la rimette dov'era)
+    const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight }));
+    if (geo.max <= 150) return problems;
+    await page.mouse.move(Math.round(geo.h / 2), 300);
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(80);
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(500);
+    const moved = await page.evaluate(() => window.scrollY);
+    if (moved < 20) return problems; // la rotella non ha mosso la pagina (browser di prova): niente da controllare
+    await page.waitForTimeout(3500);
+    const after = await page.evaluate(() => {
+      const log = (window.__framingLog || []).filter((e) => e.assist).slice(-1)[0] || null;
+      return { y: window.scrollY, bar: document.querySelector('.gallerybar').getBoundingClientRect().top, log };
+    });
+    if (!after.log) problems.push(`scendendo con la rotella e fermandosi a metà (a ${Math.round(moved)} px) la pagina non è stata accompagnata in fondo: ora è a ${Math.round(after.y)} px`);
+    else if (!after.log.ran) problems.push(`scendendo con la rotella la pagina non è stata accompagnata in fondo: ${after.log.why}`);
+    else if (Math.abs(after.bar - after.log.holdY) > BAR_TOLERANCE_PX) problems.push(`scendendo con la rotella la pagina è stata accompagnata, ma il numero con le frecce è a ${Math.round(after.bar)} px dal bordo alto invece di ${after.log.holdY}`);
+    // salendo, la pagina resta dove l'utente la lascia
+    await page.mouse.wheel(0, -150);
+    await page.waitForTimeout(700);
+    const up1 = await page.evaluate(() => window.scrollY);
+    await page.waitForTimeout(2200);
+    const up2 = await page.evaluate(() => window.scrollY);
+    if (up1 > after.y - 20) return problems; // la rotella in su non ha mosso la pagina: niente da controllare
+    if (Math.abs(up2 - up1) > BAR_TOLERANCE_PX) problems.push(`salendo con la rotella la pagina non è rimasta dove l'utente l'ha lasciata: da ${Math.round(up1)} a ${Math.round(up2)} px`);
+  } catch (e) {
+    problems.push(`prova dell'accompagnamento verso il fondo non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 async function checkBarHoldAfterUserScroll(context, base) {
   const problems = [];
   if (context.__profile === 'telefono') return problems;
@@ -339,9 +385,13 @@ async function checkBarHoldAfterUserScroll(context, base) {
     await page.waitForTimeout(SETTLE_MS);
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight, barTop: document.querySelector('.gallerybar').getBoundingClientRect().top + window.scrollY, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
     if (geo.photos < 2 || geo.max <= 8) return problems;
-    const wanted = Math.max(0, Math.min(geo.max - 20, geo.barTop - geo.h + 100)); // la cima della barra 100 px sopra il bordo basso della finestra
+    // La pagina «mossa dall'utente» con la barra in vista ma non in fondo: l'utente è sceso fino in fondo e ha poi alzato la pagina di 100 px (se
+    // scende e si ferma a metà la pagina viene accompagnata in fondo, vedi checkAssist; verso l'alto resta dov'è). Il test porta la pagina in
+    // fondo con window.scrollTo (non vale come gesto dell'utente) e la rotella in su la alza.
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(300);
     await page.mouse.move(Math.round(geo.h / 2), 300);
-    await page.mouse.wheel(0, wanted);
+    await page.mouse.wheel(0, -100);
     await page.waitForTimeout(900);
     await page.mouse.move(2, 2);
     const at = await page.evaluate(() => ({ y: window.scrollY, bar: document.querySelector('.gallerybar').getBoundingClientRect().top, h: window.innerHeight }));
@@ -379,7 +429,7 @@ async function runEngine(engine, base, origin, routes) {
       const withShot = profile.shots && SHOT_ROUTES.includes(route);
       const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName.replace(/\s+/g, '-')}__${engine}.jpg`);
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
-      if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); }
+      if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); r.problems.push(...await checkAssist(context, base)); }
       if (route === RISE_ROUTE) r.problems.push(...await checkPhotoRise(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }

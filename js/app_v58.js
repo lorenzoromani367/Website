@@ -4967,9 +4967,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     && viewport.getAnimations().some((animation) => animation.playState === "running" && /height/.test(String(animation.transitionProperty || "")));
   const prefersReducedMotion = () => typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Perché la barra NON si può tenere ferma adesso (null = si può)
-  function barHoldBlocker() {
-    if (figures.length < 2) return "galleria di una foto sola";
+  // Perché la barra NON si può tenere ferma adesso (null = si può). "singlePhoto": anche una galleria di una foto sola (l'accompagnamento
+  // verso il fondo vale per tutte le pagine di progetto: la barra col numero e le frecce c'è in tutte).
+  function barHoldBlocker({ singlePhoto = false } = {}) {
+    if (figures.length < 2 && !singlePhoto) return "galleria di una foto sola";
     if (lightboxHold) return "foto ingrandita";
     if (isMobileViewport()) return "telefono";
     if (document.hidden) return "scheda in secondo piano";
@@ -4997,28 +4998,39 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     return { startY, barY0: barTopInPage() - startY, quiet: performance.now() - lastUserScrollAt >= FRAME_QUIET_MS };
   }
 
-  function startBarHold(before) {
-    const blocker = barHoldBlocker();
-    if (blocker) { logFraming({ ran: false, why: blocker, grow: growNote }); return; }
+  // Dove deve stare la cima della barra sullo schermo nell'inquadratura di serie: in fondo alla finestra (fine della pagina). Se per questo la cima
+  // della foto più alta resterebbe fuori dalla finestra per più di FRAME_MAX_TOP_CUT px (portatili, foto molto alte) la foto ha la precedenza: la
+  // barra sta più in basso, sotto il bordo.
+  function framingHoldY() {
+    const endY = barYAtPageEnd();
+    if (FRAME_PHOTO_FIRST) {
+      const photoY = barYForTallestPhoto();
+      if (photoY - FRAME_TOP_MARGIN - endY > FRAME_MAX_TOP_CUT) return photoY;
+    }
+    return endY;
+  }
+
+  // "accompany": non è uno scorrimento della galleria ma l'accompagnamento verso il fondo dopo che l'utente è sceso a metà pagina (vedi più sotto):
+  // porta la pagina all'inquadratura di serie qualunque sia l'ora e anche se la barra si vede già, senza le condizioni dello scorrimento
+  // (pagina ferma da 15 s...), che le ha già controllate chi lo chiama.
+  function startBarHold(before, { accompany = false } = {}) {
+    const blocker = barHoldBlocker({ singlePhoto: accompany });
+    if (blocker) { logFraming({ ran: false, why: blocker, grow: growNote, assist: accompany }); return; }
     stopBarHold(); // un nuovo scorrimento riparte da dove si trova la vista adesso
     const { startY, barY0, quiet } = before;
     const endY = barYAtPageEnd();
     let holdY; // dove deve stare la cima della barra sullo schermo, per tutta la durata
     let mode;
     let why = "";
-    if (barY0 < window.innerHeight - 1) {
+    if (!accompany && barY0 < window.innerHeight - 1) {
       holdY = Math.max(endY, barY0); // la barra si vede: resta dov'è
       mode = "tenuta";
     } else {
-      why = isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : !quiet ? "pagina mossa da poco" : "";
-      if (why) { logFraming({ ran: false, why: `la barra non si vede (${why}): niente da tenere fermo`, grow: growNote }); return; }
-      // Inquadratura di serie: la barra in fondo alla finestra. Se per questo la cima della foto più alta resterebbe fuori dalla finestra per più
-      // di FRAME_MAX_TOP_CUT px (portatili, foto molto alte) la foto ha la precedenza: la barra sta più in basso, sotto il bordo.
-      holdY = endY;
-      if (FRAME_PHOTO_FIRST) {
-        const photoY = barYForTallestPhoto();
-        if (photoY - FRAME_TOP_MARGIN - endY > FRAME_MAX_TOP_CUT) holdY = photoY;
+      if (!accompany) {
+        why = isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : !quiet ? "pagina mossa da poco" : "";
+        if (why) { logFraming({ ran: false, why: `la barra non si vede (${why}): niente da tenere fermo`, grow: growNote }); return; }
       }
+      holdY = framingHoldY(); // inquadratura di serie
       mode = "discesa";
     }
     const distance = Math.abs(Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - holdY)) - startY);
@@ -5029,11 +5041,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       startedAt: performance.now(),
       approachMs: mode === "tenuta" || distance < 4 ? 0 : Math.min(FRAME_APPROACH_MAX_MS, Math.max(FRAME_APPROACH_MIN_MS, 500 + distance * 0.5)),
       lastY: startY, // dove l'abbiamo messa l'ultima volta (come l'ha accettata il browser)
+      assist: accompany, // vero finché la pagina sta venendo accompagnata verso il fondo (vedi goTo: uno scorrimento che parte intanto non la interrompe)
+      approaching: false,
       raf: 0,
     };
     framing = state;
     setPageAnchoring(false);
-    logFraming({ ran: true, mode, why, holdY: Math.round(holdY), endY: Math.round(endY), grow: growNote });
+    logFraming({ ran: true, mode, why, holdY: Math.round(holdY), endY: Math.round(endY), grow: growNote, assist: accompany, fromY: Math.round(startY) });
     const step = (now) => {
       if (framing !== state) return;
       const max = pageMaxScroll(); // (forza il calcolo della pagina di questo fotogramma, che comunque servirebbe)
@@ -5064,17 +5078,71 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         }
         state.lastY = window.scrollY;
       }
+      state.approaching = approaching;
       if (!approaching && !viewportHeightAnimating()) { framing = null; setPageAnchoring(true); return; } // a posto, e la pagina non cambia più altezza
       state.raf = requestAnimationFrame(step);
     };
     state.raf = requestAnimationFrame(step);
   }
 
+  /* ---- Accompagnamento verso il fondo ----
+     Chi scende per vedere le foto e si ferma a metà (la barra col numero e le frecce ancora fuori dalla finestra, o a mezzo schermo) non resta
+     lì: finito il gesto (rotella, trackpad, tasti, barra di scorrimento se il browser segnala il mouse premuto; ASSIST_SETTLE_MS senza altri movimenti) la pagina viene accompagnata
+     in fondo con lo stesso movimento della discesa dell'inquadratura di serie (da 0,6 a 1,1 s, parte e arriva dolce): barra in fondo alla
+     finestra, o, per le foto molto alte su finestre basse, dove la cima della foto più alta sta a FRAME_TOP_MARGIN dal bordo alto (framingHoldY).
+     Da lì la barra resta ferma mentre la galleria scorre (startBarHold). Regole:
+     - solo se il gesto è andato IN GIÙ (almeno ASSIST_MIN_PX): chi sale, per leggere il testo o vedere la cima della foto, resta dove si ferma;
+     - solo se si è fermato prima dell'inquadratura: chi va più in giù (per vedere la barra sotto il bordo) resta dove arriva;
+     - conta solo ciò che l'utente ha chiesto: rotella, tasti, trackpad, barra di scorrimento. Non gli spostamenti del sito (inquadratura) né quelli
+       che fa da sola la pagina (una finestra ridimensionata, una foto che arriva);
+     - non c'è dove non c'è l'inquadratura di serie (telefono, schermi tattili), con una foto ingrandita, in modifica e con «riduci movimento»;
+     - se l'utente muove di nuovo la pagina mentre viene accompagnata, la pagina si ferma subito dov'è (startBarHold) e, se poi si ferma di nuovo
+       a metà scendendo, riparte. */
+  const ASSIST_SETTLE_MS = 350; // pausa dell'utente (nessun movimento, nessun tasto, mouse non premuto) dopo la quale la pagina viene accompagnata
+  const ASSIST_MIN_PX = 32; // quanto deve essere sceso, nel gesto, perché valga come «sta andando a vedere le foto»
+  const ASSIST_INPUT_MS = 300; // un movimento della pagina viene dall'utente se la rotella o un tasto sono arrivati da meno di così
+  let assistPrevY = window.scrollY;
+  let assistStartY = null; // dov'era la pagina quando è cominciato il gesto
+  let assistDir = 0; // verso dell'ultimo movimento chiesto dall'utente: 1 in giù, -1 in su
+  let assistTimer = null;
+
+  function onAssistScroll() {
+    const y = window.scrollY;
+    const dy = y - assistPrevY;
+    assistPrevY = y;
+    // Il movimento è dell'utente se ha appena usato la rotella o un tasto (lo scorrimento «dolce» del browser dura al massimo 0,3 s dopo l'ultimo
+    // input: più breve della pausa ASSIST_SETTLE_MS, così l'accompagnamento, che parte dopo la pausa, non si scambia mai per l'utente) o ha il
+    // mouse premuto (barra di scorrimento). Se l'utente muove la pagina mentre viene accompagnata, la rotella arriva prima del suo movimento: conta.
+    if (Math.abs(dy) < 0.5 || !(performance.now() - lastUserInputAt < ASSIST_INPUT_MS || isPointerHeld())) return;
+    if (assistStartY === null) assistStartY = y - dy;
+    assistDir = dy > 0 ? 1 : -1;
+    clearTimeout(assistTimer);
+    assistTimer = setTimeout(assistSettled, ASSIST_SETTLE_MS);
+  }
+
+  function assistSettled() {
+    assistTimer = null;
+    // Il gesto non è davvero finito (la rotella continua, il mouse è ancora premuto sulla barra di scorrimento): si riprova più tardi
+    if (isPointerHeld() || performance.now() - lastUserInputAt < ASSIST_SETTLE_MS) { assistTimer = setTimeout(assistSettled, ASSIST_SETTLE_MS); return; }
+    const startY = assistStartY;
+    const dir = assistDir;
+    assistStartY = null;
+    assistDir = 0;
+    if (startY === null || dir <= 0 || window.scrollY - startY < ASSIST_MIN_PX) return; // verso l'alto, o troppo poco: la pagina resta dov'è
+    const blocker = barHoldBlocker({ singlePhoto: true }) || (isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : null);
+    if (blocker) { logFraming({ ran: false, why: blocker, assist: true }); return; }
+    const target = Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - framingHoldY()));
+    if (window.scrollY >= target - 4) return; // già all'inquadratura, o più in giù
+    startBarHold(snapshotBar(), { accompany: true });
+  }
+  window.addEventListener("scroll", onAssistScroll, { passive: true });
+
   function goTo(i, { user = false } = {}) {
     if (isAnimating) return;
     if (!figures.length) return;
     if (lightboxHold) return; // una foto è ingrandita: la galleria dietro sta ferma (vedi holdGallery)
     const barBefore = snapshotBar(); // dov'è la barra sullo schermo prima che cambi l'altezza (vedi sopra)
+    const carrying = Boolean(framing && framing.assist && framing.approaching); // la pagina sta venendo accompagnata in fondo: continua da sola
 
     lastTransitionStart = performance.now();
     isAnimating = true;
@@ -5135,7 +5203,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     }
 
     if (user) restartAutoplay();
-    startBarHold(barBefore); // la barra col numero e le frecce resta ferma sullo schermo mentre cambia l'altezza (e, a pagina ferma, la pagina scende in fondo): vedi sopra
+    // La barra col numero e le frecce resta ferma sullo schermo mentre cambia l'altezza (e, a pagina ferma, la pagina scende in fondo): vedi sopra.
+    // Se la pagina sta già scendendo in fondo accompagnata, il suo movimento segue la barra anche mentre l'altezza cambia: ripartire la farebbe fermare un attimo.
+    if (!carrying) startBarHold(barBefore);
   }
 
   function scheduleNext() {
@@ -5453,6 +5523,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     document.removeEventListener("keydown", onKeyDown);
     clearTimeout(autoplayTimer);
     stopBarHold();
+    window.removeEventListener("scroll", onAssistScroll);
+    clearTimeout(assistTimer);
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
     cancelAnimationFrame(marqueeRafId);
     document.removeEventListener("pointermove", onMarqueeDragMove);
