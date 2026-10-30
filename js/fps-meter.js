@@ -165,10 +165,11 @@
   const media = (query) => { try { return window.matchMedia(query).matches; } catch (e) { return false; } };
   const describeHold = (e) => {
     const ago = `${Math.max(0, Math.round((Date.now() - e.at) / 1000))} s fa`;
-    if (!e.ran) return `${ago} · NON partito: ${e.why}`;
-    if (e.mode === "tenuta") return `${ago} · barra tenuta ferma dov'era, a ${e.holdY} px dal bordo alto${e.why ? ` (${e.why})` : ""}`;
-    if (e.holdY > e.endY + 2) return `${ago} · barra ferma a ${e.holdY} px, sotto il bordo della finestra (${innerHeight} px): con la barra in fondo la cima della foto più alta sarebbe tagliata di troppo`;
-    return `${ago} · pagina portata in fondo, barra ferma a ${e.holdY} px dal bordo alto`;
+    const grow = e.grow ? ` · ${e.grow}` : ""; // com'è cambiata l'altezza del riquadro in quello scorrimento (growTransitionFor)
+    if (!e.ran) return `${ago} · NON partito: ${e.why}${grow}`;
+    if (e.mode === "tenuta") return `${ago} · barra tenuta ferma dov'era, a ${e.holdY} px dal bordo alto${e.why ? ` (${e.why})` : ""}${grow}`;
+    if (e.holdY > e.endY + 2) return `${ago} · barra ferma a ${e.holdY} px, sotto il bordo della finestra (${innerHeight} px): con la barra in fondo la cima della foto più alta sarebbe tagliata di troppo${grow}`;
+    return `${ago} · pagina portata in fondo, barra ferma a ${e.holdY} px dal bordo alto${grow}`;
   };
   const holdLines = (limit) => {
     const log = window.__framingLog;

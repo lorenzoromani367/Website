@@ -4067,6 +4067,27 @@ function measureMarqueeLoop(box, track, content, clone) {
   return { distance, startPos: (((distance - textOffset) % distance) + distance) % distance };
 }
 
+// Una curva "cubic-bezier(x1, y1, x2, y2)" di CSS (letta da una variabile del foglio di stile, o quella di riserva) come
+// quattro numeri.
+function cssCubicBezier(variableName, fallback) {
+  const text = getComputedStyle(document.documentElement).getPropertyValue(variableName);
+  const m = /cubic-bezier\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/.exec(text || "");
+  return m ? [+m[1], +m[2], +m[3], +m[4]] : fallback;
+}
+
+// Quanta strada (da 0 a 1) ha fatto una transizione con questa curva quando è passata la frazione di tempo "x" (da 0 a 1).
+function bezierProgressAt(curve, x) {
+  const [x1, y1, x2, y2] = curve;
+  const at = (a, b, s) => 3 * (1 - s) * (1 - s) * s * a + 3 * (1 - s) * s * s * b + s * s * s;
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(x1, x2, mid) < x) lo = mid; else hi = mid;
+  }
+  return at(y1, y2, (lo + hi) / 2);
+}
+
 function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav, galleryKey }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
@@ -4693,31 +4714,97 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   let heldAnimations = [];
   let heldAt = 0;
 
-  // Allungamento del riquadro quando la foto in arrivo è più alta (vedi updateViewportHeight): continuo e lento, non di colpo.
-  // Con la barra tenuta ferma (startBarHold) questo è il movimento della FOTO sullo schermo: sale di quanto il riquadro si allunga.
-  // Parte da fermo, accelera piano e frena piano (curva a «S» simmetrica, quella col picco di velocità più basso) e dura in
-  // proporzione a quanto deve crescere, così la velocità massima resta più o meno la stessa (da circa 120 a 290 px al secondo)
-  // per 20 px come per 360: DURATA = BASE + PER_PX × crescita, tra MIN e MAX. (Prima durava da 0,3 a 1,4 s e finiva appena prima
-  // che la foto in arrivo cominciasse a vedersi: per i 360 px di Suspension e Mediality 0,5-0,8 s, fino a 1950 px/s di picco: troppo
-  // brusco.) Il prezzo: finché il riquadro non ha finito di allungarsi il fondo della foto che entra resta sotto il suo bordo,
-  // e sale da lì insieme alla pagina; essendo lo scorrimento orizzontale ancora ai primi passi se ne vede solo una striscia.
-  const VIEWPORT_GROW_BASE_MS = 600;
-  const VIEWPORT_GROW_MS_PER_PX = 4.5;
-  const VIEWPORT_GROW_MIN_MS = 700;
-  const VIEWPORT_GROW_MAX_MS = 2300;
-  const VIEWPORT_GROW_CURVE = "cubic-bezier(0.37, 0, 0.63, 1)";
+  // Allungamento del riquadro quando la foto in arrivo è più alta (vedi updateViewportHeight). Con la barra tenuta ferma
+  // (startBarHold) è il movimento della FOTO sullo schermo: sale di quanto il riquadro si allunga. Deve essere dolce come
+  // nell'altro verso, l'accorciamento (foglio di stile: 6 s, curva dello scorrimento: la «marea»). Il limite è che "overflow:
+  // hidden" taglia il fondo della foto che entra finché il riquadro non ha finito di allungarsi. Perciò:
+  //  - mentre si allunga, il bordo di taglio del riquadro è spostato più in basso di GROW_EXTENSION_MAX px (padding con margine
+  //    negativo: il layout non cambia) sopra lo spazio vuoto prima delle frecce, dove la foto in arrivo può già appoggiarsi;
+  //  - la durata è la più lunga che lasci il taglio sotto un limite (growTransitionFor): la transizione del foglio di stile,
+  //    uguale a quella dell'accorciamento, per quasi tutti i passi (35 su 36, fino a +190 px); una curva a «S» più corta per i
+  //    salti più grandi (oggi uno solo: Suspension, foto 7 → 8, +201 px, 2,9 s), mai sotto GROW_CALM_FLOOR_MS.
+  // (Storia: di colpo; poi 0,8 s; poi 0,3-1,4 s calcolati perché finisse prima che la foto si vedesse; poi, il 30 ottobre,
+  // 0,7-2,3 s in proporzione alla crescita. Il proprietario trovava ancora quel tratto uno «scatto» rispetto all'accorciamento,
+  // la «marea» lenta di 6 s.)
+  const GROW_EXTENSION_MAX = 100;
+  const GROW_CUT_MAX_PX = 60;       // altezza massima del fondo della foto in arrivo che può restare nascosta...
+  const GROW_CUT_AREA_MAX = 0.02;   // ...e area nascosta al massimo il 2 % della foto, finché se ne vede una striscia di almeno
+  const GROW_VISIBLE_MIN_PX = 24;   // questa larghezza
+  const GROW_CALM_FLOOR_MS = 2200;  // più veloce di così non si va, nemmeno per i salti più grandi (lì si accetta qualche taglio in più)
+  const GROW_CANDIDATES_MS = [4600, 3600, 2900, 2300];
+  const GROW_CURVE = [0.37, 0, 0.63, 1]; // «S» simmetrica: parte da fermo e ha il picco di velocità più basso (1,6 volte la media)
+  const VIEWPORT_GROW_CURVE = `cubic-bezier(${GROW_CURVE.join(", ")})`;
   let viewportGrowTimer = null;
+  let viewportExt = 0; // px di estensione applicati adesso al riquadro (0 = nessuna)
+  let viewportTarget = null; // l'altezza (senza estensione) verso cui il riquadro sta andando, o è arrivato, l'ultima volta che l'abbiamo impostata
+  let growNote = ""; // com'è cambiata l'altezza all'ultimo scorrimento (per il registro letto dal contatore di fluidità: vedi logFraming)
 
-  // Durata e curva dell'allungamento di "growPx" pixel
-  function growTransitionFor(growPx) {
-    const ms = Math.round(Math.min(VIEWPORT_GROW_MAX_MS, Math.max(VIEWPORT_GROW_MIN_MS, VIEWPORT_GROW_BASE_MS + VIEWPORT_GROW_MS_PER_PX * growPx)));
+  // Quale allungamento per una foto in arrivo ("destination": la figura, o il suo clone, verso cui sta partendo lo scorrimento): il
+  // più lento che non tagli troppo il suo fondo. Si simula la salita contro lo scorrimento orizzontale (stessa curva e stessa durata del
+  // foglio di stile) e si guarda, finché della foto se ne vede una striscia, quanto del suo fondo resta oltre il bordo di taglio.
+  // "css" vuoto = la transizione del foglio di stile, la stessa dell'accorciamento.
+  function growTransitionFor(destination, growPx, boxBottom, extension) {
+    const fallback = { css: `height ${GROW_CALM_FLOOR_MS}ms ${VIEWPORT_GROW_CURVE}`, ms: GROW_CALM_FLOOR_MS };
+    if (!(growPx > 0) || !destination || typeof destination.querySelector !== "function") return fallback;
+    const frame = destination.querySelector(".photo-frame");
+    if (!frame) return fallback;
+    const vp = viewport.getBoundingClientRect();
+    const dest = destination.getBoundingClientRect();
+    const dx = dest.left - vp.left; // > 0: la foto arriva da destra; < 0: da sinistra
+    const travel = Math.abs(dx);
+    const fr = frame.getBoundingClientRect();
+    if (!(travel > 1) || !(vp.width > 0) || !(fr.width > 0) || !(fr.height > 0)) return fallback;
+    const gap = Math.max(0, dx > 0 ? fr.left - vp.right : vp.left - fr.right); // strada da fare prima che la foto si veda
+    const free = Math.max(0, boxBottom - fr.bottom) + extension; // quanto può stare oltre il bordo di taglio senza tagliare la foto
+    const slideMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--transition-ms")) || TRANSITION_MS;
+    const slideCurve = cssCubicBezier("--transition-ease", [0.25, 0.1, 0.25, 1]);
+    const fits = (ms, curve) => {
+      let maxCut = 0;
+      let maxArea = 0;
+      for (let t = 0; t <= slideMs * 0.7; t += 40) {
+        const cut = Math.max(0, growPx * (1 - (t >= ms ? 1 : bezierProgressAt(curve, t / ms))) - free);
+        if (!cut) continue;
+        const seen = Math.min(fr.width, Math.max(0, travel * bezierProgressAt(slideCurve, t / slideMs) - gap));
+        if (seen >= GROW_VISIBLE_MIN_PX) maxCut = Math.max(maxCut, cut);
+        maxArea = Math.max(maxArea, Math.min(cut, fr.height) * seen);
+        if (maxCut > GROW_CUT_MAX_PX || maxArea > GROW_CUT_AREA_MAX * fr.width * fr.height) return false;
+      }
+      return true;
+    };
+    if (fits(slideMs, slideCurve)) return { css: "", ms: slideMs };
+    const ms = GROW_CANDIDATES_MS.find((candidate) => fits(candidate, GROW_CURVE)) || GROW_CALM_FLOOR_MS;
     return { css: `height ${ms}ms ${VIEWPORT_GROW_CURVE}`, ms };
   }
 
-  // "glide": vero SOLO quando l'altezza cambia perché sta partendo uno scorrimento tra le foto (vedi applyPosition): lì,
-  // se la foto in arrivo è più alta, il riquadro si allunga in modo continuo e lento (growTransitionFor). Per tutto il resto
-  // (trascinare una didascalia, ridimensionare una foto, ridimensionare la finestra, una foto che arriva) si allunga
-  // subito, come prima: sono azioni in corso, il riquadro non può restare indietro.
+  // Estensione del riquadro verso il basso (vedi sopra): il bordo di taglio scende di "px" senza che cambi il layout. Con "box-sizing:
+  // border-box" il padding sta dentro l'altezza, quindi anche l'altezza sale della stessa quantità; il margine negativo restituisce lo spazio.
+  const viewportBoxHeight = () => viewport.getBoundingClientRect().height - viewportExt; // l'altezza «vera», anche a transizione in corso
+  function setViewportExtension(px) {
+    px = Math.max(0, Math.round(px));
+    if (px === viewportExt) return;
+    const boxHeight = viewportBoxHeight();
+    const prevTransition = viewport.style.transition;
+    viewport.style.transition = "none";
+    viewportExt = px;
+    viewport.style.paddingBottom = px ? `${px}px` : "";
+    viewport.style.marginBottom = px ? `${-px}px` : "";
+    viewport.style.height = `${boxHeight + px}px`;
+    viewport.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
+    viewport.style.transition = prevTransition;
+  }
+  // A riposo (nessuna transizione di altezza in corso, e la galleria non è ferma dietro una foto ingrandita) niente può restare
+  // oltre il bordo di taglio: l'estensione si toglie. Se ne accorgono la fine della transizione e un timer di sicurezza.
+  function settleViewportExtension() {
+    if (!viewportExt || lightboxHold || viewportHeightAnimating()) return;
+    setViewportExtension(0);
+  }
+  viewport.addEventListener("transitionend", (e) => { if (e.target === viewport && e.propertyName === "height") settleViewportExtension(); });
+  viewport.addEventListener("transitioncancel", (e) => { if (e.target === viewport && e.propertyName === "height") settleViewportExtension(); });
+
+  // "glide": vero SOLO quando l'altezza cambia perché sta partendo uno scorrimento tra le foto (vedi applyPosition), con
+  // "destination" la foto verso cui parte: lì, se è più alta, il riquadro si allunga piano come quando si accorcia
+  // (growTransitionFor). Per tutto il resto (trascinare una didascalia, ridimensionare una foto o la finestra, una foto che
+  // arriva) si allunga subito, come prima: sono azioni in corso, il riquadro non può restare indietro.
   function updateViewportHeight(options) {
     const glide = Boolean(options && options.glide === true);
     const activeFigure = figures[current];
@@ -4738,40 +4825,52 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       bottom = Math.max(bottom, node.getBoundingClientRect().bottom);
     });
     const newHeightPx = bottom - viewportTop;
-    const currentHeightPx = viewport.getBoundingClientRect().height;
+    // Il riquadro sta già andando proprio a quest'altezza (è il caso del giro interrotto da un altro scorrimento, vedi goTo): non lo si tocca.
+    // Imporla di colpo, come fanno gli aggiornamenti senza "glide", farebbe saltare la foto di tutta la strada che le resta da fare.
+    if (viewportTarget !== null && Math.abs(newHeightPx - viewportTarget) < 0.5 && viewportHeightAnimating()) return;
+    const currentHeightPx = viewportBoxHeight();
+    const setHeight = (px, transition) => {
+      viewportTarget = px;
+      if (transition !== undefined) viewport.style.transition = transition;
+      viewport.style.height = `${px + viewportExt}px`; // l'estensione (se c'è) è sempre dentro l'altezza: vedi setViewportExtension
+    };
+    clearTimeout(viewportGrowTimer);
     if (newHeightPx > currentHeightPx) {
-      // Se la foto in arrivo è più alta di quella attuale, il riquadro NON può allungarsi lentamente (6 secondi) come
-      // quando si accorcia: "overflow: hidden" (necessario per lo slide orizzontale) taglierebbe il fondo della foto che
-      // entra finché l'altezza non recupera (confermato: subito dopo l'inizio di una transizione verso una foto molto più
-      // alta, il riquadro può restare centinaia di px più basso del necessario). Prima si allungava di colpo: la barra con
-      // le frecce e il numero, e il fondo della pagina, SALTAVANO di colpo di qualche decina di px (fino a 100) nello
-      // stesso istante in cui parte lo scorrimento. Adesso si allunga in modo continuo, partendo piano e frenando alla fine,
-      // in un tempo proporzionale alla crescita (growTransitionFor: da 0,7 a 2,3 s): con la barra tenuta ferma la foto sale
-      // di quel tanto, piano. Se la foto in arrivo si vede prima che il riquadro abbia finito, per un po' ne resta fuori
-      // (sotto il bordo del riquadro) una striscia in basso, che si scopre salendo.
+      // Se la foto in arrivo è più alta di quella attuale, "overflow: hidden" (necessario per lo slide orizzontale) taglia il
+      // fondo della foto che entra finché il riquadro non ha finito di allungarsi (confermato: subito dopo l'inizio di una
+      // transizione verso una foto molto più alta, il riquadro può restare centinaia di px più basso del necessario). Prima si
+      // allungava di colpo: la barra con le frecce e il numero, e il fondo della pagina, SALTAVANO di colpo di qualche decina di
+      // px (fino a 100) nello stesso istante in cui parte lo scorrimento. Poi si allungava in fretta (0,7-2,3 s), ma con la
+      // barra tenuta ferma (startBarHold) quello è il movimento della foto sullo schermo, e a confronto con la «marea» lenta
+      // dell'accorciamento (6 s) sembrava uno scatto a ogni foto più alta. Adesso è la stessa marea: growTransitionFor sceglie
+      // il tempo più lungo che non tagli troppo la foto in arrivo, aiutato dall'estensione del bordo di taglio.
       // Il primo disegno della pagina (prima che le foto siano arrivate) resta istantaneo: lì non c'è nulla da animare.
       if (!glide || !firstLayoutSettled) {
         const prevTransition = viewport.style.transition;
-        viewport.style.transition = "none";
-        viewport.style.height = `${newHeightPx}px`;
+        setHeight(newHeightPx, "none");
         viewport.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
         viewport.style.transition = prevTransition;
       } else {
-        const grow = growTransitionFor(newHeightPx - currentHeightPx);
-        viewport.style.transition = grow.css;
-        viewport.style.height = `${newHeightPx}px`;
-        clearTimeout(viewportGrowTimer);
-        viewportGrowTimer = setTimeout(() => { viewport.style.transition = ""; }, grow.ms + 50);
+        const room = Math.min(GROW_EXTENSION_MAX, Math.max(0, Math.floor(spacerBeforeBar.getBoundingClientRect().height)));
+        const grow = growTransitionFor(options.destination, newHeightPx - currentHeightPx, bottom, room);
+        growNote = `foto più alta di ${Math.round(newHeightPx - currentHeightPx)} px: ${grow.css ? `curva a S di ${grow.ms} ms` : `onda del foglio di stile (${Math.round(grow.ms)} ms)`}, bordo di taglio +${room} px`;
+        setViewportExtension(room);
+        setHeight(newHeightPx, grow.css);
+        viewportGrowTimer = setTimeout(() => {
+          if (grow.css) viewport.style.transition = ""; // torna la transizione del foglio di stile
+          settleViewportExtension();
+        }, grow.ms + 100);
       }
     } else {
       // Accorciarsi non taglia mai nulla: qui resta la transizione lenta del foglio di stile (la stessa dello scorrimento).
-      clearTimeout(viewportGrowTimer);
-      if (firstLayoutSettled) viewport.style.transition = ""; // toglie l'eventuale allungamento rapido ancora in corso
-      viewport.style.height = `${newHeightPx}px`;
+      if (glide) growNote = Math.abs(newHeightPx - currentHeightPx) < 0.5 ? "foto della stessa altezza" : `foto più bassa di ${Math.round(currentHeightPx - newHeightPx)} px: onda del foglio di stile (${TRANSITION_MS} ms)`;
+      setHeight(newHeightPx, firstLayoutSettled ? "" : undefined); // "" toglie l'eventuale allungamento rapido ancora in corso
+      if (viewportExt) viewportGrowTimer = setTimeout(settleViewportExtension, TRANSITION_MS + 150);
     }
   }
 
-  function applyPosition({ instant = false, position = current } = {}) {
+  // "height: false": solo il binario, senza toccare l'altezza del riquadro (la cambia la chiamata successiva, quella che anima davvero).
+  function applyPosition({ instant = false, position = current, height = true } = {}) {
     if (instant) {
       // Scatto senza transizione: usato solo per i riancoraggi invisibili
       // del trucco del "loop infinito" — vedi goTo(). Non è mai quello che
@@ -4785,7 +4884,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     } else {
       track.style.transform = `translateX(-${position * 100}%)`;
     }
-    updateViewportHeight({ glide: !instant });
+    if (height) updateViewportHeight({ glide: !instant, destination: track.children[position] });
   }
 
   // Chiudere il giro (dall'ultima foto alla prima, o viceversa) deve
@@ -4848,7 +4947,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // prima delle frecce) e cambia da foto a foto.
   const barYForTallestPhoto = () => {
     const viewportRect = viewport.getBoundingClientRect();
-    const gapToBar = footerBar.getBoundingClientRect().top - viewportRect.bottom;
+    const gapToBar = footerBar.getBoundingClientRect().top - viewportRect.bottom + viewportExt; // senza l'estensione temporanea del riquadro
     let need = 0;
     figures.forEach((figure) => {
       const frame = figure.querySelector(".photo-frame");
@@ -4900,7 +4999,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   function startBarHold(before) {
     const blocker = barHoldBlocker();
-    if (blocker) { logFraming({ ran: false, why: blocker }); return; }
+    if (blocker) { logFraming({ ran: false, why: blocker, grow: growNote }); return; }
     stopBarHold(); // un nuovo scorrimento riparte da dove si trova la vista adesso
     const { startY, barY0, quiet } = before;
     const endY = barYAtPageEnd();
@@ -4912,7 +5011,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       mode = "tenuta";
     } else {
       why = isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : !quiet ? "pagina mossa da poco" : "";
-      if (why) { logFraming({ ran: false, why: `la barra non si vede (${why}): niente da tenere fermo` }); return; }
+      if (why) { logFraming({ ran: false, why: `la barra non si vede (${why}): niente da tenere fermo`, grow: growNote }); return; }
       // Inquadratura di serie: la barra in fondo alla finestra. Se per questo la cima della foto più alta resterebbe fuori dalla finestra per più
       // di FRAME_MAX_TOP_CUT px (portatili, foto molto alte) la foto ha la precedenza: la barra sta più in basso, sotto il bordo.
       holdY = endY;
@@ -4934,7 +5033,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     };
     framing = state;
     setPageAnchoring(false);
-    logFraming({ ran: true, mode, why, holdY: Math.round(holdY), endY: Math.round(endY) });
+    logFraming({ ran: true, mode, why, holdY: Math.round(holdY), endY: Math.round(endY), grow: growNote });
     const step = (now) => {
       if (framing !== state) return;
       const max = pageMaxScroll(); // (forza il calcolo della pagina di questo fotogramma, che comunque servirebbe)
@@ -5019,7 +5118,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       // Inserire il clone in testa sposta la foto reale attuale (era in
       // posizione 0) alla posizione 1: la riancoriamo lì all'istante,
       // senza transizione, così finora non è cambiato nulla di visibile.
-      applyPosition({ instant: true, position: 1 });
+      applyPosition({ instant: true, position: 1, height: false }); // l'altezza la cambia la riga sotto, dolcemente: prima, se l'ultima foto è più alta, il riquadro si allungava di colpo
       applyPosition({ position: 0 }); // un passo indietro normale, verso il clone appena aggiunto in testa
       const finish = () => {
         clone.remove();
@@ -5132,6 +5231,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     heldAnimations.forEach((animation) => { try { animation.play(); } catch (e) { /* già finita o annullata */ } });
     heldAnimations = [];
     if (heightWasChanging) startBarHold(snapshotBar());
+    settleViewportExtension(); // se nessun allungamento è ancora in corso, il bordo di taglio torna al suo posto
     lastTransitionStart += heldFor; // le transizioni fermate riprendono con il tempo che restava
     if (pendingWrapCleanup) {
       const remaining = Math.max(0, TRANSITION_MS - (performance.now() - lastTransitionStart));

@@ -12,7 +12,7 @@
          che in alto c'è tra il "0" e il titolo;
        - galleria di un progetto, su computer: mentre la galleria scorre e la foto cambia altezza (foto più alta e più bassa) il numero con
          le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
-         non si muove; in Mediality la foto non sale di scatto quando la successiva è molto più alta (al massimo 500 px al secondo).
+         non si muove; in Mediality la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa).
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -277,11 +277,15 @@ async function checkFraming(context, base) {
   return problems;
 }
 
-// La foto non deve salire di scatto quando la successiva è molto più alta. Con la barra ferma, la pagina si sposta di quanto il riquadro si allunga:
-// in Mediality, a 1440 × 900, dalla foto 3 alla 4 sono +280 px. Dal 30 ottobre (growTransitionFor in js/app_v58.js) ci mette circa 1,1 s e la velocità
-// massima è circa 245 px al secondo; prima ci metteva 0,4 s, 700-860 px al secondo (misurato sui fotogrammi). Il limite sta in mezzo.
+// La foto non deve salire di scatto quando la successiva è più alta. Con la barra ferma, la pagina si sposta di quanto il riquadro si allunga e quel
+// movimento è la salita della foto sullo schermo. Dal 30 ottobre (growTransitionFor in js/app_v58.js) si allunga con la stessa onda lenta di 6 secondi
+// dell'accorciamento (velocità massima 2,3 volte la media: per 190 px circa 75 px al secondo); prima ci metteva da 0,2 a 2,3 s (da 200 a 2000 px al
+// secondo): la salita era uno «scatto» in confronto alla discesa. Si guarda il primo passo, tra il secondo e il quinto, in cui la foto in arrivo è più alta di
+// almeno RISE_MIN_PX (in Mediality, a 1440 × 900, dalla foto 3 alla 4: +190 px), così la prova non dipende da una misura precisa di una foto: chi
+// ridimensiona le foto con l'editor ne cambia l'altezza.
 const RISE_ROUTE = '#/project/mediality';
-const PHOTO_PEAK_PX_S = 500;
+const RISE_MIN_PX = 60;
+const PHOTO_PEAK_PX_S = 150;
 async function checkPhotoRise(context, base) {
   const problems = [];
   if (context.__profile !== 'computer') return problems; // una volta sola per motore: né il retina (stesso risultato) né il telefono (la pagina non si muove)
@@ -291,16 +295,29 @@ async function checkPhotoRise(context, base) {
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
-    const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
-    if (geo.photos < 4 || geo.max <= 8) return problems;
-    await page.keyboard.press('ArrowRight'); // 1 → 2: stessa altezza; la pagina scende alla posizione di serie
-    await page.waitForTimeout(2600);
-    await page.keyboard.press('ArrowRight'); // 2 → 3: più bassa (6 s)
-    await page.waitForTimeout(6700);
-    await page.keyboard.press('ArrowRight'); // 3 → 4: più alta di 280 px
+    const geo = await page.evaluate(() => {
+      // altezza del riquadro con ciascuna foto in vista: fino al punto più basso tra foto, didascalia e figura (come updateViewportHeight)
+      const top = document.querySelector('.photo-viewport').getBoundingClientRect().top;
+      const heights = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')].map((figure) => {
+        let bottom = figure.getBoundingClientRect().bottom;
+        figure.querySelectorAll('.photo-frame, .caption-box').forEach((node) => { bottom = Math.max(bottom, node.getBoundingClientRect().bottom); });
+        return bottom - top;
+      });
+      return { max: document.documentElement.scrollHeight - window.innerHeight, heights };
+    });
+    if (geo.heights.length < 2 || geo.max <= 8) return problems;
+    let from = -1; // (il primo passo non si misura: lì la pagina scende all'inquadratura di serie e quello sarebbe il movimento misurato)
+    for (let i = 1; i < Math.min(5, geo.heights.length - 1); i++) { if (geo.heights[i + 1] - geo.heights[i] >= RISE_MIN_PX) { from = i; break; } }
+    if (from < 0) return problems; // nessun passo con una foto molto più alta: niente da misurare
+    const rise = geo.heights[from + 1] - geo.heights[from];
+    for (let i = 0; i < from; i++) { // si arriva alla foto prima del passo, aspettando che ogni scorrimento sia finito (6 s)
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(6700);
+    }
+    await page.keyboard.press('ArrowRight'); // il passo con la foto più alta
     const w = await watchPage(page, 3000);
-    if (Math.abs(w.y1 - w.y0) < 100) problems.push(`in Mediality, con la foto molto più alta in arrivo, la pagina non si è spostata abbastanza (${Math.round(Math.abs(w.y1 - w.y0))} px): la prova non ha misurato la salita`);
-    else if (w.peak > PHOTO_PEAK_PX_S) problems.push(`in Mediality, con la foto molto più alta in arrivo, la foto sale troppo di scatto: ${Math.round(w.peak)} px al secondo al massimo (deve restare sotto i ${PHOTO_PEAK_PX_S}: la salita dev'essere lenta e dolce, vedi growTransitionFor in js/app_v58.js)`);
+    if (Math.abs(w.y1 - w.y0) < 40) problems.push(`in Mediality, con la foto più alta di ${Math.round(rise)} px in arrivo, la pagina non si è spostata abbastanza (${Math.round(Math.abs(w.y1 - w.y0))} px nei primi 3 s): la prova non ha misurato la salita`);
+    else if (w.peak > PHOTO_PEAK_PX_S) problems.push(`in Mediality, con la foto più alta di ${Math.round(rise)} px in arrivo, la foto sale troppo di scatto: ${Math.round(w.peak)} px al secondo al massimo (deve restare sotto i ${PHOTO_PEAK_PX_S}: la salita dev'essere lenta e dolce come la discesa, vedi growTransitionFor in js/app_v58.js)`);
   } catch (e) {
     problems.push(`prova della salita della foto non riuscita: ${String(e.message).split('\n')[0]}`);
   }
