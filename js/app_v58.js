@@ -5013,7 +5013,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // "accompany": non è uno scorrimento della galleria ma l'accompagnamento verso il fondo dopo che l'utente è sceso a metà pagina (vedi più sotto):
   // porta la pagina all'inquadratura di serie qualunque sia l'ora e anche se la barra si vede già, senza le condizioni dello scorrimento
   // (pagina ferma da 15 s...), che le ha già controllate chi lo chiama.
-  function startBarHold(before, { accompany = false } = {}) {
+  function startBarHold(before, { accompany = false, takeover = false } = {}) {
     const blocker = barHoldBlocker({ singlePhoto: accompany });
     if (blocker) { logFraming({ ran: false, why: blocker, grow: growNote, assist: accompany }); return; }
     stopBarHold(); // un nuovo scorrimento riparte da dove si trova la vista adesso
@@ -5039,12 +5039,16 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       holdY,
       mode,
       startedAt: performance.now(),
-      approachMs: mode === "tenuta" || distance < 4 ? 0 : Math.min(FRAME_APPROACH_MAX_MS, Math.max(FRAME_APPROACH_MIN_MS, 500 + distance * 0.5)),
+      approachMs: mode === "tenuta" || distance < 4 ? 0
+        : takeover ? Math.min(ASSIST_GLIDE_MAX_MS, Math.max(ASSIST_GLIDE_MIN_MS, 520 + distance * 0.6))
+        : Math.min(FRAME_APPROACH_MAX_MS, Math.max(FRAME_APPROACH_MIN_MS, 500 + distance * 0.5)),
       lastY: startY, // dove l'abbiamo messa l'ultima volta (come l'ha accettata il browser)
       assist: accompany, // vero finché la pagina sta venendo accompagnata verso il fondo (vedi goTo: uno scorrimento che parte intanto non la interrompe)
+      takeover, // l'accompagnamento è partito subito, dal primo scatto di rotella o dal primo tasto (curva che parte svelta: ASSIST_GLIDE_CURVE)
       approaching: false,
       raf: 0,
     };
+    state.approaching = state.approachMs > 0; // (dal primo fotogramma: chi guarda subito dopo, goTo e l'accompagnamento, deve già saperlo)
     framing = state;
     setPageAnchoring(false);
     logFraming({ ran: true, mode, why, holdY: Math.round(holdY), endY: Math.round(endY), grow: growNote, assist: accompany, fromY: Math.round(startY) });
@@ -5053,11 +5057,13 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       const max = pageMaxScroll(); // (forza il calcolo della pagina di questo fotogramma, che comunque servirebbe)
       // Qualcuno ha mosso la pagina senza che l'abbiamo fatto noi (la coda di una rotella, la barra di scorrimento)? Dove dovrebbe
       // essere: dov'era, o più su se la pagina si è accorciata (il browser la ferma da solo al nuovo fondo).
-      const moved = Math.abs(window.scrollY - Math.min(state.lastY, max)) > 2.5;
+      // (Durante un accompagnamento gli scatti di rotella e i tasti che il sito ha assorbito, assistConsumedAt, non sono l'utente che muove la pagina.)
+      const absorbed = state.assist && performance.now() - assistConsumedAt < 250;
+      const moved = !absorbed && Math.abs(window.scrollY - Math.min(state.lastY, max)) > 2.5;
       if (moved) noteUserScroll();
       const barY = barTopInPage() - window.scrollY; // dov'è adesso la cima della barra sullo schermo
       let approaching = false;
-      if (moved || isPointerHeld() || performance.now() - lastUserInputAt < USER_INPUT_SETTLE_MS) {
+      if (moved || isPointerHeld() || (performance.now() - lastUserInputAt < USER_INPUT_SETTLE_MS && !(state.assist && lastUserInputAt <= assistConsumedAt))) {
         // L'utente sta muovendo la pagina: non la si tocca. Quando smette, la barra si tiene dove l'ha lasciata (e la discesa è finita).
         state.mode = "tenuta";
         state.approachMs = 0;
@@ -5067,10 +5073,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         state.lastY = window.scrollY; // il punto in cui tenerla non si vede (l'utente guarda altro): niente da tenere fermo, la pagina non si sposta
       } else {
         const target = Math.max(0, Math.min(max, barTopInPage() - state.holdY)); // dove deve stare la pagina in questo fotogramma
-        const p = state.approachMs ? Math.min(1, (now - state.startedAt) / state.approachMs) : 1;
+        const p = state.approachMs ? Math.min(1, Math.max(0, (now - state.startedAt) / state.approachMs)) : 1;
         approaching = p < 1;
         if (approaching) {
-          const eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // partenza e arrivo dolci
+          const eased = state.takeover ? bezierProgressAt(ASSIST_GLIDE_CURVE, p) // risponde subito e frena piano, come dopo una spinta
+            : p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // partenza e arrivo dolci
           setPageScroll(state.startY + (target - state.startY) * eased);
         } else {
           // In fondo: oltre il fondo, il browser la porta all'ultimo punto possibile (anche mezzo pixel su retina). Fermata prima: proprio lì.
@@ -5087,24 +5094,110 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   /* ---- Accompagnamento verso il fondo ----
      Chi scende per vedere le foto e si ferma a metà (la barra col numero e le frecce ancora fuori dalla finestra, o a mezzo schermo) non resta
-     lì: finito il gesto (rotella, trackpad, tasti, barra di scorrimento se il browser segnala il mouse premuto; ASSIST_SETTLE_MS senza altri movimenti) la pagina viene accompagnata
-     in fondo con lo stesso movimento della discesa dell'inquadratura di serie (da 0,6 a 1,1 s, parte e arriva dolce): barra in fondo alla
-     finestra, o, per le foto molto alte su finestre basse, dove la cima della foto più alta sta a FRAME_TOP_MARGIN dal bordo alto (framingHoldY).
-     Da lì la barra resta ferma mentre la galleria scorre (startBarHold). Regole:
-     - solo se il gesto è andato IN GIÙ (almeno ASSIST_MIN_PX): chi sale, per leggere il testo o vedere la cima della foto, resta dove si ferma;
-     - solo se si è fermato prima dell'inquadratura: chi va più in giù (per vedere la barra sotto il bordo) resta dove arriva;
-     - conta solo ciò che l'utente ha chiesto: rotella, tasti, trackpad, barra di scorrimento. Non gli spostamenti del sito (inquadratura) né quelli
-       che fa da sola la pagina (una finestra ridimensionata, una foto che arriva);
-     - non c'è dove non c'è l'inquadratura di serie (telefono, schermi tattili), con una foto ingrandita, in modifica e con «riduci movimento»;
-     - se l'utente muove di nuovo la pagina mentre viene accompagnata, la pagina si ferma subito dov'è (startBarHold) e, se poi si ferma di nuovo
-       a metà scendendo, riparte. */
-  const ASSIST_SETTLE_MS = 350; // pausa dell'utente (nessun movimento, nessun tasto, mouse non premuto) dopo la quale la pagina viene accompagnata
-  const ASSIST_MIN_PX = 32; // quanto deve essere sceso, nel gesto, perché valga come «sta andando a vedere le foto»
-  const ASSIST_INPUT_MS = 300; // un movimento della pagina viene dall'utente se la rotella o un tasto sono arrivati da meno di così
+     lì: la pagina viene portata in fondo, all'inquadratura di serie (barra in fondo alla finestra; per le foto molto alte su finestre basse dove
+     la cima della foto più alta sta a FRAME_TOP_MARGIN dal bordo alto: framingHoldY). Da lì la barra resta ferma mentre la galleria scorre
+     (startBarHold). Due strade, la prima senza nessuna pausa:
+     1. SUBITO (onAssistWheel, onAssistKey): al primo scatto di rotella, o primo movimento di trackpad, o tasto ↓ Pag↓ Spazio, verso il basso, il
+        sito si prende il gesto (preventDefault: la pagina non si muove per conto suo) e porta la pagina in fondo con un movimento che parte subito
+        e frena piano (ASSIST_GLIDE_CURVE, da 0,65 a 1,2 s secondo la strada). Gli scatti che seguono (anche la coda di inerzia del trackpad)
+        vengono assorbiti finché fanno parte della stessa sequenza (meno di ASSIST_GAP_MS tra uno e l'altro); un gesto nuovo ricomincia da capo.
+     2. DOPO UNA PAUSA (onAssistScroll, assistSettled), per ciò che non si può prendere al volo (la barra di scorrimento col mouse premuto, un browser
+        che non lascia annullare la rotella): finito il gesto, ASSIST_SETTLE_MS senza altri movimenti, la pagina scende in fondo con lo stesso movimento.
+     Regole (valgono per tutte e due):
+     - solo verso il BASSO: chi sale, per leggere il testo o vedere la cima della foto, non viene toccato (la rotella in su ferma subito la discesa);
+     - solo se la pagina sta prima dell'inquadratura: chi è già lì, o più in giù (per vedere la barra sotto il bordo), scorre come sempre;
+     - non c'è dove non c'è l'inquadratura di serie (telefono, schermi tattili), con una foto ingrandita, in modifica, con «riduci movimento», a mouse
+       premuto, con la rotella su un elemento che scorre per conto suo, con Ctrl/Cmd/Maiusc (zoom, scorrimento di lato);
+     - se uno scorrimento della galleria parte mentre la pagina scende, la discesa non si interrompe (goTo). */
+  const ASSIST_GLIDE_MIN_MS = 650; // durata dell'accompagnamento che parte subito: 520 ms + 0,6 ms per px di strada, tra questi due limiti
+  const ASSIST_GLIDE_MAX_MS = 1200;
+  const ASSIST_GLIDE_CURVE = [0.16, 0, 0.12, 1]; // in 50 ms è già a velocità piena (picco 2,9 volte la media a un decimo del tempo), poi frena piano
+  const ASSIST_GAP_MS = 250; // due scatti di rotella più vicini di così sono la stessa sequenza (un gesto di trackpad con la sua coda di inerzia, o i colpi di una rotella)
+  const ASSIST_SETTLE_MS = 250; // strada 2: pausa dell'utente (nessun movimento, nessun tasto, mouse non premuto) dopo la quale la pagina viene accompagnata
+  const ASSIST_MIN_PX = 32; // strada 2: quanto deve essere sceso, nel gesto, perché valga come «sta andando a vedere le foto»
+  const ASSIST_INPUT_MS = 300; // strada 2: un movimento della pagina viene dall'utente se la rotella o un tasto sono arrivati da meno di così
+  let assistWheelAt = -Infinity; // l'ultimo scatto di rotella, di qualunque verso
+  let assistUpAt = -Infinity; // l'ultimo scatto verso l'alto: subito dopo, un piccolo scatto in giù è solo il rimbalzo di un gesto in su e non vale
+  let assistConsuming = false; // la sequenza di rotella in corso è stata presa dal sito
+  let assistConsumedAt = -Infinity; // l'ultimo scatto o tasto assorbito (per startBarHold: non è l'utente che muove la pagina)
+  let assistGlideAt = -Infinity; // quando è partito l'ultimo accompagnamento immediato
+  let assistBlockedLogAt = -Infinity;
+  let assistLastNote = "nessuna rotella né tasto da quando la pagina è aperta"; // cosa ha deciso il sito all'ultima rotella o all'ultimo tasto (lo legge il contatore di fluidità)
+  const assistNote = (text) => { assistLastNote = `${text} (alle ${new Date().toLocaleTimeString()})`; };
   let assistPrevY = window.scrollY;
-  let assistStartY = null; // dov'era la pagina quando è cominciato il gesto
-  let assistDir = 0; // verso dell'ultimo movimento chiesto dall'utente: 1 in giù, -1 in su
+  let assistStartY = null; // strada 2: dov'era la pagina quando è cominciato il gesto
+  let assistDir = 0; // strada 2: verso dell'ultimo movimento chiesto dall'utente: 1 in giù, -1 in su
   let assistTimer = null;
+
+  const assistBlocker = () => barHoldBlocker({ singlePhoto: true }) || (isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : null);
+  const assistTargetY = () => Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - framingHoldY())); // dove sta la pagina all'inquadratura di serie
+  const assistGliding = () => Boolean(framing && framing.assist && framing.takeover && framing.approaching);
+
+  // Un elemento che scorre per conto suo (una finestra con la barra di scorrimento): la rotella lì non è per la pagina.
+  function insideScroller(node) {
+    for (let el = node; el && el.nodeType === 1 && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if ((overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight + 1) return true;
+    }
+    return false;
+  }
+
+  // Parte l'accompagnamento immediato, se si può e se la pagina è prima dell'inquadratura. Restituisce null se è partito, altrimenti il perché no.
+  function assistTakeOver() {
+    const blocker = assistBlocker();
+    if (blocker) {
+      if (performance.now() - assistBlockedLogAt > 1500) { assistBlockedLogAt = performance.now(); logFraming({ ran: false, why: blocker, assist: true }); }
+      return blocker;
+    }
+    if (window.scrollY >= assistTargetY() - 4) return "la pagina è già all'inquadratura (o più in giù)";
+    startBarHold(snapshotBar(), { accompany: true, takeover: true });
+    assistGlideAt = performance.now();
+    return assistGliding() ? null : "l'accompagnamento non è partito";
+  }
+
+  function onAssistWheel(e) {
+    const now = performance.now();
+    const fresh = now - assistWheelAt > ASSIST_GAP_MS; // primo scatto di un gesto (o di uno scatto di mouse dopo una pausa)
+    assistWheelAt = now;
+    if (fresh) assistConsuming = false;
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // zoom, scorrimento di lato
+    if (e.deltaY < 0) { assistConsuming = false; assistUpAt = now; if (fresh) assistNote("rotella verso l'alto: lasciata all'utente"); return; } // verso l'alto: è dell'utente (startBarHold ferma l'accompagnamento in corso)
+    if (assistConsuming || assistGliding()) {
+      // La sequenza è del sito: gli scatti in più e la coda di inerzia del trackpad non muovono la pagina da soli.
+      // (Sicurezza: se la discesa non c'è più da un pezzo, o si è ingrandita una foto o si è entrati in modifica, la rotella torna dell'utente.)
+      if ((now - assistGlideAt > 6000 && !assistGliding()) || lightboxHold || isEditMode()) { assistConsuming = false; return; }
+      if (e.cancelable) e.preventDefault();
+      assistConsumedAt = now;
+      return;
+    }
+    // (Anche a gesto già cominciato: un trackpad può cominciare con scatti nulli o di lato. Non dopo uno scatto in su: sarebbe il rimbalzo di quel gesto.)
+    if (e.deltaY === 0) return;
+    if (now - assistUpAt < 400) { assistNote("rotella in giù subito dopo una in su: è il rimbalzo di quel gesto, lasciata all'utente"); return; }
+    if (!e.cancelable) { assistNote("il browser non lascia annullare questa rotella: ci pensa la pausa (strada 2)"); return; }
+    if (insideScroller(e.target)) { assistNote("rotella sopra un elemento che scorre per conto suo: lasciata a lui"); return; }
+    const why = assistTakeOver();
+    if (why) { assistNote(`rotella in giù NON presa: ${why}`); return; }
+    e.preventDefault();
+    assistConsuming = true;
+    assistConsumedAt = now;
+    assistNote("rotella in giù presa: la pagina scende da sola");
+  }
+
+  function onAssistKey(e) {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const space = e.key === " " || e.key === "Spacebar";
+    if (!(e.key === "ArrowDown" || e.key === "PageDown" || (space && !e.shiftKey))) return;
+    const target = e.target;
+    if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']")) return; // scrive o sceglie
+    if (space && target && target.closest && target.closest("button, a, summary")) return; // lo Spazio su un pulsante lo preme
+    if (!assistGliding()) {
+      const why = assistTakeOver();
+      if (why) { assistNote(`tasto ${e.key === " " ? "Spazio" : e.key} NON preso: ${why}`); return; }
+      assistNote(`tasto ${e.key === " " ? "Spazio" : e.key} preso: la pagina scende da sola`);
+    }
+    e.preventDefault();
+    assistConsumedAt = performance.now();
+  }
 
   function onAssistScroll() {
     const y = window.scrollY;
@@ -5113,7 +5206,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     // Il movimento è dell'utente se ha appena usato la rotella o un tasto (lo scorrimento «dolce» del browser dura al massimo 0,3 s dopo l'ultimo
     // input: più breve della pausa ASSIST_SETTLE_MS, così l'accompagnamento, che parte dopo la pausa, non si scambia mai per l'utente) o ha il
     // mouse premuto (barra di scorrimento). Se l'utente muove la pagina mentre viene accompagnata, la rotella arriva prima del suo movimento: conta.
-    if (Math.abs(dy) < 0.5 || !(performance.now() - lastUserInputAt < ASSIST_INPUT_MS || isPointerHeld())) return;
+    if (Math.abs(dy) < 0.5 || assistGliding() || !(performance.now() - lastUserInputAt < ASSIST_INPUT_MS || isPointerHeld())) return; // (la discesa del sito non conta)
     if (assistStartY === null) assistStartY = y - dy;
     assistDir = dy > 0 ? 1 : -1;
     clearTimeout(assistTimer);
@@ -5122,6 +5215,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
 
   function assistSettled() {
     assistTimer = null;
+    if (assistGliding()) { assistStartY = null; assistDir = 0; return; } // la pagina sta già scendendo (strada 1): niente da fare
     // Il gesto non è davvero finito (la rotella continua, il mouse è ancora premuto sulla barra di scorrimento): si riprova più tardi
     if (isPointerHeld() || performance.now() - lastUserInputAt < ASSIST_SETTLE_MS) { assistTimer = setTimeout(assistSettled, ASSIST_SETTLE_MS); return; }
     const startY = assistStartY;
@@ -5129,13 +5223,18 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     assistStartY = null;
     assistDir = 0;
     if (startY === null || dir <= 0 || window.scrollY - startY < ASSIST_MIN_PX) return; // verso l'alto, o troppo poco: la pagina resta dov'è
-    const blocker = barHoldBlocker({ singlePhoto: true }) || (isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : null);
+    const blocker = assistBlocker();
     if (blocker) { logFraming({ ran: false, why: blocker, assist: true }); return; }
-    const target = Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - framingHoldY()));
-    if (window.scrollY >= target - 4) return; // già all'inquadratura, o più in giù
-    startBarHold(snapshotBar(), { accompany: true });
+    if (window.scrollY >= assistTargetY() - 4) return; // già all'inquadratura, o più in giù
+    startBarHold(snapshotBar(), { accompany: true, takeover: true });
   }
+
+  window.addEventListener("wheel", onAssistWheel, { passive: false }); // (non passivo: deve poter annullare la rotella)
+  window.addEventListener("keydown", onAssistKey);
   window.addEventListener("scroll", onAssistScroll, { passive: true });
+  // Per il contatore di fluidità: l'accompagnamento è attivo adesso, o cosa lo ferma
+  const assistState = () => ({ blocker: assistBlocker(), y: Math.round(window.scrollY), target: Math.round(assistTargetY()), last: assistLastNote });
+  window.__assistState = assistState;
 
   function goTo(i, { user = false } = {}) {
     if (isAnimating) return;
@@ -5523,8 +5622,11 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     document.removeEventListener("keydown", onKeyDown);
     clearTimeout(autoplayTimer);
     stopBarHold();
+    window.removeEventListener("wheel", onAssistWheel);
+    window.removeEventListener("keydown", onAssistKey);
     window.removeEventListener("scroll", onAssistScroll);
     clearTimeout(assistTimer);
+    if (window.__assistState === assistState) delete window.__assistState;
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
     cancelAnimationFrame(marqueeRafId);
     document.removeEventListener("pointermove", onMarqueeDragMove);

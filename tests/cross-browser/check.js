@@ -13,7 +13,7 @@
        - galleria di un progetto, su computer: mentre la galleria scorre e la foto cambia altezza (foto più alta e più bassa) il numero con
          le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
          non si muove; in Mediality la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa);
-         chi scende con la rotella e si ferma a metà pagina viene accompagnato in fondo, chi sale resta dove si ferma.
+         chi scende con la rotella viene portato in fondo subito, senza pause, anche se si ferma a metà; chi sale resta dove si ferma.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -330,10 +330,14 @@ async function checkPhotoRise(context, base) {
 // Stessa prova, ma con la pagina già mossa dall'utente (rotella) in un punto in cui la barra si vede senza essere in fondo: lì la pagina non
 // deve andare da nessuna parte, ma la barra deve restare dov'è mentre la foto cambia altezza (era il caso che non funzionava: l'inquadratura
 // aspettava 15 s dall'ultimo movimento dell'utente e nel frattempo la barra saliva e scendeva con la foto).
-// Chi scende per vedere le foto e si ferma a metà non resta lì: finito il gesto la pagina viene accompagnata in fondo (assistSettled in js/app_v58.js),
-// con la barra del numero e delle frecce all'inquadratura di serie. Verso l'alto no: chi sale resta dove si ferma. Si prova con la rotella, come
-// un utente: due scatti in giù dalla cima, poi un'attesa; la barra deve stare dove dice il registro del sito (holdY) e il registro deve dire che è
-// stata accompagnata; poi uno scatto in su, e la pagina non deve più muoversi.
+// Chi scende per vedere le foto e si ferma a metà non resta lì: al primo scatto di rotella verso il basso la pagina parte da sola e arriva in fondo,
+// all'inquadratura di serie, SENZA pause (onAssistWheel in js/app_v58.js; prima aspettava mezzo secondo dopo la fine del gesto e non andava bene).
+// Verso l'alto no: chi sale resta dove si ferma. Si prova con la rotella, come un utente: due scatti in giù dalla cima. Si guarda, fotogramma per
+// fotogramma, quando la pagina comincia a muoversi dopo il primo scatto (al massimo ASSIST_START_MS), il tratto più lungo in cui sta ferma tra
+// l'inizio e l'arrivo (al massimo ASSIST_STALL_MS: una pausa vera sarebbe mezzo secondo) e dove arriva: il numero con le frecce deve stare dove dice il
+// registro del sito (holdY). Poi un scatto in su, e la pagina non deve più muoversi.
+const ASSIST_START_MS = 300;
+const ASSIST_STALL_MS = 250;
 async function checkAssist(context, base) {
   const problems = [];
   if (context.__profile !== 'computer') return problems; // una volta sola per motore (né il retina, uguale, né il telefono, dove non c'è)
@@ -346,27 +350,42 @@ async function checkAssist(context, base) {
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight }));
     if (geo.max <= 150) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la pagina scorre solo ${Math.round(geo.max)} px)`); return problems; }
     await page.mouse.move(Math.round(geo.h / 2), 300);
+    const sampling = page.evaluate(() => new Promise((resolve) => {
+      const t0 = performance.now(); const rows = [];
+      const tick = () => { setTimeout(() => rows.push([performance.now(), window.scrollY]), 0); if (performance.now() - t0 < 2800) requestAnimationFrame(tick); else setTimeout(() => resolve(rows), 80); };
+      requestAnimationFrame(tick);
+    }));
+    await page.waitForTimeout(200);
+    const wheelAt = await page.evaluate(() => performance.now());
     await page.mouse.wheel(0, 100);
     await page.waitForTimeout(80);
     await page.mouse.wheel(0, 100);
-    await page.waitForTimeout(500);
-    const moved = await page.evaluate(() => window.scrollY);
-    if (moved < 20) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la rotella non ha mosso la pagina)`); return problems; } // browser di prova: niente da controllare
-    await page.waitForTimeout(3500);
+    const rows = await sampling;
+    const moving = rows.filter((r, i) => i > 0 && r[0] >= wheelAt && Math.abs(r[1] - rows[i - 1][1]) >= 0.4);
+    if (!moving.length) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la rotella non ha mosso la pagina)`); return problems; } // browser di prova: niente da controllare
+    let stall = 0;
+    for (let k = 1; k < moving.length; k++) stall = Math.max(stall, moving[k][0] - moving[k - 1][0]);
+    const startMs = moving[0][0] - wheelAt;
+    const endMs = moving[moving.length - 1][0] - wheelAt;
+    await page.waitForTimeout(400);
     const after = await page.evaluate(() => {
       const log = (window.__framingLog || []).filter((e) => e.assist).slice(-1)[0] || null;
       return { y: window.scrollY, bar: document.querySelector('.gallerybar').getBoundingClientRect().top, log };
     });
-    if (!after.log) problems.push(`scendendo con la rotella e fermandosi a metà (a ${Math.round(moved)} px) la pagina non è stata accompagnata in fondo: ora è a ${Math.round(after.y)} px`);
+    if (!after.log) problems.push(`scendendo con la rotella la pagina non è stata accompagnata in fondo: ora è a ${Math.round(after.y)} px`);
     else if (!after.log.ran) problems.push(`scendendo con la rotella la pagina non è stata accompagnata in fondo: ${after.log.why}`);
     else if (Math.abs(after.bar - after.log.holdY) > BAR_TOLERANCE_PX) problems.push(`scendendo con la rotella la pagina è stata accompagnata, ma il numero con le frecce è a ${Math.round(after.bar)} px dal bordo alto invece di ${after.log.holdY}`);
+    else {
+      if (startMs > ASSIST_START_MS) problems.push(`dal primo scatto di rotella la pagina ci mette ${Math.round(startMs)} ms a muoversi (al massimo ${ASSIST_START_MS}): deve partire subito, senza pause`);
+      if (stall > ASSIST_STALL_MS) problems.push(`scendendo con la rotella la pagina sta ferma per ${Math.round(stall)} ms a metà strada (al massimo ${ASSIST_STALL_MS}): deve scendere di seguito, senza pause`);
+    }
     // salendo, la pagina resta dove l'utente la lascia
     await page.mouse.wheel(0, -150);
     await page.waitForTimeout(700);
     const up1 = await page.evaluate(() => window.scrollY);
     await page.waitForTimeout(2200);
     const up2 = await page.evaluate(() => window.scrollY);
-    console.log(`  [accompagnamento] ${context.__engine}: la rotella ha portato la pagina a ${Math.round(moved)} px; dopo l'attesa è a ${Math.round(after.y)} px su ${Math.round(geo.max)} (barra a ${Math.round(after.bar)} px, registro ${after.log ? `holdY ${after.log.holdY}` : 'vuoto'}); in su: ${Math.round(up1)} → ${Math.round(up2)} px`);
+    console.log(`  [accompagnamento] ${context.__engine}: la pagina comincia a muoversi ${Math.round(startMs)} ms dopo il primo scatto, arriva dopo ${Math.round(endMs)} ms, tratto fermo più lungo ${Math.round(stall)} ms; arriva a ${Math.round(after.y)} px su ${Math.round(geo.max)} (barra a ${Math.round(after.bar)} px, registro ${after.log ? `holdY ${after.log.holdY}` : 'vuoto'}); in su: ${Math.round(up1)} → ${Math.round(up2)} px`);
     if (up1 > after.y - 20) return problems; // la rotella in su non ha mosso la pagina: niente da controllare
     if (Math.abs(up2 - up1) > BAR_TOLERANCE_PX) problems.push(`salendo con la rotella la pagina non è rimasta dove l'utente l'ha lasciata: da ${Math.round(up1)} a ${Math.round(up2)} px`);
   } catch (e) {

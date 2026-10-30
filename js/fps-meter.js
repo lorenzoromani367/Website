@@ -167,7 +167,7 @@
     const ago = `${Math.max(0, Math.round((Date.now() - e.at) / 1000))} s fa`;
     const grow = e.grow ? ` · ${e.grow}` : ""; // com'è cambiata l'altezza del riquadro in quello scorrimento (growTransitionFor)
     // Accompagnamento verso il fondo dopo che l'utente è sceso a metà pagina (assistSettled in app_v58.js)
-    if (e.assist) return e.ran ? `${ago} · pagina accompagnata in fondo dopo che l'utente è sceso e si è fermato a metà (la pagina stava a ${e.fromY} px dall'alto; la barra è stata portata a ${e.holdY} px dal bordo alto della finestra)` : `${ago} · accompagnamento in fondo NON partito: ${e.why}`;
+    if (e.assist) return e.ran ? `${ago} · pagina portata in fondo dall'accompagnamento (partito con la pagina a ${e.fromY} px dall'alto; la barra è stata portata a ${e.holdY} px dal bordo alto della finestra)` : `${ago} · accompagnamento in fondo NON partito: ${e.why}`;
     if (!e.ran) return `${ago} · NON partito: ${e.why}${grow}`;
     if (e.mode === "tenuta") return `${ago} · barra tenuta ferma dov'era, a ${e.holdY} px dal bordo alto${e.why ? ` (${e.why})` : ""}${grow}`;
     if (e.holdY > e.endY + 2) return `${ago} · barra ferma a ${e.holdY} px, sotto il bordo della finestra (${innerHeight} px): con la barra in fondo la cima della foto più alta sarebbe tagliata di troppo${grow}`;
@@ -177,7 +177,12 @@
     const log = window.__framingLog;
     const conditions = `riduci movimento: ${media("(prefers-reduced-motion: reduce)") ? "SÌ" : "no"} · schermo tattile: ${media("(pointer: coarse)") ? "SÌ" : "no"} · modalità modifica: ${document.body.classList.contains("edit-mode") ? "SÌ" : "no"}`;
     if (!Array.isArray(log)) return ["Barra ferma: questa pagina non ha il codice nuovo (ricaricare con Cmd+Maiusc+R)", conditions];
-    const lines = [log.length ? `Barra ferma, ultimi scorrimenti della galleria (${log.length}):` : "Barra ferma: nessuno scorrimento della galleria da quando la pagina è aperta", conditions];
+    // Accompagnamento verso il fondo (assistState in app_v58.js): attivo adesso, o cosa lo ferma
+    const assist = typeof window.__assistState === "function" ? window.__assistState() : null;
+    const assistLine = assist
+      ? `Accompagnamento verso il fondo: ${assist.blocker ? `NON attivo adesso (${assist.blocker})` : `attivo (pagina a ${assist.y} px, l'inquadratura è a ${assist.target} px)`}. Ultima rotella o tasto: ${assist.last}`
+      : "Accompagnamento verso il fondo: non c'è in questa pagina (non è una galleria, o la pagina non ha il codice nuovo: ricaricare con Cmd+Maiusc+R)";
+    const lines = [log.length ? `Barra ferma, ultimi scorrimenti della galleria (${log.length}):` : "Barra ferma: nessuno scorrimento della galleria da quando la pagina è aperta", conditions, assistLine];
     log.slice(-limit).reverse().forEach((e) => lines.push(`- ${describeHold(e)} (${e.hash || "#/"})`));
     return lines;
   };
