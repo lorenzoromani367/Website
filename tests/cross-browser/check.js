@@ -317,6 +317,7 @@ async function checkPhotoRise(context, base) {
     }
     await page.keyboard.press('ArrowRight'); // il passo con la foto più alta
     const w = await watchPage(page, 3000);
+    console.log(`  [salita della foto] ${context.__engine}: passo con +${Math.round(rise)} px (dalla foto ${from + 1} alla ${from + 2}); nei primi 3 s la pagina si sposta di ${Math.round(Math.abs(w.y1 - w.y0))} px, al massimo ${Math.round(w.peak)} px/s (limite ${PHOTO_PEAK_PX_S})`);
     if (Math.abs(w.y1 - w.y0) < 40) problems.push(`in Mediality, con la foto più alta di ${Math.round(rise)} px in arrivo, la pagina non si è spostata abbastanza (${Math.round(Math.abs(w.y1 - w.y0))} px nei primi 3 s): la prova non ha misurato la salita`);
     else if (w.peak > PHOTO_PEAK_PX_S) problems.push(`in Mediality, con la foto più alta di ${Math.round(rise)} px in arrivo, la foto sale troppo di scatto: ${Math.round(w.peak)} px al secondo al massimo (deve restare sotto i ${PHOTO_PEAK_PX_S}: la salita dev'essere lenta e dolce come la discesa, vedi growTransitionFor in js/app_v58.js)`);
   } catch (e) {
@@ -343,14 +344,14 @@ async function checkAssist(context, base) {
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS + 1200); // (nei primi 2 s il sito non conta i movimenti della pagina: il browser a volte la rimette dov'era)
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight }));
-    if (geo.max <= 150) return problems;
+    if (geo.max <= 150) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la pagina scorre solo ${Math.round(geo.max)} px)`); return problems; }
     await page.mouse.move(Math.round(geo.h / 2), 300);
     await page.mouse.wheel(0, 100);
     await page.waitForTimeout(80);
     await page.mouse.wheel(0, 100);
     await page.waitForTimeout(500);
     const moved = await page.evaluate(() => window.scrollY);
-    if (moved < 20) return problems; // la rotella non ha mosso la pagina (browser di prova): niente da controllare
+    if (moved < 20) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la rotella non ha mosso la pagina)`); return problems; } // browser di prova: niente da controllare
     await page.waitForTimeout(3500);
     const after = await page.evaluate(() => {
       const log = (window.__framingLog || []).filter((e) => e.assist).slice(-1)[0] || null;
@@ -365,6 +366,7 @@ async function checkAssist(context, base) {
     const up1 = await page.evaluate(() => window.scrollY);
     await page.waitForTimeout(2200);
     const up2 = await page.evaluate(() => window.scrollY);
+    console.log(`  [accompagnamento] ${context.__engine}: la rotella ha portato la pagina a ${Math.round(moved)} px; dopo l'attesa è a ${Math.round(after.y)} px su ${Math.round(geo.max)} (barra a ${Math.round(after.bar)} px, registro ${after.log ? `holdY ${after.log.holdY}` : 'vuoto'}); in su: ${Math.round(up1)} → ${Math.round(up2)} px`);
     if (up1 > after.y - 20) return problems; // la rotella in su non ha mosso la pagina: niente da controllare
     if (Math.abs(up2 - up1) > BAR_TOLERANCE_PX) problems.push(`salendo con la rotella la pagina non è rimasta dove l'utente l'ha lasciata: da ${Math.round(up1)} a ${Math.round(up2)} px`);
   } catch (e) {
@@ -423,6 +425,7 @@ async function runEngine(engine, base, origin, routes) {
     if (profile.isMobile && variant.engine !== 'firefox') opts.isMobile = true; // Firefox non conosce "isMobile": il formato telefono si decide dalla larghezza (come fa il sito)
     const context = await browser.newContext(opts);
     context.__profile = profileName;
+    context.__engine = engine;
     if (variant.css) await context.addInitScript((css) => { const add = () => { const st = document.createElement('style'); st.textContent = css; (document.head || document.documentElement).appendChild(st); }; add(); }, variant.css);
     for (const route of routes) {
       const slug = route.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || (route === '' ? 'indirizzo_semplice' : 'home');
