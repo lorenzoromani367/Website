@@ -350,7 +350,7 @@ async function checkPhotoRise(context, base) {
 //     all'inquadratura, senza discesa da vedere).
 const ASSIST_START_MS = 300;
 const ASSIST_STALL_MS = 250;
-const ASSIST_PEAK_PX_S = 500; // la galleria con la sua curva su 6 s: 314 px/s per 823 px (2,3 volte la media); la discesa veloce di prima: 2425
+const ASSIST_PEAK_PX_S = 600; // la galleria con la sua curva su 6 s: 314 px/s per 823 px (2,3 volte la media), fino a ~440 se si sovrappone uno scorrimento automatico della galleria (misurato su Firefox); la discesa veloce di prima: 2425
 const ASSIST_ARRIVAL_PX = 12; // «arrivata»: a meno di così dal punto finale (la curva della galleria frena piano, gli ultimi pixel durano a lungo)
 const ASSIST_GLIDE_MIN_WAIT_MS = 6400; // la discesa dura fino a 6 s: prima di questo tempo non si dà per finita
 
