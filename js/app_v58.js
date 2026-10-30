@@ -5035,17 +5035,20 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       if (instant) why = "riduci movimento: la pagina viene messa subito all'inquadratura, senza discesa";
     }
     const distance = Math.abs(Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - holdY)) - startY);
+    // La discesa accompagnata si muove come la galleria: stessa curva e, per le strade lunghe, stessa durata (vedi assistGlideFor)
+    const glide = takeover && mode === "discesa" && distance >= 4 && !instant ? assistGlideFor(distance) : null;
     const state = {
       startY,
       holdY,
       mode,
       startedAt: performance.now(),
       approachMs: mode === "tenuta" || distance < 4 || instant ? 0
-        : takeover ? Math.min(ASSIST_GLIDE_MAX_MS, Math.max(ASSIST_GLIDE_MIN_MS, 520 + distance * 0.6))
+        : glide ? glide.ms
         : Math.min(FRAME_APPROACH_MAX_MS, Math.max(FRAME_APPROACH_MIN_MS, 500 + distance * 0.5)),
+      curve: glide ? glide.curve : null, // la curva della discesa accompagnata (null: quella di serie, partenza e arrivo dolci)
       lastY: startY, // dove l'abbiamo messa l'ultima volta (come l'ha accettata il browser)
       assist: accompany, // vero finché la pagina sta venendo accompagnata verso il fondo (vedi goTo: uno scorrimento che parte intanto non la interrompe)
-      takeover, // l'accompagnamento è partito subito, dal primo scatto di rotella o dal primo tasto (curva che parte svelta: ASSIST_GLIDE_CURVE)
+      takeover, // l'accompagnamento è partito subito, dal primo scatto di rotella o dal primo tasto (muove come la galleria: assistGlideFor)
       approaching: false,
       raf: 0,
     };
@@ -5082,7 +5085,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         const p = state.approachMs ? Math.min(1, Math.max(0, (now - state.startedAt) / state.approachMs)) : 1;
         approaching = p < 1;
         if (approaching) {
-          const eased = state.takeover ? bezierProgressAt(ASSIST_GLIDE_CURVE, p) // risponde subito e frena piano, come dopo una spinta
+          const eased = state.curve ? bezierProgressAt(state.curve, p) // la curva della galleria: parte subito, piano, e frena piano
             : p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // partenza e arrivo dolci
           setPageScroll(state.startY + (target - state.startY) * eased);
         } else {
@@ -5104,8 +5107,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
      la cima della foto più alta sta a FRAME_TOP_MARGIN dal bordo alto: framingHoldY). Da lì la barra resta ferma mentre la galleria scorre
      (startBarHold). Due strade, la prima senza nessuna pausa:
      1. SUBITO (onAssistWheel, onAssistKey): al primo scatto di rotella, o primo movimento di trackpad, o tasto ↓ Pag↓ Spazio, verso il basso, il
-        sito si prende il gesto (preventDefault: la pagina non si muove per conto suo) e porta la pagina in fondo con un movimento che parte subito
-        e frena piano (ASSIST_GLIDE_CURVE, da 0,65 a 1,2 s secondo la strada). Gli scatti che seguono (anche la coda di inerzia del trackpad, con i
+        sito si prende il gesto (preventDefault: la pagina non si muove per conto suo) e porta la pagina in fondo con un movimento che parte subito,
+        piano, e frena piano: lo stesso della galleria (assistGlideFor: stessa curva e durata, fino a 6 s). Gli scatti che seguono (anche la coda di inerzia del trackpad, con i
         suoi scatti nulli, di lato o di pochi pixel in su) vengono assorbiti finché fanno parte della stessa sequenza (meno di ASSIST_GAP_MS tra uno
         e l'altro); un gesto nuovo ricomincia da capo. Se il browser non lascia annullare lo scatto (a quanto so Chrome può non permetterlo, per il
         resto di un gesto di trackpad, se il primo scatto non è stato annullato: qui non si può verificare) la discesa parte lo stesso: scrive la
@@ -5120,9 +5123,16 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
        elemento che scorre per conto suo, con Ctrl/Cmd/Maiusc (zoom, scorrimento di lato). C'è anche in modalità modifica. Con «riduci movimento»
        la pagina non scende piano: viene messa subito all'inquadratura (niente movimento da vedere);
      - se uno scorrimento della galleria parte mentre la pagina scende, la discesa non si interrompe (goTo). */
-  const ASSIST_GLIDE_MIN_MS = 650; // durata dell'accompagnamento che parte subito: 520 ms + 0,6 ms per px di strada, tra questi due limiti
-  const ASSIST_GLIDE_MAX_MS = 1200;
-  const ASSIST_GLIDE_CURVE = [0.16, 0, 0.12, 1]; // in 50 ms è già a velocità piena (picco 2,9 volte la media a un decimo del tempo), poi frena piano
+  // La discesa accompagnata si muove ESATTAMENTE come la galleria: la stessa curva (--transition-ease) e, per le strade lunghe, la stessa durata
+  // (--transition-ms, 6 s). Per le strade corte la durata scende con la strada (ASSIST_GLIDE_MS_PER_PX: 6 s per circa 800 px, cioè la stessa
+  // velocità media) ma non sotto ASSIST_GLIDE_MIN_MS. Partenza a 64 px/s, picco 2,3 volte la media (314 px/s per 823 px in 6 s). Una versione
+  // di poche ore prima partiva a piena velocità in 50 ms e finiva in 1 s (picco 2425 px/s, 40 px per fotogramma): «velocissima, uno scatto».
+  const ASSIST_GLIDE_MIN_MS = 1500;
+  const ASSIST_GLIDE_MS_PER_PX = 7.5;
+  function assistGlideFor(distance) {
+    const galleryMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--transition-ms")) || TRANSITION_MS;
+    return { ms: Math.min(galleryMs, Math.max(ASSIST_GLIDE_MIN_MS, distance * ASSIST_GLIDE_MS_PER_PX)), curve: cssCubicBezier("--transition-ease", [0.25, 0.1, 0.25, 1]) };
+  }
   const ASSIST_GAP_MS = 250; // due scatti di rotella più vicini di così sono la stessa sequenza (un gesto di trackpad con la sua coda di inerzia, o i colpi di una rotella)
   const ASSIST_SETTLE_MS = 250; // strada 2: pausa dell'utente (nessun movimento, nessun tasto, mouse non premuto) dopo la quale la pagina viene accompagnata
   const ASSIST_MIN_PX = 32; // strada 2: quanto deve essere sceso, nel gesto, perché valga come «sta andando a vedere le foto»
