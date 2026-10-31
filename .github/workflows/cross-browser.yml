@@ -70,6 +70,15 @@ jobs:
           SITE_URL: ${{ github.event.inputs.url }}
         run: node check.js --site=../../_site --out=report --engines="$ENGINES" ${SITE_URL:+--url="$SITE_URL"}
 
+      # Le modifiche fatte da telefono (anteprima mobile) arrivano davvero su disco? Si avvia il server vero su una COPIA del sito (mai su
+      # js/site-state.js del repository) e si ridimensiona una foto in otto modi: salvataggio e ricarica, chiusura o ricarica subito, file su
+      # disco riportato indietro, mouse rilasciato fuori, gesto annullato dal browser, memoria del browser piena, indirizzo di rete (dove non
+      # si può salvare e il sito deve dirlo). Solo Chromium; non si fa quando si prova il sito vero (campo "url").
+      - name: Salvataggi delle modifiche (anteprima mobile)
+        if: ${{ !cancelled() && github.event.inputs.url == '' }}
+        working-directory: tests/cross-browser
+        run: node saves.js --out=report
+
       # Solo quando si prova il sito vero (campo "url"): si toccano una a una le voci come farebbe un dito su un telefono
       # (home, link in fondo, frecce tra i progetti) per vedere se qualche tocco porta a "not found".
       - name: Giro dei tocchi sul sito vero (telefono)

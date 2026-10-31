@@ -17,17 +17,34 @@ function showSaveSuccess(timestamp, target = "content.js") {
   }, 3000);
 }
 
-function showSaveError() {
+function showSaveError(message) {
   let alarm = document.getElementById("save-error-alarm");
   if (!alarm) {
     alarm = document.createElement("div");
     alarm.id = "save-error-alarm";
     alarm.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(220, 38, 38, 0.95); color: white; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 32px; font-weight: bold; --sans-stroke: 0; z-index: 100000; text-align: center; padding: 40px; box-sizing: border-box; cursor: pointer; flex-direction: column; white-space: pre-wrap;";
-    alarm.textContent = "ATTENZIONE: Modifiche NON salvate su disco\n\nClicca per chiudere.";
     alarm.onclick = () => { alarm.style.display = "none"; };
     document.body.appendChild(alarm);
   }
+  alarm.textContent = message || "ATTENZIONE: Modifiche NON salvate su disco\n\nClicca per chiudere.";
+  alarm.style.fontSize = message && message.length > 80 ? "clamp(16px, 4.6vw, 28px)" : "32px"; // un testo lungo deve starci anche su un telefono
   alarm.style.display = "flex";
+}
+
+// Come il riquadro verde "Salvato su disco", ma rosso: una modifica appena fatta che NON è stata salvata dove doveva.
+let notSavedTimeout;
+function showNotSavedBadge(text) {
+  let badge = document.getElementById("not-saved-badge");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.id = "not-saved-badge";
+    badge.style.cssText = "position: fixed; bottom: 20px; right: 20px; max-width: calc(100vw - 40px); box-sizing: border-box; background: #b3261e; color: white; padding: 8px 16px; border-radius: 4px; font-family: var(--mono); font-size: 12px; line-height: 1.4; --sans-stroke: 0; z-index: 10001; box-shadow: 0 4px 12px rgba(0,0,0,0.2); transition: opacity 0.3s; pointer-events: none;";
+    document.body.appendChild(badge);
+  }
+  badge.textContent = text;
+  badge.style.opacity = "1";
+  clearTimeout(notSavedTimeout);
+  notSavedTimeout = setTimeout(() => { badge.style.opacity = "0"; }, 6000);
 }
 
 const originalFetch = window.fetch;
@@ -136,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -214,12 +231,30 @@ const siteStore = (() => {
     storage = null; // memoria del browser bloccata (es. finestra privata): si lavora comunque, ma nulla resta
   }
   const fallback = new Map();
+  // Voci che la memoria del browser NON ha accettato (piena, o che non risponde): restano qui, in memoria finché la pagina è aperta, e
+  // vanno comunque su disco con tutto il resto. Prima la scrittura falliva in silenzio: a schermo la foto restava com'era stata
+  // trascinata, ma non si salvava niente e ricaricando tornava com'era prima (più grande).
+  const unsaved = new Map();
+  let lastStorageAlarm = 0;
+  const storageRefused = () => {
+    if (Date.now() - lastStorageAlarm < 20000) return;
+    lastStorageAlarm = Date.now();
+    showPageNotice(syncEnabled
+      ? "La memoria di questo browser è piena e non accetta più modifiche: restano solo finché la pagina è aperta, ma vanno su disco (js/site-state.js) quando compare «Salvato su disco». Libera spazio (cancella i dati del sito per localhost) e ricarica."
+      : "La memoria di questo browser è piena e da questo indirizzo le modifiche non vanno nemmeno su disco: l'ultima andrà persa quando chiudi la pagina.", { seconds: 25 });
+  };
   const backend = storage
     ? {
-        get: (key) => storage.getItem(key),
-        set: (key, value) => storage.setItem(key, value),
-        del: (key) => storage.removeItem(key),
-        keys: () => Array.from({ length: storage.length }, (_, i) => storage.key(i)),
+        get: (key) => (unsaved.has(key) ? unsaved.get(key) : storage.getItem(key)),
+        set: (key, value) => {
+          try { storage.setItem(key, value); unsaved.delete(key); } catch (e) { unsaved.set(key, value); storageRefused(); }
+        },
+        del: (key) => { unsaved.delete(key); try { storage.removeItem(key); } catch (e) { /* non si riesce a togliere: resta com'era */ } },
+        keys: () => {
+          const out = new Set(Array.from({ length: storage.length }, (_, i) => storage.key(i)));
+          unsaved.forEach((_, key) => out.add(key));
+          return Array.from(out);
+        },
       }
     : {
         get: (key) => (fallback.has(key) ? fallback.get(key) : null),
@@ -367,6 +402,16 @@ const siteStore = (() => {
     chain = chain.then(sendToDisk);
     return chain;
   }
+  // Da un indirizzo di rete con "?edit" (il telefono vero) o da un file aperto direttamente la modifica resta solo nella memoria di quel
+  // browser: finché non lo diceva nessuno, sembrava salvata e poi (sul computer, sul sito pubblicato) la foto era tornata com'era.
+  let notSavedEdits = 0;
+  function editNotSavedHere() {
+    notSavedEdits += 1;
+    showNotSavedBadge("NON salvato su disco: da questo indirizzo la modifica resta solo in questo browser.");
+    if (notSavedEdits === 1) {
+      showSaveError("Da questo indirizzo le modifiche NON vanno su disco.\n\nRestano solo in questo browser, per questo indirizzo: sul computer e sul sito pubblicato non compaiono.\n\nPer salvarle apri http://localhost:8000 sul computer (l'anteprima mobile è il telefono).\n\nClicca per chiudere.");
+    }
+  }
   function scheduleFlush() {
     if (!syncEnabled) return;
     dirty = true;
@@ -450,14 +495,15 @@ const siteStore = (() => {
     getItem: (key) => backend.get(key),
     setItem: (key, value) => {
       backend.set(key, String(value));
-      if (isTracked(key)) scheduleFlush();
+      if (isTracked(key)) { if (!syncEnabled) editNotSavedHere(); scheduleFlush(); }
     },
     removeItem: (key) => {
       backend.del(key);
-      if (isTracked(key)) scheduleFlush();
+      if (isTracked(key)) { if (!syncEnabled) editNotSavedHere(); scheduleFlush(); }
     },
     keys: () => backend.keys(),
     flushNow,
+    canSaveToDisk: syncEnabled,
   };
 })();
 
@@ -1714,8 +1760,10 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
       dragState = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y };
       if (visualHandleEl) visualHandleEl.classList.add("is-dragging");
       else node.classList.add("is-dragging");
+      try { targetEl.setPointerCapture(e.pointerId); } catch (err) { /* il browser non lo permette: si va avanti senza */ }
       document.addEventListener("pointermove", onPointerMove);
       document.addEventListener("pointerup", onPointerUp);
+      document.addEventListener("pointercancel", onPointerUp); // gesto annullato dal browser: si salva ciò che si vede
     });
   }
 
@@ -1744,6 +1792,7 @@ function makeMovableFree(node, key, title = "Trascina per spostare", { onMove, d
     activeHandle = null;
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
+    document.removeEventListener("pointercancel", onPointerUp);
     dragState = null;
     savePositionOverride(key, { x: pos.x, y: pos.y });
     // Dal telefono (anteprima mobile o schermo stretto) in content.js NON si scrive: lì offset/width/zoomBox sono quelli del
@@ -2113,6 +2162,7 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
       handle.classList.remove("is-dragging");
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
       saveSizeOverride(key, { width: node.style.width, height: node.style.height });
       // Dal telefono in content.js non si scrive (vedi makeMovableFree): la misura del telefono resta in site-state.js (":m")
       if (src && propType === "size" && !isMobileViewport()) {
@@ -2140,8 +2190,10 @@ function makeResizable(node, key, defaults = {}, { lockRatioTo, onResizeEnd, alw
         aspectRatio: lockRatioTo ? currentAspectRatio() : null,
       };
       handle.classList.add("is-dragging");
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* il browser non lo permette: si va avanti senza */ }
       document.addEventListener("pointermove", onPointerMove);
       document.addEventListener("pointerup", onPointerUp);
+      document.addEventListener("pointercancel", onPointerUp); // gesto annullato dal browser: si salva la misura che si vede
     });
   }
 
@@ -2191,6 +2243,7 @@ function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio
     handle.classList.remove("is-dragging");
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
+    document.removeEventListener("pointercancel", onPointerUp);
     saveSizeOverride(key, { width: node.style.width, height: node.style.height });
     if (src && propType === "size") {
       fetch('/api/save-image-props', {
@@ -2207,8 +2260,10 @@ function makeHeightResizable(node, key, title = "Trascina per regolare lo spazio
     e.stopPropagation();
     dragStart = { pointerId: e.pointerId, startY: e.clientY, startHeight: node.getBoundingClientRect().height };
     handle.classList.add("is-dragging");
+    try { handle.setPointerCapture(e.pointerId); } catch (err) { /* il browser non lo permette: si va avanti senza */ }
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerUp);
   });
 }
 
@@ -2840,6 +2895,9 @@ function ensureEditModeUI() {
       toggle.textContent = "⇲";
     } else {
       toggle.textContent = "💾";
+      if (siteStore.canSaveToDisk === false) {
+        showPageNotice("Attenzione: da questo indirizzo le modifiche NON vanno su disco, restano solo in questo browser. Per salvarle apri http://localhost:8000 sul computer.", { seconds: 20 });
+      }
     }
 
     document.body.classList.toggle("edit-mode");
@@ -3292,6 +3350,7 @@ function makeZoomResizable(frame, img) {
       handle.classList.remove("is-dragging");
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("pointercancel", onPointerUp);
       const drag = dragStart;
       dragStart = null;
 
@@ -3364,8 +3423,10 @@ function makeZoomResizable(frame, img) {
         aspectRatio: img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : rect.width / rect.height,
       };
       handle.classList.add("is-dragging");
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* il browser non lo permette: si va avanti senza */ }
       document.addEventListener("pointermove", onPointerMove);
       document.addEventListener("pointerup", onPointerUp);
+      document.addEventListener("pointercancel", onPointerUp); // gesto annullato dal browser: si salva la misura che si vede
     });
   }
 
