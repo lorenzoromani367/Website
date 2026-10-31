@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 259,
-  "updatedAt": "2026-10-31T09:34:45.616Z",
+  "version": 260,
+  "updatedAt": "2026-10-31T11:12:32.113Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -1112,6 +1112,10 @@ window.SITE_STATE = {
       },
       "project.mediality.image.5": {
         "width": "277.83px",
+        "height": ""
+      },
+      "project.cement.image.0": {
+        "width": "248.207px",
         "height": ""
       }
     },
