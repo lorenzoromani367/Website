@@ -14,8 +14,9 @@
          le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
          non si muove; in Mediality la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa);
          chi scende con la rotella viene portato in fondo subito, senza pause, anche se si ferma a metà; chi sale resta dove si ferma;
-       - testo scorrevole di una galleria: la stessa velocità (MARQUEE_PX_PER_SEC, 6 px al secondo) su computer e su telefono, misurata sul testo
-         vero e non letta dalla costante: fallisce se il sito lo sposta di più o di meno, o se qualcosa nel formato telefono lo scala o lo ferma.
+       - testo scorrevole di una galleria: le stesse RIGHE al secondo su computer (6 px al secondo, MARQUEE_PX_PER_SEC) e su telefono (4,95 px al
+         secondo, MARQUEE_PX_PER_SEC_PHONE: il carattere è più piccolo), misurate sul testo vero e non lette dalla costante: fallisce se il sito lo
+         sposta di più o di meno, se qualcosa lo scala o lo ferma, o se le righe al secondo di telefono e computer non tornano.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -520,13 +521,14 @@ async function checkAssist(context, base) {
   return problems;
 }
 
-// Testo scorrevole delle gallerie (quello che scende in loop nel suo riquadro, .description): la stessa velocità su telefono e su computer. Il sito
-// lo sposta di MARQUEE_PX_PER_SEC px al secondo contati sul tempo, non sui fotogrammi (app_v58.js), e nessuna misura del formato telefono la cambia.
+// Testo scorrevole delle gallerie (quello che scende in loop nel suo riquadro, .description): stesse righe al secondo su telefono e su computer. Il sito
+// lo sposta di MARQUEE_PX_PER_SEC px al secondo sul computer e di MARQUEE_PX_PER_SEC_PHONE su telefono, contati sul tempo e non sui fotogrammi (app_v58.js).
 // Qui lo si guarda sul testo vero, fotogramma per fotogramma, per MARQUEE_SAMPLE_MS: dove lo mette il sito (la transform che scrive) e dove si vede
 // (il rettangolo del testo rispetto al suo riquadro: la pagina che si muove per conto suo, sul computer, non conta). Non entrano i fotogrammi oltre
 // i 100 ms (il sito non conta quel tempo, per non far saltare il testo dopo una pausa) e il giro che ricomincia (un salto di qualche centinaio di px,
-// invisibile: la seconda copia prende il posto della prima). Sul telefono il carattere è più piccolo (12,5 px invece di 15,2): la velocità in pixel è
-// la stessa, in righe al secondo no, e il registro riporta anche quella.
+// invisibile: la seconda copia prende il posto della prima). Sul telefono il carattere è più piccolo (12,5 px invece di 15,2, riga di 20,7 invece di
+// 25,1 px): alla stessa velocità in pixel il testo farebbe passare il 21 % di righe in più al secondo, quindi il telefono va a 4,95 px al secondo
+// (dal 31 ottobre; prima 6) e il confronto tra i due formati si fa sulle RIGHE al secondo (0,239).
 const MARQUEE_SAMPLE_MS = 6000;
 const MARQUEE_CODE_TOLERANCE = 0.01; // quello che il sito scrive: deve essere la costante (1 %)
 const MARQUEE_SEEN_TOLERANCE = 0.04; // quello che si vede: 4 % (su 36 px, un rettangolo arrotondato al pixel sbaglia anche di 1 px)
@@ -566,7 +568,8 @@ async function checkMarqueeSpeed(context, base, seen) {
         }
         resolve({
           dtSum, code, seenPx, used, longFrames, seams, maxStep, readable, frames: rows.length,
-          expected: typeof MARQUEE_PX_PER_SEC === 'number' ? MARQUEE_PX_PER_SEC : null,
+          expectedComputer: typeof MARQUEE_PX_PER_SEC === 'number' ? MARQUEE_PX_PER_SEC : null,
+          expectedPhone: typeof MARQUEE_PX_PER_SEC_PHONE === 'number' ? MARQUEE_PX_PER_SEC_PHONE : null,
           fontPx: parseFloat(cs.fontSize), linePx: parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.65,
         });
       };
@@ -575,17 +578,19 @@ async function checkMarqueeSpeed(context, base, seen) {
     if (!m) { problems.push(`testo scorrevole (${label}): non c'è il testo che scorre`); return problems; }
     const secs = m.dtSum / 1000;
     if (m.used < 30 || secs < 1.5) { console.log(`  [testo scorrevole] ${engine} ${label}: saltata (solo ${m.used} fotogrammi utili su ${m.frames})`); return problems; }
-    const expected = m.expected || 6;
+    const expected = label === 'telefono' ? m.expectedPhone : (m.expectedComputer || 6); // (la costante del telefono, se la pagina non la espone, non si controlla in assoluto)
     const codeSpeed = m.code / secs;
     const seenSpeed = m.seenPx / secs;
-    if (m.readable && Math.abs(codeSpeed - expected) > expected * MARQUEE_CODE_TOLERANCE) problems.push(`testo scorrevole (${label}): il sito lo sposta di ${marqueeNum(codeSpeed)} px al secondo invece di ${expected}`);
-    if (Math.abs(seenSpeed - expected) > expected * MARQUEE_SEEN_TOLERANCE) problems.push(`testo scorrevole (${label}): si vede muovere a ${marqueeNum(seenSpeed)} px al secondo invece di ${expected} (il sito scrive ${m.readable ? marqueeNum(codeSpeed) : 'un valore che non so leggere'}): qualcosa lo scala o lo ferma`);
+    if (expected && m.readable && Math.abs(codeSpeed - expected) > expected * MARQUEE_CODE_TOLERANCE) problems.push(`testo scorrevole (${label}): il sito lo sposta di ${marqueeNum(codeSpeed)} px al secondo invece di ${expected}`);
+    if (expected && Math.abs(seenSpeed - expected) > expected * MARQUEE_SEEN_TOLERANCE) problems.push(`testo scorrevole (${label}): si vede muovere a ${marqueeNum(seenSpeed)} px al secondo invece di ${expected} (il sito scrive ${m.readable ? marqueeNum(codeSpeed) : 'un valore che non so leggere'}): qualcosa lo scala o lo ferma`);
     seen[label] = { speed: seenSpeed, linePx: m.linePx };
-    console.log(`  [testo scorrevole] ${engine} ${label}: si vede muovere a ${marqueeNum(seenSpeed)} px/s (il sito scrive ${m.readable ? marqueeNum(codeSpeed) : '?'}; costante ${m.expected === null ? 'non letta' : m.expected}), carattere ${marqueeNum(m.fontPx, 1)} px, riga ${marqueeNum(m.linePx, 1)} px = ${marqueeNum(seenSpeed / m.linePx, 3)} righe/s; ${m.used} fotogrammi utili su ${m.frames} (${m.longFrames} oltre 100 ms, ${m.seams} salti di giro), passo massimo ${marqueeNum(m.maxStep)} px`);
+    console.log(`  [testo scorrevole] ${engine} ${label}: si vede muovere a ${marqueeNum(seenSpeed)} px/s (il sito scrive ${m.readable ? marqueeNum(codeSpeed) : '?'}; costante ${expected === null || expected === undefined ? 'non letta' : expected}), carattere ${marqueeNum(m.fontPx, 1)} px, riga ${marqueeNum(m.linePx, 1)} px = ${marqueeNum(seenSpeed / m.linePx, 3)} righe/s; ${m.used} fotogrammi utili su ${m.frames} (${m.longFrames} oltre 100 ms, ${m.seams} salti di giro), passo massimo ${marqueeNum(m.maxStep)} px`);
     if (label === 'telefono' && seen.computer) {
-      const gap = Math.abs(seen.telefono.speed - seen.computer.speed) / seen.computer.speed;
-      console.log(`  [testo scorrevole] ${engine}: telefono ${marqueeNum(seen.telefono.speed)} px/s contro computer ${marqueeNum(seen.computer.speed)} px/s (differenza ${marqueeNum(gap * 100, 1)} %); in righe al secondo ${marqueeNum(seen.telefono.speed / seen.telefono.linePx, 3)} contro ${marqueeNum(seen.computer.speed / seen.computer.linePx, 3)}`);
-      if (gap > MARQUEE_SEEN_TOLERANCE) problems.push(`testo scorrevole: su telefono scorre a ${marqueeNum(seen.telefono.speed)} px al secondo, sul computer a ${marqueeNum(seen.computer.speed)}: deve essere la stessa velocità`);
+      const phoneLines = seen.telefono.speed / seen.telefono.linePx;
+      const computerLines = seen.computer.speed / seen.computer.linePx;
+      const gap = Math.abs(phoneLines - computerLines) / computerLines;
+      console.log(`  [testo scorrevole] ${engine}: telefono ${marqueeNum(seen.telefono.speed)} px/s = ${marqueeNum(phoneLines, 3)} righe/s contro computer ${marqueeNum(seen.computer.speed)} px/s = ${marqueeNum(computerLines, 3)} righe/s (differenza ${marqueeNum(gap * 100, 1)} % in righe al secondo)`);
+      if (gap > MARQUEE_SEEN_TOLERANCE) problems.push(`testo scorrevole: su telefono passano ${marqueeNum(phoneLines, 3)} righe al secondo (${marqueeNum(seen.telefono.speed)} px/s), sul computer ${marqueeNum(computerLines, 3)} (${marqueeNum(seen.computer.speed)} px/s): devono essere le stesse (MARQUEE_PX_PER_SEC_PHONE in js/app_v58.js)`);
     }
   } catch (e) {
     problems.push(`prova del testo scorrevole non riuscita (${label}): ${String(e.message).split('\n')[0]}`);

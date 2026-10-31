@@ -136,7 +136,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -526,7 +526,13 @@ const siteStore = (() => {
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
 const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
-const MARQUEE_PX_PER_SEC = 6;  // velocità dello scorrimento del testo
+const MARQUEE_PX_PER_SEC = 6;  // velocità dello scorrimento del testo (computer)
+// Su telefono il carattere è più piccolo (12,5 px invece di 15,2: riga di 20,7 invece di 25,1 px), quindi a 6 px al secondo
+// passerebbero il 21 % di righe in più al secondo. Per averne le stesse del computer (6 / 25,08 = 0,239 righe al secondo) il
+// testo va più piano: 6 × 20,68 / 25,08 = 4,95 px al secondo. Se si cambia il carattere del telefono va rifatto questo conto
+// (il controllo su GitHub confronta le righe al secondo di computer e telefono e diventa rosso se non tornano).
+const MARQUEE_PX_PER_SEC_PHONE = 4.95;
+const marqueeSpeed = () => (isMobileViewport() ? MARQUEE_PX_PER_SEC_PHONE : MARQUEE_PX_PER_SEC);
 // Spazio minimo (px) tra la FINE del testo scorrevole e il suo ricominciare: è quello del testo "recognition".
 // Con meno spazio, appena si apre la pagina si vedeva la coda del testo sopra il suo inizio, come se partisse
 // da un punto a caso (succedeva in "homes", "stills"...).
@@ -4628,7 +4634,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     if (dt > 0.1) dt = 0.1;
     marqueeLastTs = ts;
     if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
-      marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
+      marqueePos = (marqueePos + dt * marqueeSpeed()) % marqueeDistance;
       applyMarqueeTransform();
     }
     marqueeRafId = requestAnimationFrame(marqueeTick);
@@ -6004,7 +6010,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
       if (dt > 0.1) dt = 0.1;
       marqueeLastTs = ts;
       if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
-        marqueePos = (marqueePos + dt * MARQUEE_PX_PER_SEC) % marqueeDistance;
+        marqueePos = (marqueePos + dt * marqueeSpeed()) % marqueeDistance;
         applyMarqueeTransform();
       }
       marqueeRafId = requestAnimationFrame(marqueeTick);
