@@ -644,7 +644,8 @@ body.edit-mode .description-editable {
    diventa un vero rettangolo con bordo, per essere inequivocabile. */
 .caption-box {
   position: absolute;
-  /* "auto", non "100%": il codice rende la didascalia "relative" (sta nel flusso, 160px sotto la foto) e una
+  /* "auto", non "100%": il codice rende la didascalia "relative" (sta nel flusso, 160px sotto la foto; 140px su telefono, vedi
+     "margin-top" nel blocco per telefono più sotto) e una
      percentuale come "top: 100%" Safari la applica (spostando la didascalia di un'intera altezza della foto,
      fuori dalla pagina), Chrome/Vivaldi no — per questo su Safari le didascalie sparivano. */
   top: auto;
@@ -780,6 +781,15 @@ body.edit-mode .caption-input:focus {
   .caption-input,
   .archive-word {
     font-size: calc(0.8rem - 2pt);
+  }
+
+  /* Spazio tra il bordo basso della foto e la didascalia: su computer 160px (regola ".caption-box" più sopra), su telefono 140px
+     (31 ottobre, scelta del proprietario tra quattro prove: 160, 140, 120 e 100px). Va scritto "margin-top ... !important" come
+     la regola di base, che è "!important": a parità di peso vince quella scritta dopo. Cambia solo il margine sopra (quello a
+     sinistra, che centra la didascalia sotto la foto, resta com'è) e la pagina si accorcia di 20px, con la barra del numero e
+     delle frecce che sale insieme. */
+  .caption-box {
+    margin-top: 140px !important;
   }
 
   .description {
