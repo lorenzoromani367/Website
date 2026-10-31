@@ -574,7 +574,7 @@ async function checkMarqueeSpeed(context, base, seen) {
     }), MARQUEE_SAMPLE_MS);
     if (!m) { problems.push(`testo scorrevole (${label}): non c'è il testo che scorre`); return problems; }
     const secs = m.dtSum / 1000;
-    if (m.used < 60 || secs < 1) { console.log(`  [testo scorrevole] ${engine} ${label}: saltata (solo ${m.used} fotogrammi utili su ${m.frames})`); return problems; }
+    if (m.used < 30 || secs < 1.5) { console.log(`  [testo scorrevole] ${engine} ${label}: saltata (solo ${m.used} fotogrammi utili su ${m.frames})`); return problems; }
     const expected = m.expected || 6;
     const codeSpeed = m.code / secs;
     const seenSpeed = m.seenPx / secs;
