@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 221,
-  "updatedAt": "2026-10-30T04:59:20.676Z",
+  "version": 259,
+  "updatedAt": "2026-10-31T09:34:45.616Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -341,7 +341,8 @@ window.SITE_STATE = {
       "project.cement.captionText.@cement/sunset-of-flower.jpg": "the sunset of flower \nX1 45 (part I)",
       "project.sospension.captionText.@sospension/estrangement-4.jpg": "untitled (part of a series)",
       "project.sospension.captionText.@sospension/estrangement-3.jpg": "untitled (part of a series)",
-      "project.sospension.captionText.@sospension/estrangement-1.jpg": "untitled (part of a series)"
+      "project.sospension.captionText.@sospension/estrangement-1.jpg": "untitled (part of a series)",
+      "project.cement.captionText.@cement/employee-looking-outside-his-window.jpg": "employee looking outside \nhis window"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -520,6 +521,10 @@ window.SITE_STATE = {
       "archive.bottomIndexPos": {
         "x": -93.859375,
         "y": 26.765625
+      },
+      "project.cement.captionPos.2": {
+        "x": -0.26953125,
+        "y": 0
       }
     },
     "site-removed-images-v1": {
@@ -866,6 +871,14 @@ window.SITE_STATE = {
       "zoom:images/mediality/mediality-5.jpg": {
         "width": "1519.8px",
         "height": "795.457px"
+      },
+      "project.homes.image.2": {
+        "width": "504.941px",
+        "height": ""
+      },
+      "project.homes.image.5": {
+        "width": "466.003px",
+        "height": ""
       }
     },
     "site-size-overrides-v1:m": {
@@ -966,11 +979,11 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.boudaries.image.11": {
-        "width": "258.222px",
+        "width": "287.037px",
         "height": ""
       },
       "project.boudaries.image.10": {
-        "width": "265.362px",
+        "width": "287.197px",
         "height": ""
       },
       "project.boudaries.image.9": {
@@ -979,6 +992,126 @@ window.SITE_STATE = {
       },
       "project.homes.image.0": {
         "width": "286.675px",
+        "height": ""
+      },
+      "project.boudaries.image.8": {
+        "width": "276.118px",
+        "height": ""
+      },
+      "project.boudaries.image.12": {
+        "width": "260.344px",
+        "height": ""
+      },
+      "project.homes.image.2": {
+        "width": "273.639px",
+        "height": ""
+      },
+      "project.homes.image.5": {
+        "width": "285.027px",
+        "height": ""
+      },
+      "project.homes.image.6": {
+        "width": "267.382px",
+        "height": ""
+      },
+      "project.homes.image.7": {
+        "width": "258.19px",
+        "height": ""
+      },
+      "project.homes.image.8": {
+        "width": "263.142px",
+        "height": ""
+      },
+      "project.stills.image.1": {
+        "width": "274.652px",
+        "height": ""
+      },
+      "project.stills.image.2": {
+        "width": "239.873px",
+        "height": ""
+      },
+      "project.stills.image.4": {
+        "width": "286.312px",
+        "height": ""
+      },
+      "project.stills.image.17": {
+        "width": "301.823px",
+        "height": ""
+      },
+      "project.stills.image.16": {
+        "width": "276.11px",
+        "height": ""
+      },
+      "project.stills.image.14": {
+        "width": "278.971px",
+        "height": ""
+      },
+      "project.stills.image.19": {
+        "width": "273.209px",
+        "height": ""
+      },
+      "project.stills.image.20": {
+        "width": "288.499px",
+        "height": ""
+      },
+      "project.stills.image.21": {
+        "width": "293.97px",
+        "height": ""
+      },
+      "project.recognition.image.7": {
+        "width": "286.53px",
+        "height": ""
+      },
+      "project.cement.image.1": {
+        "width": "266.013px",
+        "height": ""
+      },
+      "project.cement.image.2": {
+        "width": "255.22px",
+        "height": ""
+      },
+      "project.cement.image.3": {
+        "width": "272.004px",
+        "height": ""
+      },
+      "project.sospension.image.2": {
+        "width": "287.637px",
+        "height": ""
+      },
+      "project.sospension.image.3": {
+        "width": "270.785px",
+        "height": ""
+      },
+      "project.sospension.image.6": {
+        "width": "267.667px",
+        "height": ""
+      },
+      "project.sospension.image.8": {
+        "width": "256.428px",
+        "height": ""
+      },
+      "project.maniac.image.0": {
+        "width": "285.659px",
+        "height": ""
+      },
+      "project.maniac.image.1": {
+        "width": "282.557px",
+        "height": ""
+      },
+      "project.maniac.image.2": {
+        "width": "282.935px",
+        "height": ""
+      },
+      "project.maniac.image.4": {
+        "width": "270.885px",
+        "height": ""
+      },
+      "project.mediality.image.2": {
+        "width": "272.514px",
+        "height": ""
+      },
+      "project.mediality.image.5": {
+        "width": "277.83px",
         "height": ""
       }
     },
