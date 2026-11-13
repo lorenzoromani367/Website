@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -4985,14 +4985,19 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
      foto a salire o scendere: a ogni fotogramma, mentre l'altezza del riquadro cambia, la pagina viene spostata di quanto basta perché la
      barra stia sempre nello stesso punto dello schermo (startBarHold). Due casi, secondo che la barra si veda o no quando parte lo scorrimento:
      - la barra SI VEDE (anche solo in parte): resta dov'è, ovunque l'abbia messa l'utente con la pagina, o l'inquadratura di serie nel giro
-       prima. La pagina non va mai da nessuna parte per conto suo, né dopo 15 secondi: la barra non cambia posto da uno scorrimento all'altro;
+       prima. La pagina non va mai da nessuna parte per conto suo, né dopo 15 secondi: la barra non cambia posto da uno scorrimento all'altro.
+       Una sola eccezione (dal 13 novembre, scelta del proprietario: «foto sempre intera»): se la foto che arriva è così alta che, con la barra
+       lì, la sua cima finirebbe sopra FRAME_TOP_MARGIN dal bordo alto della finestra (o sopra dov'è già, se la pagina era stata messa più su),
+       la barra scende piano con la foto che si allunga e la cima resta ferma: è lo stesso movimento lento della galleria (protectFrame);
      - la barra NON si vede (la pagina è in cima a leggere il testo, o appena aperta): se la pagina è ferma da FRAME_QUIET_MS (e non c'è
        «riduci movimento», né la modalità modifica) è l'inquadratura di serie: la pagina scende (0,6-1,1 s, partenza e arrivo dolci) fino a
        mettere la barra in fondo alla finestra, e da lì la barra non si muove più. Se la foto più alta della galleria non ci sta insieme alla
-       barra la cima di quella foto può restare fuori dalla finestra, fino a FRAME_MAX_TOP_CUT px; se ne resterebbe fuori di più (finestre basse,
-       foto molto alte) la foto ha la precedenza e la barra sta più in basso, sotto il bordo, nel punto in cui la cima della foto più alta sta a
-       FRAME_TOP_MARGIN dal bordo alto (FRAME_PHOTO_FIRST; con false la barra sta sempre in fondo): la stessa posizione per ogni foto.
-       Se l'utente ha mosso la pagina da meno di FRAME_QUIET_MS non si fa niente.
+       barra (finestre basse, foto molto alte) la foto ha la precedenza: la barra sta più in basso, sotto il bordo, nel punto in cui la cima
+       della foto più alta sta a FRAME_TOP_MARGIN dal bordo alto: la stessa posizione per ogni foto, e nessuna foto ha la cima fuori dalla
+       finestra (FRAME_MAX_TOP_CUT = 0; fino al 13 novembre era 200: la barra restava in fondo e la cima delle foto alte poteva restare fuori
+       fino a 200 px, in una finestra di 950 px per 62 foto su 99; con FRAME_PHOTO_FIRST = false la barra sta sempre in fondo).
+       Se l'utente ha mosso la pagina da meno di FRAME_QUIET_MS non si fa niente, salvo che la pagina sia già nel punto dell'inquadratura di serie
+       (alreadyThere, per esempio appena arrivata lì con la discesa accompagnata della rotella): allora ci resta, e la barra si tiene ferma lì.
      Mentre l'utente muove la pagina (rotella con la sua coda di inerzia, barra di scorrimento, mouse premuto) non la si tocca; quando smette
      (USER_INPUT_SETTLE_MS, e la pagina ha smesso di muoversi) la barra si tiene dove l'ha lasciata, se si vede. Si ferma del tutto se si ingrandisce una foto, si entra in modifica
      o si cambia pagina. Non c'è su telefono né su schermi tattili (il dito la muove già da solo).
@@ -5007,7 +5012,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const FRAME_APPROACH_MIN_MS = 600;
   const FRAME_APPROACH_MAX_MS = 1100;
   const FRAME_PHOTO_FIRST = true; // false: la barra sta sempre in fondo, anche se la cima di una foto alta resta fuori dalla finestra
-  const FRAME_MAX_TOP_CUT = 200; // px di cima della foto più alta che possono restare fuori dalla finestra pur di avere la barra in fondo
+  const FRAME_MAX_TOP_CUT = 0; // px di cima della foto più alta che possono restare fuori dalla finestra pur di avere la barra in fondo (0: mai, la foto ha sempre la precedenza; fino al 13 novembre 200)
   const FRAME_TOP_MARGIN = 24; // px tra il bordo alto della finestra e la cima della foto più alta, quando la foto ha la precedenza
   let framing = null;
 
@@ -5073,8 +5078,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
 
   // Dove deve stare la cima della barra sullo schermo nell'inquadratura di serie: in fondo alla finestra (fine della pagina). Se per questo la cima
-  // della foto più alta resterebbe fuori dalla finestra per più di FRAME_MAX_TOP_CUT px (portatili, foto molto alte) la foto ha la precedenza: la
-  // barra sta più in basso, sotto il bordo.
+  // della foto più alta resterebbe fuori dalla finestra per più di FRAME_MAX_TOP_CUT px (oggi 0: mai; portatili, foto molto alte) la foto ha la
+  // precedenza: la barra sta più in basso, sotto il bordo.
   function framingHoldY() {
     const endY = barYAtPageEnd();
     if (FRAME_PHOTO_FIRST) {
@@ -5100,13 +5105,27 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       holdY = Math.max(endY, barY0); // la barra si vede: resta dov'è
       mode = "tenuta";
     } else {
-      if (!accompany) {
+      const standardY = framingHoldY(); // inquadratura di serie
+      // Una pagina già ferma nel punto dell'inquadratura di serie, anche con la barra sotto il bordo (la foto ha la precedenza), ci resta: non c'è
+      // nessun movimento da fare, solo il punto da tenere fermo mentre l'altezza cambia, come quando la barra si vede (tenuta). Vale anche se
+      // l'utente l'ha messa lì da poco (con la discesa accompagnata della rotella): altrimenti, nei 15 secondi dopo, la galleria cambiava
+      // altezza senza che la pagina la seguisse, e dopo veniva riportata a posto con una discesa.
+      const alreadyThere = !accompany && Math.abs(barY0 - standardY) <= 2;
+      if (!accompany && !alreadyThere) {
         why = isEditMode() ? "modalità modifica" : prefersReducedMotion() ? "riduci movimento" : !quiet ? "pagina mossa da poco" : "";
         if (why) { logFraming({ ran: false, why: `la barra non si vede (${why}): niente da tenere fermo`, grow: growNote }); return; }
       }
-      holdY = framingHoldY(); // inquadratura di serie
+      holdY = standardY;
       mode = "discesa";
     }
+    // Barra «tenuta» e foto in arrivo che deve restare intera (vedi il commento sopra, e holdNow qui sotto): la barra resta dov'è finché la cima
+    // della foto non arriverebbe più su di protectTop, cioè sopra FRAME_TOP_MARGIN dal bordo alto o sopra dov'è già adesso (se la pagina era stata
+    // messa più su: da lì non va oltre, ma niente salti). Con la barra che non si vede (discesa) non serve: l'inquadratura di serie è già fatta
+    // per la foto più alta della galleria.
+    const protectFrame = mode === "tenuta" && figures[current] ? figures[current].querySelector(".photo-frame") : null;
+    const protectTop = protectFrame
+      ? Math.min(FRAME_TOP_MARGIN, holdY - (footerBar.getBoundingClientRect().top - protectFrame.getBoundingClientRect().top))
+      : 0;
     const distance = Math.abs(Math.max(0, Math.min(pageMaxScroll(), barTopInPage() - holdY)) - startY);
     // La discesa accompagnata si muove come la galleria: stessa curva e, per le strade lunghe, stessa durata (vedi assistGlideFor)
     const glide = takeover && mode === "discesa" && distance >= 4 ? assistGlideFor(distance) : null;
@@ -5123,13 +5142,15 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       lastY: startY, // dove l'abbiamo messa l'ultima volta (come l'ha accettata il browser)
       assist: accompany, // vero finché la pagina sta venendo accompagnata verso il fondo (vedi goTo: uno scorrimento che parte intanto non la interrompe)
       takeover, // l'accompagnamento è partito subito, dal primo scatto di rotella o dal primo tasto (muove come la galleria: assistGlideFor)
+      protect: protectFrame, // la cornice della foto in arrivo, finché la sua cima va tenuta dentro la finestra (null: niente da proteggere)
+      protectTop, // dove, al massimo in alto, può stare la sua cima sullo schermo
       approaching: false,
       raf: 0,
     };
     state.approaching = state.approachMs > 0; // (dal primo fotogramma: chi guarda subito dopo, goTo e l'accompagnamento, deve già saperlo)
     framing = state;
     setPageAnchoring(false);
-    logFraming({ ran: true, mode, why, holdY: Math.round(holdY), endY: Math.round(endY), grow: growNote, assist: accompany, fromY: Math.round(startY) });
+    logFraming({ ran: true, mode, why, holdY: Math.round(holdY), endY: Math.round(endY), grow: growNote, assist: accompany, fromY: Math.round(startY), protectTop: protectFrame ? Math.round(protectTop) : null });
     const step = (now) => {
       if (framing !== state) return;
       const max = pageMaxScroll(); // (forza il calcolo della pagina di questo fotogramma, che comunque servirebbe)
@@ -5151,11 +5172,17 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         state.mode = "tenuta";
         state.approachMs = 0;
         state.holdY = Math.max(barYAtPageEnd(), barY);
+        state.protect = null; // la pagina l'ha messa l'utente dov'è: da lì non la si sposta
         state.lastY = window.scrollY;
       } else if (state.mode === "tenuta" && !(state.holdY < window.innerHeight - 1)) {
         state.lastY = window.scrollY; // il punto in cui tenerla non si vede (l'utente guarda altro): niente da tenere fermo, la pagina non si sposta
       } else {
-        const target = Math.max(0, Math.min(max, barTopInPage() - state.holdY)); // dove deve stare la pagina in questo fotogramma
+        // Con una foto da proteggere la barra resta dov'è finché la cima della foto sta sotto protectTop; poi scende, piano, con la foto che si
+        // allunga: dalla cima della foto alla cima della barra c'è (barra - cima), e cresce con il riquadro.
+        const holdNow = state.protect
+          ? Math.max(state.holdY, state.protectTop + footerBar.getBoundingClientRect().top - state.protect.getBoundingClientRect().top)
+          : state.holdY;
+        const target = Math.max(0, Math.min(max, barTopInPage() - holdNow)); // dove deve stare la pagina in questo fotogramma
         const p = state.approachMs ? Math.min(1, Math.max(0, (now - state.startedAt) / state.approachMs)) : 1;
         approaching = p < 1;
         if (approaching) {

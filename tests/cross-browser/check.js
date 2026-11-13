@@ -333,6 +333,64 @@ async function checkPhotoRise(context, base) {
   return problems;
 }
 
+// Una foto non finisce mai con la cima fuori dalla finestra (13 novembre, scelta del proprietario: «foto sempre intera»). Prima la barra col numero
+// restava in fondo e la cima delle foto alte poteva restare fuori fino a 200 px (FRAME_MAX_TOP_CUT): con una finestra alta 950 px 62 foto su 99, e in
+// un video del proprietario la foto 2 di Homes lo era di 135 px. Si prova il caso della barra «tenuta» (startBarHold, protectFrame): Homes, finestra
+// del formato «computer» (1440 × 900), la pagina messa dove la barra sta a 80 px dal bordo basso (si vede) e la prima foto sta tutta dentro; poi il
+// tasto → verso la foto 2, la più alta. A transizione finita la cima della sua cornice deve stare dentro la finestra (al massimo 1,5 px fuori dal
+// margine di 24 px, o da dov'era se più su), e la pagina non deve muoversi di scatto (la barra scende piano con la foto che si allunga). Se Homes
+// cambia (foto ridimensionate) e la prova non ha più da misurare, lo dice e passa.
+const NOCUT_ROUTE = '#/project/homes';
+const NOCUT_TOP_MARGIN_PX = 24; // FRAME_TOP_MARGIN in js/app_v58.js
+const NOCUT_TOLERANCE_PX = 1.5;
+async function checkPhotoNotCut(context, base) {
+  const problems = [];
+  if (context.__profile !== 'computer') return problems; // una volta sola per motore (il retina ha la stessa altezza; il telefono non ha la barra ferma)
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${NOCUT_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(SETTLE_MS + 1200); // (nei primi 2 s il sito non conta i movimenti della pagina)
+    const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
+    if (geo.photos < 2 || geo.max <= 150) return problems;
+    await page.evaluate(() => { // la pagina messa dove la barra sta a 80 px dal bordo basso (con window.scrollTo: non vale come gesto dell'utente)
+      const barTop = document.querySelector('.gallerybar').getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, Math.max(0, Math.min(document.documentElement.scrollHeight - window.innerHeight, barTop - (window.innerHeight - 80))));
+    });
+    await page.waitForTimeout(700);
+    const pointer = await page.evaluate(() => { const r = document.querySelector('.photo-viewport').getBoundingClientRect(); return { x: r.left + r.width / 2, y: Math.max(30, Math.min(window.innerHeight - 30, r.top + r.height / 2)) }; });
+    await page.mouse.move(pointer.x, pointer.y); // sulla galleria: ferma l'autoplay, che cambierebbe foto per conto suo
+    const read = () => page.evaluate(() => {
+      const figs = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')];
+      const vp = document.querySelector('.photo-viewport').getBoundingClientRect();
+      let cur = 0; let best = Infinity;
+      figs.forEach((f, i) => { const d = Math.abs(f.getBoundingClientRect().left - vp.left); if (d < best) { best = d; cur = i; } });
+      const img = figs[cur].querySelector('.photo-frame img');
+      return { cur: cur + 1, top: img ? img.getBoundingClientRect().top : null, bar: document.querySelector('.gallerybar').getBoundingClientRect().top, h: window.innerHeight };
+    });
+    const before = await read();
+    if (before.top === null || before.top < NOCUT_TOP_MARGIN_PX - NOCUT_TOLERANCE_PX || !(before.bar < before.h - 20)) {
+      console.log(`  [foto intera] ${context.__engine}: non misurata (con la pagina messa così la prima foto sta a ${before.top === null ? '?' : Math.round(before.top)} px dal bordo alto e la barra a ${Math.round(before.bar)} su ${before.h})`);
+      return problems;
+    }
+    const watching = watchPage(page, 7500);
+    await page.waitForTimeout(150);
+    await page.keyboard.press('ArrowRight');
+    const w = await watching;
+    const after = await read();
+    if (after.cur === before.cur) { console.log(`  [foto intera] ${context.__engine}: non misurata (il tasto → non ha cambiato foto)`); return problems; }
+    const floor = Math.min(NOCUT_TOP_MARGIN_PX, before.top) - NOCUT_TOLERANCE_PX;
+    console.log(`  [foto intera] ${context.__engine}: dalla foto ${before.cur} alla ${after.cur} con la barra a ${Math.round(before.bar)} su ${before.h}: la cima della foto in arrivo sta a ${Math.round(after.top)} px dal bordo alto (limite ${Math.round(floor)}), la barra è andata a ${Math.round(after.bar)} px; la pagina si muove al massimo di ${Math.round(w.peak)} px/s (limite ${PHOTO_PEAK_PX_S})`);
+    if (after.top < floor) problems.push(`in Homes, passando alla foto ${after.cur} con la barra in vista, la cima della foto resta fuori dalla finestra: è a ${Math.round(after.top)} px dal bordo alto (deve stare ad almeno ${Math.round(floor)}): la barra deve scendere piano con la foto, non restare ferma a tagliarla (protectFrame in js/app_v58.js)`);
+    if (w.peak > PHOTO_PEAK_PX_S) problems.push(`in Homes, con la foto in arrivo più alta la pagina si muove troppo di scatto: ${Math.round(w.peak)} px al secondo al massimo (limite ${PHOTO_PEAK_PX_S})`);
+  } catch (e) {
+    problems.push(`prova della foto sempre intera non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 // Stessa prova, ma con la pagina già mossa dall'utente (rotella) in un punto in cui la barra si vede senza essere in fondo: lì la pagina non
 // deve andare da nessuna parte, ma la barra deve restare dov'è mentre la foto cambia altezza (era il caso che non funzionava: l'inquadratura
 // aspettava 15 s dall'ultimo movimento dell'utente e nel frattempo la barra saliva e scendeva con la foto).
@@ -658,6 +716,7 @@ async function runEngine(engine, base, origin, routes) {
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
       if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); r.problems.push(...await checkAssist(context, base)); r.problems.push(...await checkMarqueeSpeed(context, base, marqueeSeen)); }
       if (route === RISE_ROUTE) r.problems.push(...await checkPhotoRise(context, base));
+      if (route === NOCUT_ROUTE) r.problems.push(...await checkPhotoNotCut(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();
