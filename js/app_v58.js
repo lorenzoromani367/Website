@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -579,6 +579,13 @@ const MARQUEE_PX_PER_SEC = 6;  // velocità dello scorrimento del testo (compute
 // (il controllo su GitHub confronta le righe al secondo di computer e telefono e diventa rosso se non tornano).
 const MARQUEE_PX_PER_SEC_PHONE = 4.95;
 const marqueeSpeed = () => (isMobileViewport() ? MARQUEE_PX_PER_SEC_PHONE : MARQUEE_PX_PER_SEC);
+// VERSO del testo scorrevole: il testo SALE, dal basso verso l'alto (scelta del proprietario, 15 novembre; fino ad allora scendeva).
+// La striscia (testo, vuoto, copia del testo) è spostata di "pos - distanza" px, con pos tra 0 e la distanza del giro: col tempo pos
+// DIMINUISCE, quindi la striscia va verso l'alto. Arrivata a 0 pos ricomincia da "distanza": è lo stesso identico fotogramma, perché la
+// seconda copia del testo prende il posto della prima. È l'unico punto che decide il verso: lo usano tutti i testi scorrevoli (gallerie e
+// About) e il trascinamento col dito lo lascia com'è (il testo segue il dito), poi lo scorrimento riparte da lì, sempre verso l'alto.
+// La velocità (6 px al secondo, 4,95 su telefono) e la partenza (prima riga sul bordo alto del riquadro) non cambiano.
+const marqueeAdvance = (pos, distance, dt) => (((pos - dt * marqueeSpeed()) % distance) + distance) % distance;
 // Spazio minimo (px) tra la FINE del testo scorrevole e il suo ricominciare: è quello del testo "recognition".
 // Con meno spazio, appena si apre la pagina si vedeva la coda del testo sopra il suo inizio, come se partisse
 // da un punto a caso (succedeva in "homes", "stills"...).
@@ -4121,9 +4128,9 @@ function buildTopbar(keyPrefix, indexText, titleText, { onIndexChange, hideIndex
   return { topbar, resolvedIndexText };
 }
 
-// Il testo scorrevole è una striscia con due copie del testo una sotto l'altra, che scende in loop dentro il suo
-// riquadro (.description). Qui si misura, sulla pagina vera e a striscia ferma:
-//  - distance: di quanto deve scendere prima di ripetersi (dalla prima riga di una copia alla prima riga dell'altra);
+// Il testo scorrevole è una striscia con due copie del testo una sotto l'altra, che SALE in loop dentro il suo
+// riquadro (.description; dal 15 novembre, prima scendeva: vedi marqueeAdvance). Qui si misura, sulla pagina vera e a striscia ferma:
+//  - distance: di quanto deve muoversi prima di ripetersi (dalla prima riga di una copia alla prima riga dell'altra);
 //  - startPos: il punto di partenza di OGNI testo scorrevole del sito: la prima riga del testo esattamente sul
 //    bordo alto del riquadro in cui scorre (prima partiva più in basso, dopo il margine interno del riquadro).
 // Si usano differenze tra rettangoli e non "offsetTop": quest'ultimo cambia da un browser all'altro e arrotonda ai pixel interi.
@@ -4647,8 +4654,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // Marquee del testo: SEMPRE attivo, velocità volutamente minima (un
   // filo di movimento continuo, non una lettura a scorrimento). Guidato
   // da requestAnimationFrame (non da un'animazione CSS) proprio per
-  // poterlo anche trascinare a mano. "marqueePos" è quanto si è già
-  // scorso (0..marqueeDistance, in px); trascinando lo si sposta
+  // poterlo anche trascinare a mano. "marqueePos" è dove si trova la
+  // striscia nel suo giro (0..marqueeDistance, in px: la striscia è spostata
+  // di pos - distanza, e col tempo pos DIMINUISCE, quindi il testo sale: vedi
+  // marqueeAdvance); trascinando lo si sposta
   // direttamente, e l'avanzamento automatico riprende da lì al rilascio,
   // senza scattare indietro. La distanza è quella ESATTA misurata sul DOM
   // (non una percentuale) — vedi il commento in style.css sul perché
@@ -4695,7 +4704,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     if (dt > 0.1) dt = 0.1;
     marqueeLastTs = ts;
     if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
-      marqueePos = (marqueePos + dt * marqueeSpeed()) % marqueeDistance;
+      marqueePos = marqueeAdvance(marqueePos, marqueeDistance, dt); // verso: il testo sale (vedi marqueeAdvance)
       applyMarqueeTransform();
     }
     marqueeRafId = requestAnimationFrame(marqueeTick);
@@ -6098,7 +6107,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
       if (dt > 0.1) dt = 0.1;
       marqueeLastTs = ts;
       if (!marqueeDragState && !marqueeHoverPaused && !isEditMode() && marqueeDistance > 0) {
-        marqueePos = (marqueePos + dt * marqueeSpeed()) % marqueeDistance;
+        marqueePos = marqueeAdvance(marqueePos, marqueeDistance, dt); // verso: il testo sale (vedi marqueeAdvance)
         applyMarqueeTransform();
       }
       marqueeRafId = requestAnimationFrame(marqueeTick);

@@ -510,7 +510,8 @@ body.edit-mode .topbar-index-input:focus {
 
 /* La larghezza/altezza di .description viene impostata da JS leggendo
    LAYOUT.gallery.descriptionWidth (o descriptionBox del singolo progetto).
-   Il testo scorre verticalmente dall'alto verso il basso in loop continuo,
+   Il testo scorre verticalmente dal basso verso l'alto (fino al 15 novembre
+   dall'alto verso il basso) in loop continuo,
    come un marquee: dentro c'è un'unica striscia (.description-track) con
    il testo ripetuto due volte una sotto l'altra. Lo scorrimento è guidato
    da JS (requestAnimationFrame in app.js), non da un'animazione CSS,
