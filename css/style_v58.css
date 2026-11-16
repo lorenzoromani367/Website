@@ -719,7 +719,11 @@ body.edit-mode .description-editable {
 .archive-word {
   font-family: var(--mono);
   font-size: 0.8rem;
-  font-weight: 550;
+  /* Peso: 700 (il grassetto vero), non 550. Il carattere a macchina da scrivere ("Courier New") ha solo due pesi, normale (400) e
+     grassetto (700): con 550, a metà, ogni browser (e ogni versione) sceglie a modo suo, e sul computer del proprietario le didascalie
+     sono risultate a volte a posto (grassetto) e a volte troppo leggere (normale): 13 e 16 novembre. Con 700 tutti scelgono la stessa
+     faccia. Le larghezze delle lettere non cambiano (nel carattere a macchina da scrivere normale e grassetto sono larghi uguale). */
+  font-weight: 700;
   line-height: 1.4;
   letter-spacing: normal;
   color: var(--muted);
@@ -1926,7 +1930,8 @@ body.edit-mode .guide-line {
 .photo-caption-text {
   font-family: var(--mono);
   font-size: 0.8rem;
-  font-weight: normal;
+  /* Stesso peso delle altre didascalie (vedi ".caption-input" più sopra): 700. Fino al 16 novembre era "normal" (400), cioè la più sottile. */
+  font-weight: 700;
   color: var(--muted);
   text-align: center;
   margin-top: 8px;

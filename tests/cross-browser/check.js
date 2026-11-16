@@ -17,7 +17,9 @@
        - testo scorrevole di una galleria: le stesse RIGHE al secondo su computer (6 px al secondo, MARQUEE_PX_PER_SEC) e su telefono (4,95 px al
          secondo, MARQUEE_PX_PER_SEC_PHONE: il carattere è più piccolo), misurate sul testo vero e non lette dalla costante: fallisce se il sito lo
          sposta di più o di meno, se qualcosa lo scala o lo ferma, se le righe al secondo di telefono e computer non tornano, o se il testo
-         SCENDE invece di salire (dal 15 novembre va dal basso verso l'alto; prima scendeva: marqueeAdvance in js/app_v58.js).
+         SCENDE invece di salire (dal 15 novembre va dal basso verso l'alto; prima scendeva: marqueeAdvance in js/app_v58.js);
+       - didascalie (gallerie e Core Archive): il peso del carattere è 700, il grassetto vero. Con un peso a metà (era 550) ogni browser sceglie a modo suo e
+         sul computer del proprietario le didascalie sono risultate troppo leggere (13 e 16 novembre): si legge lo stile calcolato e si pretende 700.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -708,6 +710,37 @@ async function checkBarHoldAfterUserScroll(context, base) {
 }
 
 /* ------------------------------ un motore intero ------------------------------ */
+// Peso del carattere delle didascalie: 700, il grassetto vero, in ogni motore e formato. Il carattere a macchina da scrivere ("Courier New") ha solo due
+// pesi, normale (400) e grassetto (700): con un peso a metà (era 550) ogni browser, e ogni versione, sceglie a modo suo, e sul computer del proprietario le
+// didascalie sono risultate troppo leggere (13 e 16 novembre). Quale faccia scelga davvero un browser non si può leggere da qui: si controlla che il CSS ne
+// chieda una vera. Si legge lo stile calcolato di una didascalia di galleria (.caption-input), di una parola del Core Archive (.archive-word) e di una
+// didascalia delle pagine del Core Archive (.photo-caption-text); le ultime due non stanno nella pagina di Homes: se ne misura una copia messa lì.
+const CAPTION_WEIGHT = 700;
+async function checkCaptionWeight(context, base) {
+  const problems = [];
+  if (context.__profile === 'computer retina') return problems; // stesso CSS del computer
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${NOCUT_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.caption-input', { state: 'attached', timeout: 20000 });
+    const w = await page.evaluate(() => {
+      const probe = (tag, cls) => { const e = document.createElement(tag); e.className = cls; e.textContent = 'x'; document.body.appendChild(e); const wt = getComputedStyle(e).fontWeight; e.remove(); return wt; };
+      return {
+        'didascalie delle gallerie (.caption-input)': getComputedStyle(document.querySelector('.caption-input')).fontWeight,
+        'parole del Core Archive (.archive-word)': probe('span', 'archive-word'),
+        'didascalie del Core Archive (.photo-caption-text)': probe('p', 'photo-caption-text'),
+      };
+    });
+    const bad = Object.entries(w).filter(([, v]) => Number(v) !== CAPTION_WEIGHT);
+    if (bad.length) problems.push(`didascalie: il peso del carattere non è ${CAPTION_WEIGHT} (${bad.map(([k, v]) => `${k}: ${v}`).join('; ')}): con un peso a metà, o normale, ogni browser sceglie a modo suo e le didascalie possono risultare troppo leggere (css/style_v58.css)`);
+    console.log(`  [peso didascalie] ${context.__engine} ${context.__profile}: ${Object.entries(w).map(([k, v]) => `${k.replace(/ \(.*\)$/, '')} ${v}`).join(' · ')} (richiesto ${CAPTION_WEIGHT})`);
+  } catch (e) {
+    problems.push(`prova del peso delle didascalie non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 async function runEngine(engine, base, origin, routes) {
   const variant = VARIANTS[engine] || { engine };
   const browser = await pw[variant.engine].launch(variant.args ? { args: variant.args } : {});
@@ -728,7 +761,7 @@ async function runEngine(engine, base, origin, routes) {
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
       if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); r.problems.push(...await checkAssist(context, base)); r.problems.push(...await checkMarqueeSpeed(context, base, marqueeSeen)); }
       if (route === RISE_ROUTE) r.problems.push(...await checkPhotoRise(context, base));
-      if (route === NOCUT_ROUTE) r.problems.push(...await checkPhotoNotCut(context, base));
+      if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();
