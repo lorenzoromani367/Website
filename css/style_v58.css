@@ -1000,6 +1000,65 @@ body.edit-mode .grid-btn {
   }
 }
 
+/* Core Archive: frecce avanti/indietro nella foto ingrandita di una parola (vedi zoomGo in app_v58.js). Fisse ai due lati dello
+   schermo, a mezza altezza, nei margini che la foto lascia liberi (3% dello schermo, come in fitTarget): restano sempre nello stesso
+   punto, così si può sfogliare cliccando di seguito senza spostare il mouse. Spuntano dopo il volo della foto (350 ms di attesa) e
+   spariscono subito alla chiusura. Nascoste del tutto (visibility) finché non c'è una foto aperta: né Tab né lettori di schermo le trovano.
+   Stesso colore e stesse frecce (← →) di quelle delle gallerie. Su telefono la foto arriva quasi al bordo: le frecce stanno sopra la foto,
+   in un cerchio scuro semitrasparente che le tiene leggibili anche sulle foto chiare. */
+.lightbox-nav {
+  position: fixed;
+  top: 50%;
+  z-index: 302;
+  width: max(44px, 3vw);
+  height: 64px;
+  margin-top: -32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--paper);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease, visibility 0s linear 150ms;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* due tocchi di seguito su una freccia sono due passaggi, non uno zoom della pagina */
+}
+
+.lightbox-nav.prev { left: 0; }
+.lightbox-nav.next { right: 0; }
+
+.lightbox-nav.is-active {
+  visibility: visible;
+  opacity: 0.7;
+  pointer-events: auto;
+  transition: opacity 300ms ease 350ms, visibility 0s;
+}
+
+.lightbox-nav.is-active:hover,
+.lightbox-nav.is-active:focus-visible {
+  opacity: 1;
+  transition-delay: 0s;
+  transition-duration: 150ms;
+}
+
+@media (max-width: 700px) {
+  .lightbox-nav {
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+    border-radius: 50%;
+    background: rgba(22, 22, 22, 0.55);
+    font-size: 1.3rem;
+  }
+
+  .lightbox-nav.prev { left: 12px; }
+  .lightbox-nav.next { right: 12px; }
+}
+
 /* Zoom sul testo: stesso identico rettangolo beige di ".page" (stessa
    larghezza, stessa altezza minima quasi a schermo intero, stesso
    margine) — non un box che si stringe attorno al testo, ma il "foglio"

@@ -19,7 +19,12 @@
          sposta di più o di meno, se qualcosa lo scala o lo ferma, se le righe al secondo di telefono e computer non tornano, o se il testo
          SCENDE invece di salire (dal 15 novembre va dal basso verso l'alto; prima scendeva: marqueeAdvance in js/app_v58.js);
        - didascalie (gallerie e Core Archive): il peso del carattere è 700, il grassetto vero. Con un peso a metà (era 550) ogni browser sceglie a modo suo e
-         sul computer del proprietario le didascalie sono risultate troppo leggere (13 e 16 novembre): si legge lo stile calcolato e si pretende 700.
+         sul computer del proprietario le didascalie sono risultate troppo leggere (13 e 16 novembre): si legge lo stile calcolato e si pretende 700;
+       - Core Archive, foto ingrandita di una parola: ci sono le frecce avanti/indietro (visibili, dentro lo schermo, almeno 44 px); → porta alla parola
+         dopo, ← a quella prima, dalla prima ← porta all'ultima, il tasto → fa lo stesso; a passaggio finito non resta una copia della foto vecchia;
+         chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre);
+       - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
+         content.js e le modifiche al file non comparivano). Il file si rilegge e si divide in paragrafi con un altro metodo da quello del sito.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -141,6 +146,18 @@ function measureInPage() {
   return out;
 }
 
+// Dal 19 novembre la prima foto di una galleria cambia da sola dopo 3 s (AUTOPLAY_DELAY: prima erano 6 s) e, su computer, in quel momento la pagina
+// scende da sola all'inquadratura di serie. Le prove che aprono una galleria e poi la guidano coi tasti o con la rotella, o ne misurano la pagina,
+// partono da una pagina «appena aperta» e non devono ritrovarsi a metà un cambio di foto per conto suo (con la macchina di GitHub, più lenta, il
+// margine di prima — quattro secondi — non c'è più). Il mouse sulle foto ferma l'avanzamento automatico: è quello che fa il sito per chi lo guarda.
+// Lo si mette lì subito dopo il caricamento (se la pagina non ha una galleria non c'è niente da fermare).
+async function holdAutoplay(page) {
+  try {
+    const p = await page.evaluate(() => { const v = document.querySelector('.photo-viewport'); if (!v) return null; const r = v.getBoundingClientRect(); return { x: r.left + r.width / 2, y: Math.max(30, Math.min(window.innerHeight - 30, r.top + r.height / 2)) }; });
+    if (p) await page.mouse.move(p.x, p.y);
+  } catch (e) { /* senza galleria, o senza mouse, non c'è niente da fermare */ }
+}
+
 /* ------------------------------ una pagina, un motore, un formato ------------------------------ */
 async function checkPage(context, base, origin, route, withShot, shotPath) {
   const problems = [];
@@ -156,6 +173,7 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
       try { await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${route}`, { waitUntil: 'load', timeout: 45000 }); await page.waitForSelector('#app > *', { state: 'attached', timeout: 20000 }); break; }
       catch (e) { if (attempt >= 2) throw e; await page.waitForTimeout(1500); }
     }
+    await holdAutoplay(page); // (la prima foto non deve cambiare da sola a metà delle misure: vedi holdAutoplay)
     await page.evaluate(() => (document.fonts && document.fonts.ready) || null);
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
@@ -251,6 +269,7 @@ async function checkFraming(context, base) {
     await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page);
     await page.waitForTimeout(SETTLE_MS);
     const read = () => page.evaluate(() => ({ y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
     const watchBar = (ms) => watchPage(page, ms);
@@ -304,6 +323,7 @@ async function checkPhotoRise(context, base) {
     await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${RISE_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page);
     await page.waitForTimeout(SETTLE_MS);
     const geo = await page.evaluate(() => {
       // altezza del riquadro con ciascuna foto in vista: fino al punto più basso tra foto, didascalia e figura (come updateViewportHeight)
@@ -354,6 +374,7 @@ async function checkPhotoNotCut(context, base) {
     await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${NOCUT_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page);
     await page.waitForTimeout(SETTLE_MS + 1200); // (nei primi 2 s il sito non conta i movimenti della pagina)
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
     if (geo.photos < 2 || geo.max <= 150) return problems;
@@ -512,6 +533,7 @@ async function checkAssist(context, base) {
     await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page); // (fermo fino al momento di cominciare: poi il mouse si sposta e, dopo 3 s, la galleria può cambiare foto a metà discesa, come dal sito)
     await page.waitForTimeout(SETTLE_MS + 1200); // (nei primi 2 s il sito non conta i movimenti della pagina: il browser a volte la rimette dov'era)
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight }));
     if (geo.max <= 150) { console.log(`  [accompagnamento] ${context.__engine}: saltata (la pagina scorre solo ${Math.round(geo.max)} px)`); return problems; }
@@ -679,6 +701,7 @@ async function checkBarHoldAfterUserScroll(context, base) {
     await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page);
     await page.waitForTimeout(SETTLE_MS);
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, h: window.innerHeight, barTop: document.querySelector('.gallerybar').getBoundingClientRect().top + window.scrollY, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
     if (geo.photos < 2 || geo.max <= 8) return problems;
@@ -741,6 +764,109 @@ async function checkCaptionWeight(context, base) {
   return problems;
 }
 
+// Il testo di About sta in testi/about.txt e il sito lo legge da lì (19 novembre; prima mostrava una copia in js/content.js e le modifiche al file non
+// comparivano mai). Si rilegge il file dalla pagina (stesso indirizzo relativo del sito), lo si divide in paragrafi con un metodo diverso da quello del sito
+// (righe → blocchi separati da righe vuote → a capo = spazio; il testo passa per il parser HTML come fa il sito), e si confronta con quello che la pagina mostra.
+const ABOUT_ROUTE = '#/about';
+async function checkAboutText(context, base) {
+  const problems = [];
+  if (context.__profile === 'computer retina') return problems; // stesso testo del computer
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${ABOUT_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.description-content p', { state: 'attached', timeout: 20000 });
+    const r = await page.evaluate(async () => {
+      const res = await fetch('testi/about.txt?v=' + Date.now());
+      const file = res.ok ? await res.text() : null;
+      const decode = (s) => { const p = document.createElement('p'); p.innerHTML = s; return p.textContent; };
+      const expected = file === null ? [] : file.replace(/\r\n?/g, '\n').trim().split(/\n[ \t]*\n+/).map((b) => b.split('\n').map((l) => l.trim()).filter((l) => l.length).join(' ')).filter((b) => b.length).map(decode);
+      const shown = [...document.querySelectorAll('.description-content p')].filter((p) => !p.classList.contains('spacer')).map((p) => p.textContent);
+      return { status: res.status, expected, shown };
+    });
+    if (r.expected.length === 0) problems.push(`About: testi/about.txt non si legge o è vuoto (risposta ${r.status}): il sito è ripiegato sul testo di content.js`);
+    else if (JSON.stringify(r.expected) !== JSON.stringify(r.shown)) problems.push(`About: la pagina non mostra il testo di testi/about.txt (file: ${r.expected.length} paragrafi, a partire da «${r.expected[0].slice(0, 40)}»; pagina: ${r.shown.length} paragrafi, a partire da «${(r.shown[0] || '').slice(0, 40)}»)`);
+    console.log(`  [testo di About] ${context.__engine} ${context.__profile}: ${r.shown.length} paragrafi mostrati, ${r.expected.length} nel file${r.expected.length && JSON.stringify(r.expected) === JSON.stringify(r.shown) ? ': uguali' : ': DIVERSI'}`);
+  } catch (e) {
+    problems.push(`prova del testo di About non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
+// Core Archive: la foto ingrandita di una parola ha le frecce avanti/indietro (19 novembre), così non si torna all'elenco ogni volta. Si apre la prima
+// parola con la foto, e si controlla: le due frecce compaiono (visibili, dentro lo schermo, grandi almeno 44 px); → porta alla foto della parola dopo e ←
+// a quella prima; dalla prima parola ← porta all'ultima (si gira); il tasto → fa lo stesso della freccia; alla fine si chiude e le frecce spariscono.
+// Il passaggio è una dissolvenza (non un volo): a passaggio finito non resta nessuna copia della foto vecchia e il riquadro è pieno e fermo.
+const ARCHIVE_ROUTE = '#/archive';
+async function checkArchiveArrows(context, base) {
+  const problems = [];
+  if (context.__profile === 'computer retina') return problems; // stesso codice del computer
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${ARCHIVE_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.archive-word-frame.is-linked', { state: 'attached', timeout: 20000 });
+    await page.waitForTimeout(SETTLE_MS);
+    const words = await page.evaluate(() => [...document.querySelectorAll('.archive-word-frame.is-linked .hidden-link-img')].map((i) => i.src));
+    if (words.length < 3) {
+      console.log(`  [frecce core archive] ${context.__engine} ${context.__profile}: saltata (solo ${words.length} parole con una foto)`);
+      await page.close();
+      return problems;
+    }
+    const state = () => page.evaluate(() => {
+      const frame = document.getElementById('lightboxActiveFrame');
+      const img = document.getElementById('lightboxActiveImg');
+      const cs = getComputedStyle(frame);
+      return {
+        open: frame.classList.contains('is-active'),
+        src: img.getAttribute('src'),
+        opacity: Number(cs.opacity),
+        transform: cs.transform,
+        ghosts: document.querySelectorAll('.lightbox-ghost').length,
+        nav: [...document.querySelectorAll('.lightbox-nav')].map((b) => { const s = getComputedStyle(b); const r = b.getBoundingClientRect(); return { visible: s.visibility === 'visible' && Number(s.opacity) > 0.5, w: r.width, h: r.height, inside: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight }; }),
+      };
+    });
+    const settled = (s) => s.ghosts === 0 && s.opacity === 1 && (s.transform === 'none' || /^matrix\(1, 0, 0, 1, 0(?:\.0+)?, 0(?:\.0+)?\)$/.test(s.transform));
+    const last = words.length - 1;
+    const steps = [];
+    const expectAt = (s, i, what) => { if (!s.open || s.src !== words[i]) problems.push(`Core Archive (${context.__profile}): ${what}: non si vede la foto della parola ${i + 1} di ${words.length}`); else if (!settled(s)) problems.push(`Core Archive (${context.__profile}): ${what}: a passaggio finito resta una copia della foto vecchia o il riquadro non è pieno e fermo (copie ${s.ghosts}, opacità ${s.opacity}, ${s.transform})`); };
+
+    await page.locator('.archive-word-frame.is-linked').first().click();
+    await page.waitForTimeout(1800);
+    let s = await state();
+    expectAt(s, 0, 'apertura');
+    if (s.nav.length !== 2 || !s.nav.every((n) => n.visible)) problems.push(`Core Archive (${context.__profile}): le frecce avanti/indietro non compaiono sulla foto ingrandita di una parola`);
+    else if (!s.nav.every((n) => n.inside && n.w >= 44 && n.h >= 44)) problems.push(`Core Archive (${context.__profile}): le frecce stanno fuori dallo schermo o sono più piccole di 44 px (${s.nav.map((n) => `${Math.round(n.w)}×${Math.round(n.h)}`).join(', ')})`);
+    steps.push('si aprono');
+
+    await page.click('.lightbox-nav.next');
+    await page.waitForTimeout(1100);
+    expectAt(await state(), 1, '→');
+    await page.click('.lightbox-nav.prev');
+    await page.waitForTimeout(1100);
+    expectAt(await state(), 0, '←');
+    await page.click('.lightbox-nav.prev');
+    await page.waitForTimeout(1100);
+    expectAt(await state(), last, '← dalla prima parola (si gira)');
+    steps.push('→ ← e giro');
+
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(1100);
+    expectAt(await state(), 0, 'tasto →');
+    steps.push('tasto →');
+
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(1100);
+    s = await state();
+    if (s.open || s.nav.some((n) => n.visible) || s.ghosts) problems.push(`Core Archive (${context.__profile}): dopo la chiusura restano aperti il riquadro, le frecce o una copia della foto (aperto ${s.open}, frecce visibili ${s.nav.filter((n) => n.visible).length}, copie ${s.ghosts})`);
+    steps.push('chiusura');
+    console.log(`  [frecce core archive] ${context.__engine} ${context.__profile}: ${words.length} parole con foto; ${steps.join(', ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
+  } catch (e) {
+    problems.push(`prova delle frecce del Core Archive non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 async function runEngine(engine, base, origin, routes) {
   const variant = VARIANTS[engine] || { engine };
   const browser = await pw[variant.engine].launch(variant.args ? { args: variant.args } : {});
@@ -762,6 +888,8 @@ async function runEngine(engine, base, origin, routes) {
       if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); r.problems.push(...await checkAssist(context, base)); r.problems.push(...await checkMarqueeSpeed(context, base, marqueeSeen)); }
       if (route === RISE_ROUTE) r.problems.push(...await checkPhotoRise(context, base));
       if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
+      if (route === ABOUT_ROUTE) r.problems.push(...await checkAboutText(context, base));
+      if (route === ARCHIVE_ROUTE) r.problems.push(...await checkArchiveArrows(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();

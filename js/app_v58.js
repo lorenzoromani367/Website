@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -570,7 +570,7 @@ const siteStore = (() => {
 /* -------------------------------------------------------------------------
    1. Costanti regolabili
    ------------------------------------------------------------------------- */
-const AUTOPLAY_DELAY = 6000;   // ms di pausa su ogni foto prima di avanzare
+const AUTOPLAY_DELAY = 3000;   // ms di pausa su ogni foto prima di avanzare (19 novembre: da 6000 a 3000, richiesta del proprietario; lo scorrimento, qui sotto, è rimasto di 6 s)
 const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
 const MARQUEE_PX_PER_SEC = 6;  // velocità dello scorrimento del testo (computer)
 // Su telefono il carattere è più piccolo (12,5 px invece di 15,2: riga di 20,7 invece di 25,1 px), quindi a 6 px al secondo
@@ -3287,6 +3287,83 @@ let zoomCurrentClose = null;
 // apertura, tolta all'inizio della chiusura. null = nessuna foto ingrandita da adattare.
 let zoomRefit = null;
 
+/* ---- Core Archive: frecce avanti/indietro nella foto ingrandita di una parola (19 novembre) ----
+   Chi ingrandisce la foto di una parola del Core Archive può passare alla parola prima o dopo senza chiudere e senza tornare
+   all'elenco: frecce ai due lati dello schermo e tasti ← →. Si passa tra le parole che hanno una foto, nell'ordine dell'elenco
+   (gli spazi vuoti e le parole senza foto si saltano), e dall'ultima si torna alla prima.
+   L'ingrandimento resta UNO (stesso sfondo, stesso riquadro): cambiando foto NON si rifà il volo dalla parola. L'apertura (850 ms)
+   e la chiusura (550 ms) sono rimaste com'erano; la foto nuova arriva con una dissolvenza incrociata e un piccolo scorrimento
+   (zoomCrossfade). Le gallerie dei progetti non hanno frecce: lì la foto ingrandita si chiude e basta, come prima. */
+let zoomSequence = null;      // una voce { open, warm } per parola con foto, nell'ordine dell'elenco; null = niente frecce
+let zoomSequenceIndex = -1;   // quale di esse è aperta ora (o l'ultima richiesta con una freccia)
+let zoomNavToken = 0;         // chi preme due frecce di fila: conta solo l'ultima richiesta
+let zoomNavLockedUntil = 0;   // finché la foto sta volando fuori dalla parola le frecce non fanno nulla
+let zoomClosing = false;      // la chiusura è partita: niente più cambi di foto
+let zoomNavigated = false;    // si è cambiata foto con le frecce: alla chiusura la parola va portata in vista
+let zoomNavPrev = null;
+let zoomNavNext = null;
+
+// Prepara in anticipo (decodificate, vedi warmLightboxPhoto) le foto delle due parole vicine, così il passaggio con la freccia le trova
+// pronte invece di aspettare: la prima volta, a freddo, una foto grande poteva far attendere il passaggio per due decimi di secondo.
+// Lo si fa a volo (o passaggio) finito, per non appesantire l'animazione in corso.
+let zoomWarmTimer = null;
+function zoomWarmNeighbors(delay) {
+  clearTimeout(zoomWarmTimer);
+  zoomWarmTimer = setTimeout(() => {
+    const sequence = zoomSequence;
+    if (!sequence || sequence.length < 2 || zoomClosing) return;
+    sequence[(zoomSequenceIndex + 1) % sequence.length].warm();
+    sequence[(zoomSequenceIndex - 1 + sequence.length) % sequence.length].warm();
+  }, delay);
+}
+
+function zoomNavSet(on) {
+  [zoomNavPrev, zoomNavNext].forEach((button) => { if (button) button.classList.toggle("is-active", on); });
+}
+
+// delta: +1 = la parola dopo, -1 = quella prima
+function zoomGo(delta) {
+  const sequence = zoomSequence;
+  if (!sequence || sequence.length < 2 || !zoomCurrentClose || zoomClosing) return;
+  if (performance.now() < zoomNavLockedUntil) return;
+  if (!zoomActiveFrame || !zoomActiveFrame.classList.contains("is-active")) return;
+  zoomSequenceIndex = (zoomSequenceIndex + delta + sequence.length) % sequence.length;
+  zoomNavigated = true;
+  sequence[zoomSequenceIndex].open({ token: ++zoomNavToken, direction: delta > 0 ? 1 : -1 });
+}
+
+// La foto che c'è ora, come copia che resta ferma dov'è mentre il riquadro passa alla foto nuova: sfuma e se ne va.
+function zoomMakeGhost(frame, imgEl) {
+  const src = imgEl.getAttribute("src");
+  const rect = frame.getBoundingClientRect();
+  if (!src || rect.width < 2 || rect.height < 2) return null;
+  const ghost = el("img", { class: "lightbox-ghost", src, alt: "" });
+  ghost.style.cssText = `position: fixed; z-index: 301; pointer-events: none; object-fit: contain; left: ${rect.left}px; top: ${rect.top}px; width: ${rect.width}px; height: ${rect.height}px; opacity: ${getComputedStyle(frame).opacity};`;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+// Dissolvenza incrociata: la foto nuova sale da 0 a 1 mentre la vecchia (ghost) scende da 1 a 0, entrambe con uno scorrimento di 24 px
+// (la nuova arriva dal lato verso cui si va, la vecchia se ne va dall'altro). Solo opacità e spostamento: niente di quello che
+// pesa (misure, layout).
+function zoomCrossfade(frame, ghost, direction) {
+  const shift = 24 * direction;
+  frame.style.transition = "none";
+  frame.style.opacity = "0";
+  frame.style.transform = `translate(${shift}px, 0px) scale(1)`;
+  void frame.offsetWidth; // fissa la partenza, poi si anima
+  frame.style.transition = "opacity 300ms ease-out, transform 500ms cubic-bezier(0.16, 1, 0.3, 1)";
+  frame.style.opacity = "1";
+  frame.style.transform = "translate(0px, 0px) scale(1)";
+  if (ghost) {
+    void ghost.offsetWidth;
+    ghost.style.transition = "opacity 260ms ease-in, transform 500ms cubic-bezier(0.16, 1, 0.3, 1)";
+    ghost.style.opacity = "0";
+    ghost.style.transform = `translate(${-shift}px, 0px)`;
+    setTimeout(() => ghost.remove(), 600);
+  }
+}
+
 // Maniglie per regolare a mano la dimensione della foto ingrandita: due,
 // una in basso e una speculare in alto (entrambe sul lato destro), così
 // almeno una resta raggiungibile anche se il riquadro ingrandito supera
@@ -3473,14 +3550,27 @@ function ensureZoomElements() {
   const triggerClose = () => { if (zoomCurrentClose) zoomCurrentClose(); };
   zoomBackdrop.addEventListener("click", triggerClose);
   zoomActiveImg.addEventListener("click", triggerClose);
+  // Le due frecce del Core Archive (vedi zoomGo): stanno fuori dal riquadro della foto, fisse sullo schermo, e restano nascoste
+  // (anche ai lettori di schermo e al tasto Tab) finché non si apre la foto di una parola.
+  zoomNavPrev = el("button", { type: "button", class: "lightbox-nav prev", "aria-label": "Previous" }, "←");
+  zoomNavNext = el("button", { type: "button", class: "lightbox-nav next", "aria-label": "Next" }, "→");
+  zoomNavPrev.addEventListener("click", (e) => { e.stopPropagation(); zoomGo(-1); });
+  zoomNavNext.addEventListener("click", (e) => { e.stopPropagation(); zoomGo(1); });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") triggerClose();
+    // ← e → cambiano foto (non con Alt/Ctrl/Cmd/Maiusc: sono i comandi del browser; non quando il tasto resta premuto: una foto per volta)
+    else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && zoomSequence && !e.repeat && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      e.preventDefault();
+      zoomGo(e.key === "ArrowRight" ? 1 : -1);
+    }
   });
   window.addEventListener("resize", () => {
     if (zoomRefit && zoomActiveFrame.classList.contains("is-active")) zoomRefit();
   });
   document.body.appendChild(zoomBackdrop);
   document.body.appendChild(zoomActiveFrame);
+  document.body.appendChild(zoomNavPrev);
+  document.body.appendChild(zoomNavNext);
 }
 
 // Prepara il file grande di una foto PRIMA che serva: si decodifica in anticipo (appena il puntatore arriva sulla foto o
@@ -3499,14 +3589,16 @@ function warmLightboxPhoto(src) {
   return ready;
 }
 
-function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
+// nav (solo Core Archive, parole con foto): l'elenco in cui questa apertura si mette, nell'ordine delle parole; serve alle frecce (zoomGo).
+function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
   const warmThisPhoto = () => { if (!isEditMode()) warmLightboxPhoto(img.currentSrc || img.src); };
   frame.addEventListener("pointerenter", warmThisPhoto, { passive: true });
   frame.addEventListener("pointerdown", warmThisPhoto, { passive: true });
   let opening = false; // un secondo clic mentre la foto si sta preparando non deve aprirla due volte
-  frame.addEventListener("click", () => {
-    if (isEditMode() || opening) return;
-    
+  const navIndex = nav ? nav.length : -1;
+  // swap: null = apertura normale (il clic sulla foto o sulla parola); { token, direction } = ci si arriva da una freccia, con
+  // l'ingrandimento già aperto: stesso sfondo e stesso riquadro, niente volo (vedi zoomCrossfade).
+  const openZoom = (swap) => {
     zoomActiveSizeKey = sizeKey;
     zoomActiveOriginalSrc = img.getAttribute("src") || img.src;
     zoomActivePhoto = zoomPhoto(zoomActiveOriginalSrc);
@@ -3515,7 +3607,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     const firstRect = img.getBoundingClientRect();
     // La galleria dietro si ferma dov'è (anche a metà di uno scorrimento) finché la foto è ingrandita e non è
     // tornata al suo posto: vedi holdGallery in renderGallery.
-    window.dispatchEvent(new Event("zoom-opened"));
+    if (!swap) window.dispatchEvent(new Event("zoom-opened"));
 
     // Da qui in poi niente cambia rispetto a prima, tranne UNA cosa: l'ingrandimento parte solo quando il file grande
     // è decodificato (di solito lo è già, vedi warmLightboxPhoto: allora parte nello stesso istante del clic).
@@ -3524,6 +3616,9 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     const photoReady = Promise.race([warmLightboxPhoto(img.currentSrc || img.src), new Promise((resolve) => setTimeout(resolve, 250))]);
     photoReady.then(() => {
     opening = false;
+    // Frecce: se nel frattempo si è chiesta un'altra foto, o l'ingrandimento si sta chiudendo, questa non va più mostrata.
+    if (swap && (swap.token !== zoomNavToken || zoomClosing || !zoomActiveFrame || !zoomActiveFrame.classList.contains("is-active"))) return;
+    if (!swap) zoomClosing = false;
 
     // Nasconde temporaneamente l'originale (niente "doppione" per l'istante
     // in cui il clone appare esattamente sopra di lei).
@@ -3585,15 +3680,18 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     // segnalato. Impostato ogni volta esplicitamente (non lasciato alla
     // regola CSS di base): altrimenti resterebbe quello impostato
     // dall'ultima CHIUSURA (vedi sotto), con un ritardo che qui non ha senso.
-    backdrop.style.transition = "opacity 200ms ease-out";
-    backdrop.classList.add("is-active");
+    // (Passando da una foto all'altra con le frecce lo sfondo e il riquadro sono già attivi: qui non si tocca niente.)
+    if (!swap) {
+      backdrop.style.transition = "opacity 200ms ease-out";
+      backdrop.classList.add("is-active");
+    }
     // Riattiva i click sul clone SOLO mentre è davvero visibile: senza
     // questa classe, a fine chiusura il clone resta comunque nel DOM
     // (a grandezza/posizione della miniatura, "position: fixed") e
     // intercetterebbe per sempre i click su qualunque cosa si trovi in
     // quello stesso punto dello schermo — bug confermato con un test
     // automatico (impossibile riaprire una foto in quella posizione).
-    activeFrame.classList.add("is-active");
+    if (!swap) activeFrame.classList.add("is-active");
 
     // 2. LAST: dimensione finale, centrata sullo schermo. La misura che hai
     // scelto TU per questa foto trascinando le maniglie (una per foto, uguale
@@ -3677,6 +3775,9 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     };
     const { targetW, targetH, targetX, targetY } = fitTarget();
 
+    // Con le frecce: la foto che c'è ora resta ferma dov'è, come copia, e sfuma (vedi zoomCrossfade). Va presa PRIMA di cambiare il riquadro.
+    const ghost = swap ? zoomMakeGhost(activeFrame, activeImg) : null;
+
     activeImg.src = img.src;
     activeImg.alt = img.alt;
     activeFrame.style.width = `${targetW}px`;
@@ -3684,34 +3785,44 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
     activeFrame.style.left = `${targetX}px`;
     activeFrame.style.top = `${targetY}px`;
 
-    // 3. INVERT: delta centro-miniatura → centro-target.
-    const firstCenterX = firstRect.left + firstRect.width / 2;
-    const firstCenterY = firstRect.top + firstRect.height / 2;
-    const targetCenterX = targetX + targetW / 2;
-    const targetCenterY = targetY + targetH / 2;
+    if (swap) {
+      zoomCrossfade(activeFrame, ghost, swap.direction);
+      zoomWarmNeighbors(650);
+    } else {
+      // 3. INVERT: delta centro-miniatura → centro-target.
+      const firstCenterX = firstRect.left + firstRect.width / 2;
+      const firstCenterY = firstRect.top + firstRect.height / 2;
+      const targetCenterX = targetX + targetW / 2;
+      const targetCenterY = targetY + targetH / 2;
 
-    const deltaX = firstCenterX - targetCenterX;
-    const deltaY = firstCenterY - targetCenterY;
-    let scaleX = firstRect.width / targetW;
-    let scaleY = firstRect.height / targetH;
+      const deltaX = firstCenterX - targetCenterX;
+      const deltaY = firstCenterY - targetCenterY;
+      let scaleX = firstRect.width / targetW;
+      let scaleY = firstRect.height / targetH;
 
-    if (img.classList.contains("hidden-link-img")) {
-      const uniformScale = Math.max(scaleX, scaleY);
-      scaleX = uniformScale;
-      scaleY = uniformScale;
-    }
+      if (img.classList.contains("hidden-link-img")) {
+        const uniformScale = Math.max(scaleX, scaleY);
+        scaleX = uniformScale;
+        scaleY = uniformScale;
+      }
 
-    // Porta il clone esattamente sopra la miniatura, ancora invisibile agli occhi.
-    activeFrame.style.transition = "none";
-    activeFrame.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+      // Porta il clone esattamente sopra la miniatura, ancora invisibile agli occhi.
+      activeFrame.style.transition = "none";
+      activeFrame.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
 
-    // 4. PLAY: anima verso il centro.
-    requestAnimationFrame(() => {
+      // 4. PLAY: anima verso il centro.
       requestAnimationFrame(() => {
-        activeFrame.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
-        activeFrame.style.transform = "translate(0px, 0px) scale(1)";
+        requestAnimationFrame(() => {
+          activeFrame.style.transition = "transform 850ms cubic-bezier(0.16, 1, 0.3, 1)";
+          activeFrame.style.transform = "translate(0px, 0px) scale(1)";
+        });
       });
-    });
+      // Le frecce non fanno nulla mentre la foto sta ancora uscendo dalla parola (il volo è quasi finito dopo mezzo secondo);
+      // poi compaiono, se la parola ha delle vicine (zoomSequence).
+      zoomNavLockedUntil = performance.now() + 500;
+      zoomNavSet(Boolean(zoomSequence));
+      zoomWarmNeighbors(900);
+    }
 
     // Se lo schermo cambia mentre la foto è aperta (telefono ruotato), la foto si rimette a misura dello schermo nuovo,
     // subito e senza animazione (vedi il listener di "resize" in ensureZoomElements).
@@ -3728,6 +3839,21 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
 
     zoomCurrentClose = function close() {
       zoomRefit = null; // durante la chiusura la foto non va più rimessa a misura
+      // Le frecce spariscono e non si cambia più foto (anche una richiesta già partita, ma non ancora mostrata, viene lasciata cadere).
+      zoomClosing = true;
+      zoomSequence = null;
+      zoomNavSet(false);
+      clearTimeout(zoomWarmTimer);
+      // Dopo aver sfogliato con le frecce la parola della foto che si chiude può stare fuori dallo schermo (la pagina dietro non si
+      // è mossa): la si porta in vista subito, mentre lo sfondo scuro copre ancora l'elenco, così chi chiude ritrova la parola
+      // che stava guardando. Chi apre e chiude senza frecce non vede nessun cambiamento.
+      if (zoomNavigated) {
+        zoomNavigated = false;
+        const wordRect = frame.getBoundingClientRect();
+        if (wordRect.top < 0 || wordRect.bottom > window.innerHeight) {
+          window.scrollTo(0, Math.max(0, window.scrollY + wordRect.top - (window.innerHeight - wordRect.height) / 2));
+        }
+      }
       // Ricalcola la miniatura al MOMENTO della chiusura (se nel frattempo
       // hai scrollato la pagina, "firstRect" sarebbe ormai vecchia).
       const currentThumbRect = img.getBoundingClientRect();
@@ -3817,6 +3943,15 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox) {
       }, 550);
     };
     });
+  };
+  if (nav) nav.push({ open: openZoom, warm: () => warmLightboxPhoto(img.currentSrc || img.src) });
+  frame.addEventListener("click", () => {
+    if (isEditMode() || opening) return;
+    // Se la parola ha delle vicine con una foto (Core Archive) compaiono le frecce; zoomSequence = l'elenco in cui passare.
+    zoomSequence = nav && nav.length > 1 ? nav : null;
+    zoomSequenceIndex = navIndex;
+    zoomNavigated = false;
+    openZoom(null);
   });
 }
 
@@ -4775,7 +4910,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     });
   }
 
-  /* ---- viewer foto: slide orizzontale, autoplay 5s + transizione 2s ----
+  /* ---- viewer foto: slide orizzontale, sosta di 3 s (AUTOPLAY_DELAY) + scorrimento di 6 s (TRANSITION_MS) ----
      Questo scorrimento automatico tra le foto della galleria funziona
      sempre, sia per un progetto sia per core archive. Cambia solo cosa
      fanno le frecce: su un progetto portano al progetto precedente/
@@ -5017,7 +5152,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
      ogni fotogramma (dopo l'aggiornamento delle transizioni, prima del disegno) si guarda dov'è la barra adesso e si rimette la pagina
      a posto; in fondo si resta sull'ultimo punto possibile della pagina (lo stabilisce il browser: sugli schermi retina anche mezzo pixel). */
   const USER_INPUT_SETTLE_MS = 150; // l'utente ha finito il gesto (rotella, tasti) quando non ne arrivano più da questo tempo
-  const FRAME_QUIET_MS = 15000; // un po' più del ciclo dell'autoplay (12 s): chi scorre in su a leggere non viene riportato giù al giro dopo
+  const FRAME_QUIET_MS = 15000; // più del ciclo dell'autoplay (9 s dal 19 novembre, prima 12 s): chi scorre in su a leggere non viene riportato giù al giro dopo
   const FRAME_APPROACH_MIN_MS = 600;
   const FRAME_APPROACH_MAX_MS = 1100;
   const FRAME_PHOTO_FIRST = true; // false: la barra sta sempre in fondo, anche se la cima di una foto alta resta fuori dalla finestra
@@ -6192,8 +6327,39 @@ function renderContacts() {
   renderSimplePage({ title: CONTACTS.title, paragraphs: CONTACTS.paragraphs, extraLines: CONTACTS.lines, disableMarquee: true });
 }
 
-function renderAbout() {
-  renderSimplePage({ title: ABOUT.title, paragraphs: ABOUT.paragraphs });
+// Dal testo di un file ai paragrafi: una riga vuota separa un paragrafo dall'altro, un semplice "a capo" dentro un paragrafo vale
+// uno spazio (è com'era il testo di About quando stava in content.js: quattro paragrafi, l'ultimo su una riga sola).
+function paragraphsFromText(text) {
+  return String(text)
+    .replace(/\r\n?/g, "\n")
+    .split(/\n[ \t]*\n/)
+    .map((block) => block.split("\n").map((line) => line.trim()).filter(Boolean).join(" "))
+    .filter(Boolean);
+}
+
+// Il testo di About sta in testi/about.txt, come quello dei progetti: lo si modifica lì e il sito lo mostra. Prima il sito leggeva
+// solo ABOUT in content.js e le modifiche al file di testo non comparivano mai (19 novembre). Se il file non c'è, è vuoto o non si
+// riesce a scaricare, resta il testo di ABOUT in content.js. Stessa regola dei progetti: si scarica solo se il file esiste davvero
+// (elenco in images-data.js), indirizzo relativo, e un parametro che cambia a ogni pubblicazione (sul sito) o a ogni apertura (in locale).
+async function loadAboutParagraphs() {
+  const knownTexts = window.DYNAMIC_TEXTS;
+  if (Array.isArray(knownTexts) && !knownTexts.some((file) => file.toLowerCase() === "about.txt")) return ABOUT.paragraphs;
+  try {
+    const res = await fetch(`testi/about.txt?v=${IS_PUBLISHED_BUILD ? IMAGE_VERSION : Date.now()}`);
+    if (!res.ok) return ABOUT.paragraphs;
+    const paragraphs = paragraphsFromText(await res.text());
+    return paragraphs.length ? paragraphs : ABOUT.paragraphs;
+  } catch (e) {
+    console.warn("Nessun file di testo trovato per About");
+    return ABOUT.paragraphs;
+  }
+}
+
+async function renderAbout() {
+  const myRoute = routeCounter; // vedi renderRoute: se nel frattempo si è cambiata pagina, questa non va più disegnata
+  const paragraphs = await loadAboutParagraphs();
+  if (myRoute !== routeCounter) return;
+  renderSimplePage({ title: ABOUT.title, paragraphs });
 }
 
 function renderNotFound() {
@@ -6278,7 +6444,7 @@ async function renderRoute() {
         renderContacts();
         break;
       case "about":
-        renderAbout();
+        await renderAbout();
         break;
       case "home":
       case "":
@@ -6674,6 +6840,7 @@ function renderArchivePagesMode(param) {
   const list = el("ul", { class: "archive-list" });
   figure.appendChild(list);
   const listRows = []; // { item } nell'ordine in cui compaiono: serve a riordinare
+  const archiveZoomNav = []; // le "aperture" delle parole con foto, nell'ordine dell'elenco: vedi makeZoomable (frecce avanti/indietro)
 
   const mappedArchiveImages = ARCHIVE.images.map((img, i) => ({ ...img, _index: i }));
   const poolImages = applyImageOverrides("archive", "archive", mappedArchiveImages);
@@ -6716,7 +6883,8 @@ function renderArchivePagesMode(param) {
         frame.appendChild(hiddenImg);
         // Accanto alla foto ingrandita compare il progetto a cui appartiene (cliccandolo si apre quel progetto)
         const project = archiveImageProject(src, poolImg && poolImg.linkTo, item.linkedImageProject);
-        makeZoomable(frame, hiddenImg, project ? `project/${project.slug}` : null, `${galleryKey}.zoom.${item.uid}`, poolImg && poolImg.zoomBox);
+        // L'ultimo parametro: l'elenco delle parole con foto, nell'ordine in cui compaiono: le frecce dell'ingrandimento passano di una all'altra
+        makeZoomable(frame, hiddenImg, project ? `project/${project.slug}` : null, `${galleryKey}.zoom.${item.uid}`, poolImg && poolImg.zoomBox, archiveZoomNav);
         frame.classList.add("is-linked");
       }
 
