@@ -224,7 +224,7 @@ mobile: { width: "320px", height: "363px" },
   },
   {
     slug: "cement",
-    name: "The Endless Circle",
+    name: "Endless Circle",
         images: [
       { caption: "dancing", src: "images/cement/dancing.jpg", width: "361.643px", zoomBox: { width: "1519.8px", height: "1010.61px" } },
       { caption: "disassembled body", src: "images/cement/disassembled-body.jpg", width: "475.543px" },
