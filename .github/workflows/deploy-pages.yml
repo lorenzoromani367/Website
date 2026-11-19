@@ -18,7 +18,9 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      # Indirizzo del tentativo che è riuscito: il secondo se c'è stato, altrimenti il primo (un passo fallito non dà
+      # nessun indirizzo: nella corsa 234 "Evaluated environment url:" era vuoto).
+      url: ${{ steps.deployment_retry.outputs.page_url || steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -59,6 +61,24 @@ jobs:
         with:
           path: "_site"
 
+      # Ogni tanto GitHub non elenca ancora il pacchetto appena caricato e la pubblicazione si fermava dopo un secondo con
+      # "Found 0 artifact(s)" (corse 231 e 234 del 19 novembre; nella 234 il pacchetto veniva cercato 0,4 secondi dopo il
+      # caricamento; era regolare, solo non ancora nell'elenco) lasciando online la versione di prima. Quindi il PRIMO
+      # tentativo non ferma il lavoro se fallisce (continue-on-error): si aspettano 30 secondi e si riprova UNA volta con lo
+      # stesso pacchetto (cosa si pubblica non cambia). Se anche il secondo tentativo fallisce il lavoro diventa rosso, come prima.
+      # Si guarda "outcome" e non "failure()": con continue-on-error il passo fallito risulta comunque riuscito (conclusion).
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait 30 seconds before the second attempt
+        if: steps.deployment.outcome == 'failure'
+        run: |
+          echo "::warning title=Secondo tentativo di pubblicazione::Il primo tentativo di pubblicare non è riuscito (di solito GitHub non vede ancora il pacchetto appena caricato). Aspetto 30 secondi e riprovo una volta."
+          sleep 30
+
+      - name: Deploy to GitHub Pages (second attempt)
+        id: deployment_retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
