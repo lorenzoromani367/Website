@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -3209,6 +3209,10 @@ const LIGHTBOX_SIZE_KEY = "lightbox.image";
 // telefono. (La scritta ha anche un margine interno di 10px, che si somma.)
 const LIGHTBOX_LABEL_GAP = 120;
 const LIGHTBOX_LABEL_GAP_MOBILE = 14;
+// Core Archive, computer: le due frecce dell'ingrandimento (vedi zoomGo) stanno a 2% dello schermo dal bordo (minimo 18 px, e larghe 44 px:
+// css, ".lightbox-nav"). Alla foto e al nome del progetto si toglie questo spazio in più ai due lati (oltre al 3% di sempre: vedi fitTarget),
+// così le frecce, un po' staccate dal bordo come ha chiesto il proprietario (19 novembre), non sfiorano mai né la foto né il nome.
+const ZOOM_NAV_ROOM = 34;
 
 /* ---- La misura dell'ingrandimento è UNA PER FOTO, uguale in tutto il sito ----
    La decidi tu trascinando le maniglie sulla foto ingrandita (in modalità modifica). Si salva sotto il nome della
@@ -3740,7 +3744,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
       const isArchiveZoom = Boolean(sizeKey && sizeKey.startsWith("archive.")) && !isMobile;
       let archiveArea = null; // { left, width, maxWidth }: lo spazio ideale e il massimo in cui sta la foto dell'archivio
       if (isArchiveZoom) {
-        const edge = Math.max(24, window.innerWidth * 0.03);
+        const edge = Math.max(24, window.innerWidth * 0.03) + (zoomSequence ? ZOOM_NAV_ROOM : 0); // (con le frecce, un po' più di margine: ZOOM_NAV_ROOM)
         const labelRoom = linkTo ? LIGHTBOX_LABEL_GAP + zoomProjectLabel.offsetWidth : 0; // quanto serve alla scritta, a destra della foto
         const hardRight = window.innerWidth - edge - labelRoom;               // fin qui può arrivare il bordo destro della foto
         const areaRight = Math.min(window.innerWidth * 0.75, hardRight);      // lo spazio ideale: i tre quarti di sinistra

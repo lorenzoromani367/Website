@@ -20,7 +20,8 @@
          SCENDE invece di salire (dal 15 novembre va dal basso verso l'alto; prima scendeva: marqueeAdvance in js/app_v58.js);
        - didascalie (gallerie e Core Archive): il peso del carattere è 700, il grassetto vero. Con un peso a metà (era 550) ogni browser sceglie a modo suo e
          sul computer del proprietario le didascalie sono risultate troppo leggere (13 e 16 novembre): si legge lo stile calcolato e si pretende 700;
-       - Core Archive, foto ingrandita di una parola: ci sono le frecce avanti/indietro (visibili, dentro lo schermo, almeno 44 px); → porta alla parola
+       - Core Archive, foto ingrandita di una parola: ci sono le frecce avanti/indietro (visibili, dentro lo schermo, almeno 44 px; su computer un po'
+         staccate dal bordo e senza toccare né la foto né il nome del progetto); → porta alla parola
          dopo, ← a quella prima, dalla prima ← porta all'ultima, il tasto → fa lo stesso; a passaggio finito non resta una copia della foto vecchia;
          chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre);
        - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
@@ -822,13 +823,22 @@ async function checkArchiveArrows(context, base) {
         opacity: Number(cs.opacity),
         transform: cs.transform,
         ghosts: document.querySelectorAll('.lightbox-ghost').length,
-        nav: [...document.querySelectorAll('.lightbox-nav')].map((b) => { const s = getComputedStyle(b); const r = b.getBoundingClientRect(); return { visible: s.visibility === 'visible' && Number(s.opacity) > 0.5, w: r.width, h: r.height, inside: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight }; }),
+        nav: [...document.querySelectorAll('.lightbox-nav')].map((b) => { const s = getComputedStyle(b); const r = b.getBoundingClientRect(); return { visible: s.visibility === 'visible' && Number(s.opacity) > 0.5, w: r.width, h: r.height, left: r.left, right: r.right, inside: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight }; }),
+        // dove stanno la foto e il nome del progetto (il nome ha 10 px di margine interno, che non si vede)
+        photo: (() => { const r = frame.getBoundingClientRect(); return { left: r.left, right: r.right }; })(),
+        labelRight: (() => { const l = document.querySelector('.lightbox-project-label'); return l && l.style.display !== 'none' ? l.getBoundingClientRect().right - 10 : null; })(),
       };
     });
     const settled = (s) => s.ghosts === 0 && s.opacity === 1 && (s.transform === 'none' || /^matrix\(1, 0, 0, 1, 0(?:\.0+)?, 0(?:\.0+)?\)$/.test(s.transform));
     const last = words.length - 1;
     const steps = [];
-    const expectAt = (s, i, what) => { if (!s.open || s.src !== words[i]) problems.push(`Core Archive (${context.__profile}): ${what}: non si vede la foto della parola ${i + 1} di ${words.length}`); else if (!settled(s)) problems.push(`Core Archive (${context.__profile}): ${what}: a passaggio finito resta una copia della foto vecchia o il riquadro non è pieno e fermo (copie ${s.ghosts}, opacità ${s.opacity}, ${s.transform})`); };
+    const expectAt = (s, i, what) => {
+      if (!s.open || s.src !== words[i]) problems.push(`Core Archive (${context.__profile}): ${what}: non si vede la foto della parola ${i + 1} di ${words.length}`);
+      else if (!settled(s)) problems.push(`Core Archive (${context.__profile}): ${what}: a passaggio finito resta una copia della foto vecchia o il riquadro non è pieno e fermo (copie ${s.ghosts}, opacità ${s.opacity}, ${s.transform})`);
+      // Su computer le frecce stanno un po' staccate dal bordo (dal 19 novembre) e la foto e il nome del progetto lasciano loro il posto (ZOOM_NAV_ROOM in
+      // js/app_v58.js): non devono toccarsi. Su telefono le frecce stanno sopra la foto, per scelta.
+      else if (context.__profile !== 'telefono' && s.nav.length === 2 && (s.photo.left < s.nav[0].right - 1 || Math.max(s.photo.right, s.labelRight || 0) > s.nav[1].left + 1)) problems.push(`Core Archive (${context.__profile}): ${what}: la foto o il nome del progetto toccano una freccia (foto da ${Math.round(s.photo.left)} a ${Math.round(s.photo.right)} px, nome fino a ${s.labelRight === null ? '—' : Math.round(s.labelRight)} px; frecce: la prima finisce a ${Math.round(s.nav[0].right)} px, la seconda comincia a ${Math.round(s.nav[1].left)} px)`);
+    };
 
     await page.locator('.archive-word-frame.is-linked').first().click();
     await page.waitForTimeout(1800);
