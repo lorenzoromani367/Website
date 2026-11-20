@@ -860,7 +860,11 @@ async function checkArchiveArrows(context, base) {
       });
       const closeTo = (v, t) => v !== null && Math.abs(v - t) <= 0.06;
       const fmt = (t) => `freccia → ${t.next}, freccia ← ${t.prev}, nome ${t.label === null ? '—' : t.label}`;
-      const hasMouse = context.__profile !== 'telefono';
+      // Il sito fa schiarire le parole col mouse sopra solo dove il browser dichiara di avere un mouse («@media (hover: hover)», così sul telefono un tocco non le
+      // lascia «incollate» chiare). Firefox senza schermo, quello di GitHub, può dichiarare di non averlo («hover: none»): lì la prova col mouse non ha senso e si salta
+      // (si scrive nella riga del controllo); Chromium e WebKit la fanno.
+      const hoverCapable = await page.evaluate(() => matchMedia('(hover: hover)').matches);
+      const hasMouse = context.__profile !== 'telefono' && hoverCapable;
       await page.mouse.move(3, 3); // il mouse in un angolo, lontano da tutto
       await page.waitForTimeout(1100); // (tolto il mouse, restano chiare ancora 350 ms e poi tornano scure in 300 ms)
       let t = await tone();
@@ -881,7 +885,7 @@ async function checkArchiveArrows(context, base) {
         t = await tone();
         if (!closeTo(t.next, 0.7) || !closeTo(t.label === null ? 0.7 : t.label, 0.7)) problems.push(`Core Archive (${context.__profile}): tolto il mouse le frecce e il nome del progetto non tornano «più scuri» (0,7), invece: ${fmt(t)}`);
       }
-      steps.push(hasMouse ? 'colore a riposo e col mouse sopra' : 'colore a riposo');
+      steps.push(hasMouse ? 'colore a riposo e col mouse sopra' : context.__profile === 'telefono' ? 'colore a riposo' : 'colore a riposo (il browser dichiara «hover: none»: prova col mouse saltata)');
     }
 
     await page.click('.lightbox-nav.next');
