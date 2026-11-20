@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -662,7 +662,11 @@ function stablePhotoPath(path) {
 
   const mergeProjectImages = (project, folderSlug, ownSlug) => {
     const folderPrefix = `images/${folderSlug.toLowerCase()}/`;
-    const projectFiles = window.DYNAMIC_IMAGES.filter(path => path.toLowerCase().startsWith(folderPrefix));
+    // Le foto prendono il loro NUMERO (e con lui le misure e l'ordine salvati in modalità modifica) da qui: nell'ordine ricordato in
+    // js/images-order.js, dove le foto che c'erano restano dove sono e quelle nuove vanno in fondo, NON in ordine alfabetico (le foto nuove
+    // spingevano avanti le seguenti, che prendevano le misure di un'altra: vedi js/photo-order.js). Senza quel file: ordine alfabetico, come prima.
+    const found = window.DYNAMIC_IMAGES.filter(path => path.toLowerCase().startsWith(folderPrefix));
+    const projectFiles = window.PhotoOrder ? window.PhotoOrder.arrange(found, window.IMAGE_ORDER) : found;
     // Cartella rinominata: content.js può ricordare ancora le foto nella cartella di prima (images/<slug>/)
     const previousPrefix = ownSlug && ownSlug.toLowerCase() !== folderSlug.toLowerCase() ? `images/${ownSlug.toLowerCase()}/` : null;
     if (previousPrefix) PHOTO_FOLDER_ALIASES.push([folderPrefix, previousPrefix]);

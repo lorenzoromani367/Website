@@ -1,8 +1,10 @@
 // Genera js/images-data.js: l'elenco delle foto in "images/", le loro misure vere
-// (larghezza x altezza) e l'elenco dei file in "testi/".
+// (larghezza x altezza) e l'elenco dei file in "testi/". Genera anche js/images-order.js:
+// l'ORDINE in cui il sito numera le foto (le foto che c'erano restano dove sono, le nuove
+// vanno in fondo: vedi js/photo-order.js).
 //
-//   node watch_images.js          genera il file e resta in ascolto (si aggiorna da solo)
-//   node watch_images.js --once   genera il file una volta e finisce (usato anche dalla pubblicazione)
+//   node watch_images.js          genera i file e resta in ascolto (si aggiornano da soli)
+//   node watch_images.js --once   genera i file una volta e finisce (usato anche dalla pubblicazione)
 //
 // Il server locale (server.js) fa già lo stesso in automatico: questo file serve
 // solo se vuoi rigenerare l'elenco a mano.
@@ -10,11 +12,13 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const PhotoOrder = require('./js/photo-order.js');
 
 const ROOT = __dirname;
 const IMAGES_DIR = path.join(ROOT, 'images');
 const TEXTS_DIR = path.join(ROOT, 'testi');
 const OUTPUT_FILE = path.join(ROOT, 'js', 'images-data.js');
+const ORDER_FILE = path.join(ROOT, 'js', 'images-order.js');
 const IMAGE_RE = /\.(jpg|jpeg|png|webp|gif)$/i;
 
 function scanDirectory(dir, fileList = []) {
@@ -122,7 +126,31 @@ function listTexts() {
   return fs.readdirSync(TEXTS_DIR).filter((f) => !f.startsWith('.') && /\.txt$/i.test(f)).sort();
 }
 
-function render() {
+// ORDINE STABILE (20 novembre; vedi js/photo-order.js per il perché). L'ordine ricordato sta in js/images-order.js: ogni foto di un progetto prende il suo
+// numero da lì, non dall'ordine alfabetico, così una foto nuova va in fondo e non fa scivolare le misure salvate sulle foto sbagliate.
+// js/images-data.js resta in ordine alfabetico, come prima: così il server locale vecchio (se resta acceso mentre si scarica questo aggiornamento) e
+// quello nuovo scrivono lo STESSO file, e il sito mette in ordine da sé le foto (PhotoOrder.arrange) guardando images-order.js.
+// Il file dell'ordine si riscrive solo se si legge: se c'è ma non si legge (righe di conflitto di GitHub Desktop, file a metà mentre git lo scrive) non si
+// tocca, così non si perde l'ordine ricordato; la pubblicazione, che controlla la sintassi di ogni file di js/, in quel caso si ferma.
+let orderWarned = false;
+function readOrderMemory() {
+  let text;
+  try {
+    text = fs.readFileSync(ORDER_FILE, 'utf8');
+  } catch (e) {
+    return { ok: true, list: [] }; // non c'è ancora: si parte dall'ordine alfabetico
+  }
+  try {
+    const sandbox = {};
+    new Function('window', text)(sandbox);
+    if (!Array.isArray(sandbox.IMAGE_ORDER)) throw new Error('manca window.IMAGE_ORDER');
+    return { ok: true, list: sandbox.IMAGE_ORDER.filter((p) => typeof p === 'string') };
+  } catch (e) {
+    return { ok: false, list: [] };
+  }
+}
+
+function render(memory) {
   // sort() semplice: stesso ordine su Mac, Windows e sul server di pubblicazione
   const images = scanDirectory(IMAGES_DIR).sort();
   const sizeLines = [];
@@ -150,25 +178,42 @@ function render() {
       `window.IMAGE_SIZES = {\n${sizeLines.join(',\n')}\n};\n` +
       `window.IMAGE_TWINS = {\n${twinLines.join(',\n')}\n};\n` +
       `window.DYNAMIC_TEXTS = ${JSON.stringify(texts)};\n`,
+    orderText:
+      '// Generato automaticamente da watch_images.js (o dal server locale) — non modificare a mano.\n' +
+      '// L\'ORDINE in cui il sito numera le foto: quelle che c\'erano restano dove sono, le nuove vanno in fondo (vedi js/photo-order.js).\n' +
+      `window.IMAGE_ORDER = ${JSON.stringify(PhotoOrder.arrange(images, memory.list), null, 2)};\n`,
   };
 }
 
-// Riscrive il file solo se qualcosa è cambiato. Restituisce true se l'ha riscritto.
-function generate() {
-  const { count, text } = render();
+// Scrive un file solo se il contenuto è cambiato. Restituisce true se l'ha riscritto.
+function writeIfChanged(file, text) {
   let current = null;
   try {
-    current = fs.readFileSync(OUTPUT_FILE, 'utf8');
+    current = fs.readFileSync(file, 'utf8');
   } catch (e) {
     current = null;
   }
-  if (current === text) return { changed: false, count };
-  fs.writeFileSync(OUTPUT_FILE, text);
-  return { changed: true, count };
+  if (current === text) return false;
+  fs.writeFileSync(file, text);
+  return true;
+}
+
+// Riscrive i file solo se qualcosa è cambiato. "changed" = ne ha riscritto almeno uno.
+function generate() {
+  const memory = readOrderMemory();
+  const { count, text, orderText } = render(memory);
+  let changed = writeIfChanged(OUTPUT_FILE, text);
+  if (memory.ok) {
+    if (writeIfChanged(ORDER_FILE, orderText)) changed = true;
+  } else if (!orderWarned) {
+    orderWarned = true;
+    console.warn('js/images-order.js c\'è ma non si legge (righe di conflitto? file a metà?): non lo riscrivo. Se resta così, sistemalo o cancellalo.');
+  }
+  return { changed, count };
 }
 
 function log(result) {
-  console.log(`[${new Date().toLocaleTimeString()}] images-data.js aggiornato (${result.count} foto trovate)`);
+  console.log(`[${new Date().toLocaleTimeString()}] images-data.js e images-order.js aggiornati (${result.count} foto trovate)`);
 }
 
 module.exports = { generate, readImageSize };
