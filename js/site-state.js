@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 306,
-  "updatedAt": "2026-11-20T21:58:42.280Z",
+  "version": 311,
+  "updatedAt": "2026-11-20T22:02:57.905Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -443,6 +443,14 @@ window.SITE_STATE = {
         10,
         11,
         12
+      ],
+      "project.recognition.imageOrder": [
+        0,
+        1,
+        4,
+        5,
+        7,
+        8
       ]
     },
     "site-position-overrides-v1:d": {
@@ -552,6 +560,12 @@ window.SITE_STATE = {
       ],
       "project.homes": [
         "src:images/homes/2 family.jpg"
+      ],
+      "project.recognition": [
+        "src:images/recognition/recognition-11.jpg",
+        "src:images/recognition/recognition-4.jpg",
+        "src:images/recognition/recognition-3.jpg",
+        "src:images/recognition/recognition-7.jpg"
       ]
     },
     "site-size-overrides-v1:d": {
