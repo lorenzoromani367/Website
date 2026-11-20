@@ -234,7 +234,7 @@ window.IMAGE_SIZES = {
   "images/stills/glass bottles.JPG": [794, 614],
   "images/stills/murano.JPG": [1143, 1724],
   "images/stills/neon.JPG": [1065, 1102],
-  "images/stills/pot and bowl.JPG": [5867, 5716],
+  "images/stills/pot and bowl.JPG": [2200, 2143],
   "images/stills/shirt and kimono.JPG": [403, 469],
   "images/stills/stills-1.jpg": [1655, 2200],
   "images/stills/stills-10.jpg": [1517, 2200],

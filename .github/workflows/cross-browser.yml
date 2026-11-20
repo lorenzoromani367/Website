@@ -55,6 +55,12 @@ jobs:
           sed -i "s/?v=dev/?v=${V}/g; s/SITE_VERSION = \"dev\"/SITE_VERSION = \"${V}\"/" _site/index.html
           grep -q "SITE_VERSION = \"${V}\"" _site/index.html
 
+      # L'elenco delle foto (js/images-data.js, generato da watch_images.js) deve tenere dove sono le foto che c'erano e mettere le nuove in fondo: le misure e
+      # l'ordine salvati in modalità modifica sono legati alla posizione della foto nell'elenco, e con l'ordine alfabetico una foto nuova le faceva scivolare
+      # sulle foto sbagliate (20 novembre: Stills, Homes, Complicity). Non serve nessun browser: un secondo.
+      - name: Ordine stabile dell'elenco delle foto
+        run: node tests/cross-browser/order.js
+
       - name: Install Playwright e i tre browser
         working-directory: tests/cross-browser
         run: |
