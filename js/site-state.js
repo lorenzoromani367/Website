@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 281,
-  "updatedAt": "2026-11-20T13:57:53.448Z",
+  "version": 306,
+  "updatedAt": "2026-11-20T21:58:42.280Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -343,8 +343,10 @@ window.SITE_STATE = {
       "project.sospension.captionText.@sospension/estrangement-3.jpg": "untitled (part of a series)",
       "project.sospension.captionText.@sospension/estrangement-1.jpg": "untitled (part of a series)",
       "project.cement.captionText.@cement/employee-looking-outside-his-window.jpg": "employee looking outside \nhis window",
-      "project.homes.captionText.@homes/epson0070-positive-2-2.jpg": "upper middle class",
-      "project.mediality.captionText.@mediality/mediality-6.jpg": "free"
+      "project.homes.captionText.@homes/epson0070-positive-2-2.jpg": "upper middle class, \nnorway",
+      "project.mediality.captionText.@mediality/mediality-6.jpg": "free",
+      "project.homes.captionText.@homes/4 squatting.jpg": "wildfire",
+      "project.homes.captionText.@homes/7 ongoing.jpg": "shadows"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -392,6 +394,7 @@ window.SITE_STATE = {
       ],
       "project.homes.imageOrder": [
         0,
+        9,
         1,
         2,
         3,
@@ -413,19 +416,19 @@ window.SITE_STATE = {
         9,
         10,
         23,
+        25,
         11,
         12,
         13,
         17,
         14,
+        22,
         16,
         18,
         15,
         19,
         20,
-        21,
-        24,
-        25
+        21
       ],
       "project.boudaries.imageOrder": [
         0,
@@ -546,6 +549,9 @@ window.SITE_STATE = {
       ],
       "project.boudaries": [
         "src:images/boudaries/6 stage.JPG"
+      ],
+      "project.homes": [
+        "src:images/homes/2 family.jpg"
       ]
     },
     "site-size-overrides-v1:d": {
@@ -926,7 +932,7 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "project.homes.image.9": {
-        "width": "466.871px",
+        "width": "437.989px",
         "height": ""
       },
       "zoom:images/homes/epson0070-positive-2-2.jpg": {
@@ -940,6 +946,46 @@ window.SITE_STATE = {
       "zoom:images/mediality/mediality-6.jpg": {
         "width": "891.543px",
         "height": "916.76px"
+      },
+      "project.stills.image.22": {
+        "width": "373.6px",
+        "height": ""
+      },
+      "project.stills.image.14": {
+        "width": "453.458px",
+        "height": ""
+      },
+      "project.stills.zoom.14": {
+        "width": "1519.8px",
+        "height": "737.543px"
+      },
+      "zoom:images/stills/frederique constant wristwatch.jpg": {
+        "width": "1519.8px",
+        "height": "737.543px"
+      },
+      "project.stills.zoom.13": {
+        "width": "1519.8px",
+        "height": "735.559px"
+      },
+      "zoom:images/stills/box-bezel ring.jpg": {
+        "width": "1519.8px",
+        "height": "735.559px"
+      },
+      "project.stills.image.25": {
+        "width": "475.495px",
+        "height": ""
+      },
+      "project.stills.zoom.25": {
+        "width": "1519.8px",
+        "height": "783.309px"
+      },
+      "zoom:images/stills/shirt and kimono.jpg": {
+        "width": "1519.8px",
+        "height": "783.309px"
+      },
+      "project.stills.image.23": {
+        "width": "554.846px",
+        "height": ""
       }
     },
     "site-size-overrides-v1:m": {

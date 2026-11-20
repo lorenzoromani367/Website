@@ -1,5 +1,6 @@
 // Generato automaticamente da watch_images.js (o dal server locale) — non modificare a mano.
 window.DYNAMIC_IMAGES = [
+  "images/2 family.jpg",
   "images/3 left.jpg",
   "images/beach/beach-1.jpg",
   "images/complicity/1 wire.JPG",
@@ -44,7 +45,6 @@ window.DYNAMIC_IMAGES = [
   "images/fluoxetine/dinner.JPG",
   "images/hair/hair-1.jpg",
   "images/homes/1 wine.jpg",
-  "images/homes/2 family.jpg",
   "images/homes/3 left.JPG",
   "images/homes/4 squatting.jpg",
   "images/homes/5 church.jpg",
@@ -128,6 +128,7 @@ window.DYNAMIC_IMAGES = [
   "images/whitening/smile.jpg"
 ];
 window.IMAGE_SIZES = {
+  "images/2 family.jpg": [1569, 2200],
   "images/3 left.jpg": [1886, 2200],
   "images/beach/beach-1.jpg": [1610, 1700],
   "images/complicity/1 wire.JPG": [1395, 933],
@@ -172,7 +173,6 @@ window.IMAGE_SIZES = {
   "images/fluoxetine/dinner.JPG": [1000, 1250],
   "images/hair/hair-1.jpg": [1700, 1591],
   "images/homes/1 wine.jpg": [2000, 1613],
-  "images/homes/2 family.jpg": [1569, 2200],
   "images/homes/3 left.JPG": [531, 618],
   "images/homes/4 squatting.jpg": [1393, 2200],
   "images/homes/5 church.jpg": [1308, 1848],
