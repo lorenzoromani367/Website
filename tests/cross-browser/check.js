@@ -25,6 +25,8 @@
          dopo, ← a quella prima, dalla prima ← porta all'ultima, il tasto → fa lo stesso; a passaggio finito non resta una copia della foto vecchia;
          chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre); il colore: frecce e nome del progetto sono «più scuri» a riposo
          (opacità 0,7) e si schiariscono (1) col mouse sopra, tutti e due allo stesso modo (dal 20 novembre; il nome faceva l'opposto);
+       - Stills con una finestra grande come un Mac (1788 × 1118): dopo la discesa con la rotella la pagina è in fondo e la barra con i numeri si vede
+         (checkReachBottom; dal 20 novembre: con le foto nuove le misure salvate erano scivolate su foto sbagliate e la discesa si fermava 196 px prima);
        - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
          content.js e le modifiche al file non comparivano). Il file si rilegge e si divide in paragrafi con un altro metodo da quello del sito.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
@@ -799,6 +801,47 @@ async function checkAboutText(context, base) {
 // parola con la foto, e si controlla: le due frecce compaiono (visibili, dentro lo schermo, grandi almeno 44 px); → porta alla foto della parola dopo e ←
 // a quella prima; dalla prima parola ← porta all'ultima (si gira); il tasto → fa lo stesso della freccia; alla fine si chiude e le frecce spariscono.
 // Il passaggio è una dissolvenza (non un volo): a passaggio finito non resta nessuna copia della foto vecchia e il riquadro è pieno e fermo.
+// La discesa con la rotella arriva in fondo alla pagina (20 novembre). Segnalazione del proprietario dopo aver aggiunto foto in Stills: «lo scroll down non va
+// più giù fino a fine pagina». Le foto nuove si erano infilate in mezzo all'elenco e avevano spinto avanti le misure salvate (vedi js/photo-order.js): «murano»
+// era diventata più alta della finestra e la regola dell'inquadratura (la foto più alta non si taglia mai in cima: framingHoldY in js/app_v58.js) lasciava la
+// barra con i numeri SOTTO il bordo, 196 px prima del fondo. Qui: Stills, finestra grande come quella di un Mac (1788 × 1118, dove la foto più alta di Stills,
+// 1018 px, sta intera), rotella verso il basso come farebbe una persona: a discesa finita la pagina deve essere in fondo (al massimo 12 px prima) e la barra
+// dentro la finestra. Con finestre più basse la foto più alta non sta e la barra resta sotto il bordo di proposito: lì non si controlla.
+const REACH_ROUTE = '#/project/stills';
+async function checkReachBottom(context, base) {
+  const problems = [];
+  if (context.__profile !== 'computer') return problems; // solo il computer, una volta (il resto ha lo stesso codice o non ha la rotella)
+  const page = await context.newPage();
+  try {
+    await page.setViewportSize({ width: 1788, height: 1118 });
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${REACH_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page); // il mouse sulle foto ferma l'avanzamento automatico, che a metà discesa cambierebbe l'altezza
+    await page.waitForTimeout(SETTLE_MS);
+    const read = () => page.evaluate(() => {
+      const bar = document.querySelector('.gallerybar');
+      const r = bar ? bar.getBoundingClientRect() : null;
+      const figures = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')];
+      return { y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, winH: window.innerHeight, barBottom: r ? r.bottom : null, tallest: Math.max(0, ...figures.map((f) => f.getBoundingClientRect().height)), photos: figures.length };
+    });
+    const before = await read();
+    if (before.photos < 2 || before.max <= 8) { await page.close(); return problems; } // una foto sola, o la pagina sta tutta nella finestra: niente da scendere
+    for (let i = 0; i < 12; i++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(120); }
+    await page.waitForTimeout(7500); // la discesa dura fino a 6 s
+    const after = await read();
+    const missing = after.max - after.y;
+    const barHidden = after.barBottom !== null && after.barBottom > after.winH + 1;
+    const ok = missing <= 12 && !barHidden;
+    if (!ok) problems.push(`Stills, finestra 1788 × 1118: dopo la discesa con la rotella la pagina non arriva in fondo (mancano ${Math.round(missing)} px, fino a 12 si accetta) o la barra con i numeri resta sotto il bordo (finisce a ${Math.round(after.barBottom)} px su ${after.winH}); la foto più alta è ${Math.round(after.tallest)} px: se supera la finestra la regola dell'inquadratura le dà la precedenza. Di solito una misura salvata è scivolata su un'altra foto (vedi «Ordine stabile dell'elenco delle foto» nel README)`);
+    console.log(`  [discesa in fondo] ${context.__engine} ${context.__profile}: Stills a 1788 × 1118: la pagina scende a ${Math.round(after.y)} px su ${Math.round(after.max)} (mancano ${Math.round(missing)}), fine barra a ${Math.round(after.barBottom)} px su ${after.winH}; foto più alta ${Math.round(after.tallest)} px${ok ? ': ok' : ': PROBLEMI'}`);
+  } catch (e) {
+    problems.push(`prova della discesa in fondo non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 const ARCHIVE_ROUTE = '#/archive';
 async function checkArchiveArrows(context, base) {
   const problems = [];
@@ -940,6 +983,7 @@ async function runEngine(engine, base, origin, routes) {
       if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
       if (route === ABOUT_ROUTE) r.problems.push(...await checkAboutText(context, base));
       if (route === ARCHIVE_ROUTE) r.problems.push(...await checkArchiveArrows(context, base));
+      if (route === REACH_ROUTE) r.problems.push(...await checkReachBottom(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();
