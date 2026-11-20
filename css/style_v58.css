@@ -86,8 +86,15 @@ a {
   text-decoration: none;
 }
 
-/* Email nei contatti: stesso aspetto del testo; col mouse si attenua come i link in fondo alla home, da tastiera si sottolinea. */
-.mail-link:hover {
+/* Email nei contatti: stesso aspetto del testo; col mouse si attenua come i link in fondo alla home, da tastiera si sottolinea.
+   (20 novembre: la reazione al passaggio del mouse vale solo dove il mouse c'è — «@media (hover: hover)» — e sul telefono c'è la stessa reazione
+   finché si tiene il dito premuto («:active»). Prima, sul telefono, dopo un tocco la parola restava schiarita finché non si toccava altrove.) */
+@media (hover: hover) {
+  .mail-link:hover {
+    opacity: 0.6;
+  }
+}
+.mail-link:active {
   opacity: 0.6;
 }
 .mail-link:focus-visible {
@@ -193,7 +200,12 @@ button {
   cursor: pointer;
 }
 
-.home-list a:hover {
+@media (hover: hover) {
+  .home-list a:hover {
+    opacity: 0.55;
+  }
+}
+.home-list a:active {
   opacity: 0.55;
 }
 
@@ -284,7 +296,13 @@ body.edit-mode .home-view-all-photos-btn:hover {
   transition: opacity 0.2s ease;
 }
 
-.home-word-input:hover {
+/* I nomi dei progetti (e le parole aggiunte) in home: col mouse sopra, o col dito premuto sul telefono, si schiariscono. */
+@media (hover: hover) {
+  .home-word-input:hover {
+    opacity: 0.55;
+  }
+}
+.home-word-input:active {
   opacity: 0.55;
 }
 
@@ -299,7 +317,8 @@ body.edit-mode .home-word-input {
   opacity: 1;
 }
 
-body.edit-mode .home-word-input:hover {
+body.edit-mode .home-word-input:hover,
+body.edit-mode .home-word-input:active {
   opacity: 1;
 }
 
@@ -347,7 +366,12 @@ body.edit-mode .home-word-delete-btn:hover {
   color: var(--ink);
 }
 
-.home-footer .footer-link:hover {
+@media (hover: hover) {
+  .home-footer .footer-link:hover {
+    opacity: 0.6;
+  }
+}
+.home-footer .footer-link:active {
   opacity: 0.6;
 }
 
@@ -840,7 +864,12 @@ body.edit-mode .grid-btn {
   transition: opacity 0.2s ease;
 }
 
-.nav-arrow:hover {
+@media (hover: hover) {
+  .nav-arrow:hover {
+    opacity: 0.5;
+  }
+}
+.nav-arrow:active {
   opacity: 0.5;
 }
 
@@ -906,7 +935,12 @@ body.edit-mode .grid-btn {
   opacity: 0.7;
 }
 
-.lightbox-close:hover {
+@media (hover: hover) {
+  .lightbox-close:hover {
+    opacity: 1;
+  }
+}
+.lightbox-close:active {
   opacity: 1;
 }
 
@@ -983,7 +1017,10 @@ body.edit-mode .grid-btn {
    home — stessa famiglia, grandezza, peso, interlinea e spessore (lo spessore arriva da body, vedi --sans-stroke) —
    e scritto come in home (maiuscola compresa). Colore: quello del "foglio" beige della pagina (--paper), l'unico
    che qui, sullo sfondo scuro, sta al posto dell'inchiostro scuro dei nomi della home.
-   Posizione e distanza dalla foto: vedi makeZoomable. */
+   Posizione e distanza dalla foto: vedi makeZoomable.
+   Colore (20 novembre, chiesto dal proprietario): come le frecce qui accanto (".lightbox-nav" più sotto) — a riposo un po' più scuro (0,7),
+   col mouse sopra, o sul telefono col dito premuto, più chiaro (1). Prima era al contrario (a riposo pieno, col mouse sopra più scuro:
+   lo faceva uno script con un valore scritto in riga, che qui sotto non avrebbe potuto vincere: per questo lo script non lo fa più). */
 .lightbox-project-label {
   font-family: inherit;
   font-size: 0.95rem;
@@ -991,6 +1028,24 @@ body.edit-mode .grid-btn {
   line-height: 1.5;
   letter-spacing: normal;
   color: var(--paper);
+  opacity: 0.7;
+  /* Stesso ritmo delle frecce: più chiaro in 150 ms appena ci si va sopra; quando ci si allontana resta chiaro ancora un attimo (350 ms)
+     e poi torna più scura in 300 ms — così anche un tocco veloce sul telefono lascia un segno visibile. */
+  transition: opacity 300ms ease 350ms;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .lightbox-project-label:hover {
+    opacity: 1;
+    transition-delay: 0s;
+    transition-duration: 150ms;
+  }
+}
+.lightbox-project-label:active {
+  opacity: 1;
+  transition-delay: 0s;
+  transition-duration: 150ms;
 }
 
 /* Su telefono i nomi della home sono 2pt più piccoli (vedi sopra): anche questo. */
@@ -1039,7 +1094,17 @@ body.edit-mode .grid-btn {
   transition: opacity 300ms ease 350ms, visibility 0s;
 }
 
-.lightbox-nav.is-active:hover,
+/* Più chiara col mouse sopra, da tastiera (focus) e sul telefono col dito premuto: il passaggio del mouse vale solo dove il mouse c'è
+   («hover: hover»), perché sul telefono dopo un tocco resterebbe «incollato» finché non si tocca altrove. */
+@media (hover: hover) {
+  .lightbox-nav.is-active:hover {
+    opacity: 1;
+    transition-delay: 0s;
+    transition-duration: 150ms;
+  }
+}
+
+.lightbox-nav.is-active:active,
 .lightbox-nav.is-active:focus-visible {
   opacity: 1;
   transition-delay: 0s;
@@ -2075,7 +2140,12 @@ body.edit-mode .photo-caption-text {
   transition: opacity 0.2s ease;
 }
 
-.archive-word-frame.is-linked:hover {
+@media (hover: hover) {
+  .archive-word-frame.is-linked:hover {
+    opacity: 0.55;
+  }
+}
+.archive-word-frame.is-linked:active {
   opacity: 0.55;
 }
 
@@ -2083,7 +2153,8 @@ body.edit-mode .archive-word-frame.is-linked {
   cursor: text;
 }
 
-body.edit-mode .archive-word-frame.is-linked:hover {
+body.edit-mode .archive-word-frame.is-linked:hover,
+body.edit-mode .archive-word-frame.is-linked:active {
   opacity: 1;
 }
 

@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -3661,10 +3661,8 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
       zoomProjectLabel.style.display = "block";
       placeLabel();
 
-      // Simula hover css via js perché è l'unico punto in cui lo gestiamo
-      zoomProjectLabel.onmouseenter = () => zoomProjectLabel.style.opacity = "0.7";
-      zoomProjectLabel.onmouseleave = () => zoomProjectLabel.style.opacity = "1";
-      
+      // Il colore a riposo / col mouse sopra / col dito premuto del nome sta nel foglio di stile (".lightbox-project-label"), uguale a quello
+      // delle frecce: qui non si scrive nessuna trasparenza in riga, che altrimenti vincerebbe sulle regole del foglio di stile.
       zoomProjectLabel.onclick = (e) => {
         e.stopPropagation();
         if (zoomCurrentClose) zoomCurrentClose();

@@ -23,7 +23,8 @@
        - Core Archive, foto ingrandita di una parola: ci sono le frecce avanti/indietro (visibili, dentro lo schermo, almeno 44 px; su computer un po'
          staccate dal bordo e senza toccare né la foto né il nome del progetto); → porta alla parola
          dopo, ← a quella prima, dalla prima ← porta all'ultima, il tasto → fa lo stesso; a passaggio finito non resta una copia della foto vecchia;
-         chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre);
+         chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre); il colore: frecce e nome del progetto sono «più scuri» a riposo
+         (opacità 0,7) e si schiariscono (1) col mouse sopra, tutti e due allo stesso modo (dal 20 novembre; il nome faceva l'opposto);
        - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
          content.js e le modifiche al file non comparivano). Il file si rilegge e si divide in paragrafi con un altro metodo da quello del sito.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
@@ -847,6 +848,41 @@ async function checkArchiveArrows(context, base) {
     if (s.nav.length !== 2 || !s.nav.every((n) => n.visible)) problems.push(`Core Archive (${context.__profile}): le frecce avanti/indietro non compaiono sulla foto ingrandita di una parola`);
     else if (!s.nav.every((n) => n.inside && n.w >= 44 && n.h >= 44)) problems.push(`Core Archive (${context.__profile}): le frecce stanno fuori dallo schermo o sono più piccole di 44 px (${s.nav.map((n) => `${Math.round(n.w)}×${Math.round(n.h)}`).join(', ')})`);
     steps.push('si aprono');
+
+    // Colore (20 novembre, chiesto dal proprietario): le frecce e il nome del progetto sono «più scuri» a riposo (opacità 0,7) e si schiariscono (1) col
+    // mouse sopra: tutti e due allo stesso modo (prima il nome faceva l'opposto, con un valore scritto in riga da uno script). Su telefono, senza mouse, restano
+    // a 0,7. Lo stato «premuto» col dito non si può provare qui: sta nelle regole ":active" del foglio di stile, che si provano a mano sul telefono.
+    {
+      const tone = () => page.evaluate(() => {
+        const o = (el) => (el ? Number(getComputedStyle(el).opacity) : null);
+        const label = document.querySelector('.lightbox-project-label');
+        return { next: o(document.querySelector('.lightbox-nav.next')), prev: o(document.querySelector('.lightbox-nav.prev')), label: label && label.style.display !== 'none' ? o(label) : null };
+      });
+      const closeTo = (v, t) => v !== null && Math.abs(v - t) <= 0.06;
+      const fmt = (t) => `freccia → ${t.next}, freccia ← ${t.prev}, nome ${t.label === null ? '—' : t.label}`;
+      const hasMouse = context.__profile !== 'telefono';
+      await page.mouse.move(3, 3); // il mouse in un angolo, lontano da tutto
+      await page.waitForTimeout(1100); // (tolto il mouse, restano chiare ancora 350 ms e poi tornano scure in 300 ms)
+      let t = await tone();
+      if (!closeTo(t.next, 0.7) || !closeTo(t.prev, 0.7) || (t.label !== null && !closeTo(t.label, 0.7))) problems.push(`Core Archive (${context.__profile}): a riposo le frecce e il nome del progetto devono essere «più scuri» (opacità 0,7), invece: ${fmt(t)}`);
+      if (hasMouse) {
+        await page.hover('.lightbox-nav.next');
+        await page.waitForTimeout(450);
+        t = await tone();
+        if (!closeTo(t.next, 1)) problems.push(`Core Archive (${context.__profile}): col mouse sopra la freccia non diventa più chiara (opacità 1), invece: ${fmt(t)}`);
+        if (t.label !== null) {
+          await page.hover('.lightbox-project-label');
+          await page.waitForTimeout(450);
+          t = await tone();
+          if (!closeTo(t.label, 1)) problems.push(`Core Archive (${context.__profile}): col mouse sopra il nome del progetto non diventa più chiaro (opacità 1, come le frecce), invece: ${fmt(t)}`);
+        }
+        await page.mouse.move(3, 3);
+        await page.waitForTimeout(1100);
+        t = await tone();
+        if (!closeTo(t.next, 0.7) || !closeTo(t.label === null ? 0.7 : t.label, 0.7)) problems.push(`Core Archive (${context.__profile}): tolto il mouse le frecce e il nome del progetto non tornano «più scuri» (0,7), invece: ${fmt(t)}`);
+      }
+      steps.push(hasMouse ? 'colore a riposo e col mouse sopra' : 'colore a riposo');
+    }
 
     await page.click('.lightbox-nav.next');
     await page.waitForTimeout(1100);
