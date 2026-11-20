@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 260,
-  "updatedAt": "2026-10-31T11:12:32.113Z",
+  "version": 281,
+  "updatedAt": "2026-11-20T13:57:53.448Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -342,7 +342,9 @@ window.SITE_STATE = {
       "project.sospension.captionText.@sospension/estrangement-4.jpg": "untitled (part of a series)",
       "project.sospension.captionText.@sospension/estrangement-3.jpg": "untitled (part of a series)",
       "project.sospension.captionText.@sospension/estrangement-1.jpg": "untitled (part of a series)",
-      "project.cement.captionText.@cement/employee-looking-outside-his-window.jpg": "employee looking outside \nhis window"
+      "project.cement.captionText.@cement/employee-looking-outside-his-window.jpg": "employee looking outside \nhis window",
+      "project.homes.captionText.@homes/epson0070-positive-2-2.jpg": "upper middle class",
+      "project.mediality.captionText.@mediality/mediality-6.jpg": "free"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -356,6 +358,13 @@ window.SITE_STATE = {
           "id": 2,
           "axis": "v",
           "pos": 159.1875
+        }
+      ],
+      "project.stills": [
+        {
+          "id": 1,
+          "axis": "h",
+          "pos": 891.796875
         }
       ]
     },
@@ -394,9 +403,8 @@ window.SITE_STATE = {
       ],
       "project.stills.imageOrder": [
         0,
-        1,
-        2,
         3,
+        2,
         4,
         5,
         6,
@@ -404,6 +412,7 @@ window.SITE_STATE = {
         8,
         9,
         10,
+        23,
         11,
         12,
         13,
@@ -414,7 +423,9 @@ window.SITE_STATE = {
         15,
         19,
         20,
-        21
+        21,
+        24,
+        25
       ],
       "project.boudaries.imageOrder": [
         0,
@@ -529,7 +540,9 @@ window.SITE_STATE = {
     },
     "site-removed-images-v1": {
       "project.stills": [
-        "src:images/stills/senza titolo-1.JPG"
+        "src:images/stills/senza titolo-1.JPG",
+        "src:images/stills/stills-2.jpg",
+        "src:images/stills/pot and bowl.JPG"
       ],
       "project.boudaries": [
         "src:images/boudaries/6 stage.JPG"
@@ -718,7 +731,7 @@ window.SITE_STATE = {
       },
       "project.homes.zoom.7": {
         "width": "1519.8px",
-        "height": "804.832px"
+        "height": "948.695px"
       },
       "zoom:images/homes/inmates.jpg": {
         "width": "1519.8px",
@@ -749,7 +762,7 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.stills.image.20": {
-        "width": "566.958px",
+        "width": "454.076px",
         "height": ""
       },
       "project.stills.zoom.20": {
@@ -757,12 +770,12 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "zoom:images/stills/stills-17.jpg": {
-        "width": "1036.66px",
+        "width": "777.609px",
         "height": "916.76px"
       },
       "project.stills.zoom.16": {
         "width": "1519.8px",
-        "height": "749.334px"
+        "height": "902.753px"
       },
       "zoom:images/stills/turbojet motor glider.jpg": {
         "width": "1519.8px",
@@ -879,6 +892,54 @@ window.SITE_STATE = {
       "project.homes.image.5": {
         "width": "466.003px",
         "height": ""
+      },
+      "project.stills.zoom.17": {
+        "width": "913.477px",
+        "height": "916.76px"
+      },
+      "zoom:images/stills/sophienwald wine glasses.jpg": {
+        "width": "913.477px",
+        "height": "916.76px"
+      },
+      "zoom:images/stills/oval pendant on a thin chain.jpg": {
+        "width": "1519.8px",
+        "height": "902.753px"
+      },
+      "project.stills.image.16": {
+        "width": "386.159px",
+        "height": ""
+      },
+      "project.stills.zoom.19": {
+        "width": "917.152px",
+        "height": "916.76px"
+      },
+      "zoom:images/stills/glass bottles.jpg": {
+        "width": "917.152px",
+        "height": "916.76px"
+      },
+      "project.stills.image.24": {
+        "width": "562.123px",
+        "height": ""
+      },
+      "project.stills.zoom.24": {
+        "width": "777.609px",
+        "height": "916.76px"
+      },
+      "project.homes.image.9": {
+        "width": "466.871px",
+        "height": ""
+      },
+      "zoom:images/homes/epson0070-positive-2-2.jpg": {
+        "width": "1519.8px",
+        "height": "948.695px"
+      },
+      "project.mediality.zoom.5": {
+        "width": "891.543px",
+        "height": "916.76px"
+      },
+      "zoom:images/mediality/mediality-6.jpg": {
+        "width": "891.543px",
+        "height": "916.76px"
       }
     },
     "site-size-overrides-v1:m": {
