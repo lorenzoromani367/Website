@@ -115,7 +115,6 @@ window.IMAGE_ORDER = [
   "images/stills/Oval pendant on a thin chain.JPG",
   "images/stills/Sophienwald wine glasses.JPG",
   "images/stills/pot and bowl.JPG",
-  "images/stills/shirt and kimono.JPG",
   "images/2 family.jpg",
   "images/counterpart/K100PRO92-4-2-2-1.JPG",
   "images/counterpart/K100PRO92-4-3-2-1.JPG",
@@ -138,5 +137,6 @@ window.IMAGE_ORDER = [
   "images/counterpart/vision500_14-2-2-1.JPG",
   "images/recognition-11.jpg",
   "images/recognition-3.jpg",
-  "images/recognition-7.jpg"
+  "images/recognition-7.jpg",
+  "images/stills/Remnant of a garment.JPG"
 ];
