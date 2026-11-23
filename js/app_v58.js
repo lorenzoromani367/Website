@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + dito sul testo scorre la pagina";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -4873,6 +4873,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   descTrack.classList.add("draggable");
   descTrack.addEventListener("pointerdown", (e) => {
     if (isEditMode()) return;
+    // Il dito non trascina il testo: sul telefono un dito che parte dal testo deve far scorrere la pagina
+    // (altrimenti lì sopra la pagina non si muove e sembra "bloccata"). Il testo si trascina con il mouse.
+    if (e.pointerType === "touch") return;
     e.preventDefault();
     marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos, moved: false };
     descTrack.classList.add("is-dragging");
@@ -5547,6 +5550,45 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   const assistState = () => ({ blocker: assistBlocker(), y: Math.round(window.scrollY), target: Math.round(assistTargetY()), last: assistLastNote, stats: { ...assistStats }, glide: assistLastGlide });
   window.__assistState = assistState;
 
+  /* ---- Telefono: arrivati in fondo alla pagina, ci si resta (23 novembre) ----
+     Sul telefono la barra con il numero e le frecce non si tiene ferma come sul computer (barHoldBlocker: la pagina la muove il dito). Ma la
+     galleria cambia foto da sola e il riquadro cambia altezza: se la foto che arriva è più alta la pagina si allunga e la barra, che dopo la discesa
+     col dito stava in fondo allo schermo, scivolava sotto il bordo (misurato su 390 × 844, Stills: fino a 32 px e per un quinto del tempo) e bisognava
+     scendere di nuovo. Qui, SOLO se la pagina è già scorsa in fondo (a meno di PHONE_BOTTOM_PX), a ogni fotogramma in cui il riquadro cambia altezza
+     la pagina si rimette in fondo: la barra resta dov'è, sale o scende la foto. Chi guarda altrove (il testo in alto, la foto a metà pagina) non viene
+     mai spostato, né chi ha un dito sullo schermo o ha mosso la pagina da meno di PHONE_BOTTOM_QUIET_MS (lo strascico del dito conta). */
+  const PHONE_BOTTOM_PX = 24; // entro questi px dal fondo la pagina si considera «in fondo»
+  const PHONE_BOTTOM_QUIET_MS = 250;
+  let phoneAtBottom = false;
+  let fingersDown = 0;
+  const readPhoneBottom = () => { phoneAtBottom = window.scrollY > 2 && pageMaxScroll() - window.scrollY <= PHONE_BOTTOM_PX; };
+  const countFingers = (e) => { fingersDown = e.touches ? e.touches.length : 0; };
+  // (dove la barra non si tiene ferma: telefono stretto, e schermo tattile anche largo come un telefono girato o un iPad: vedi barHoldBlocker)
+  const touchScreenLayout = () => isMobileViewport() || (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches);
+  // La foto ha la precedenza sulla barra, come sul computer («foto sempre intera»): se la cima della foto si vede, la pagina non scende oltre il punto in cui
+  // arriverebbe sopra FRAME_TOP_MARGIN dal bordo alto dello schermo (con una foto molto alta la barra resta sotto il bordo, come prima). Se la cima è già FUORI
+  // dallo schermo, sopra (a telefono girato, o con una finestra bassa, chi è in fondo ha messo la pagina lì per la barra e la foto non si vede intera comunque),
+  // non c'è niente da proteggere: la pagina segue il fondo.
+  const phoneFollowLimit = () => {
+    const frame = figures[current] && figures[current].querySelector(".photo-frame");
+    if (!frame) return Infinity;
+    const photo = frame.querySelector("img") || frame; // (la cornice comprende anche la didascalia, che sta più in basso della foto: conta la foto)
+    const top = photo.getBoundingClientRect().top;
+    if (top < 0) return Infinity;
+    return top + window.scrollY - FRAME_TOP_MARGIN;
+  };
+  const followPhoneBottom = () => {
+    if (!phoneAtBottom || !touchScreenLayout() || isEditMode() || lightboxHold || document.hidden) return;
+    if (fingersDown > 0 || performance.now() - lastUserScrollAt < PHONE_BOTTOM_QUIET_MS) return;
+    const targetY = Math.min(pageMaxScroll(), Math.max(window.scrollY, phoneFollowLimit())); // (mai verso l'alto; se la pagina si accorcia ci pensa il browser)
+    if (targetY - window.scrollY > 0.5) setPageScroll(targetY);
+  };
+  const phoneBottomObserver = new ResizeObserver(followPhoneBottom);
+  phoneBottomObserver.observe(viewport);
+  resizeObservers.push(phoneBottomObserver);
+  window.addEventListener("scroll", readPhoneBottom, { passive: true });
+  ["touchstart", "touchend", "touchcancel"].forEach((type) => window.addEventListener(type, countFingers, { passive: true, capture: true }));
+
   function goTo(i, { user = false } = {}) {
     if (isAnimating) return;
     if (!figures.length) return;
@@ -5938,6 +5980,8 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     window.removeEventListener("scroll", onAssistScroll);
     window.removeEventListener("pointerup", onAssistPointerUp);
     window.removeEventListener("touchmove", onAssistTouch);
+    window.removeEventListener("scroll", readPhoneBottom);
+    ["touchstart", "touchend", "touchcancel"].forEach((type) => window.removeEventListener(type, countFingers, { capture: true }));
     clearTimeout(assistTimer);
     if (window.__assistState === assistState) delete window.__assistState;
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
@@ -6270,6 +6314,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
     descTrack.classList.add("draggable");
     descTrack.addEventListener("pointerdown", (e) => {
       if (isEditMode()) return;
+      if (e.pointerType === "touch") return; // il dito fa scorrere la pagina, non il testo (vedi sopra)
       e.preventDefault();
       marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos, moved: false };
       descTrack.classList.add("is-dragging");
@@ -6757,11 +6802,38 @@ function healArchivePaths(pages) {
     const found = list.filter((path) => path.toLowerCase().split("/").slice(0, -1).join("/") === folder && names.includes(plainName(path.split("/").pop())));
     return found.length === 1 ? found[0] : null;
   };
+  // Cartelle spostate o rinominate (20-23 novembre: «recognition» → «counterpart»). Le foto che si ritrovano per nome (un solo file con quel nome) insegnano dove è
+  // finita la loro vecchia cartella; le altre foto di quella cartella, il cui nome compare anche in altre cartelle («recognition-9.jpg» c'è anche in «sospension»), si
+  // cercano prima lì. Senza questo la parola «fishes» del Core Archive restava legata a una foto che non c'era più (404) e non si apriva.
+  const folderOf = (path) => String(path).toLowerCase().split("/").slice(0, -1).join("/");
+  const moves = new Map(); // vecchia cartella → (nuova cartella → quante foto l'hanno insegnato)
+  pages.forEach((page) => (page.images || []).forEach((item) => {
+    ["linkedImageSrc", "poolSrc"].forEach((field) => {
+      const src = item[field];
+      if (!src || actual.has(String(src).toLowerCase())) return;
+      const sameName = byName.get(String(src).toLowerCase().split("/").pop()) || [];
+      if (sameName.length !== 1 || folderOf(sameName[0]) === folderOf(src)) return;
+      const counts = moves.get(folderOf(src)) || new Map();
+      counts.set(folderOf(sameName[0]), (counts.get(folderOf(sameName[0])) || 0) + 1);
+      moves.set(folderOf(src), counts);
+    });
+  }));
+  const movedTo = (src) => {
+    let best = null;
+    (moves.get(folderOf(src)) || new Map()).forEach((count, folder) => { if (!best || count > best.count) best = { folder, count }; });
+    return best && best.folder;
+  };
   const find = (src, word) => {
     const key = String(src).toLowerCase();
     if (actual.has(key)) return actual.get(key) !== src ? actual.get(key) : null; // solo le maiuscole erano diverse (o già a posto)
     const sameName = byName.get(key.split("/").pop()) || [];
-    return sameName.length === 1 ? sameName[0] : renamedAsWord(src, word);
+    if (sameName.length === 1) return sameName[0];
+    if (sameName.length > 1) {
+      const to = movedTo(src);
+      const inMovedFolder = to ? sameName.filter((path) => folderOf(path) === to) : [];
+      if (inMovedFolder.length === 1) return inMovedFolder[0];
+    }
+    return renamedAsWord(src, word);
   };
   pages.forEach((page) => (page.images || []).forEach((item) => {
     [["linkedImageSrc", "linkedImageLinkTo"], ["poolSrc", "linkTo"]].forEach(([srcField, linkField]) => {

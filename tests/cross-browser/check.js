@@ -27,6 +27,10 @@
          (opacità 0,7) e si schiariscono (1) col mouse sopra, tutti e due allo stesso modo (dal 20 novembre; il nome faceva l'opposto);
        - Stills con una finestra grande come un Mac (1788 × 1118): dopo la discesa con la rotella la pagina è in fondo e la barra con i numeri si vede
          (checkReachBottom; dal 20 novembre: con le foto nuove le misure salvate erano scivolate su foto sbagliate e la discesa si fermava 196 px prima);
+       - telefono (dal 23 novembre): il dito non incontra nessuna zona che non muove la pagina (touch-action: none: il testo scorrevole lo era);
+         portata la pagina in fondo, ci resta mentre la galleria cambia foto da sola (la barra con i numeri e le frecce non scivola sotto lo schermo:
+         checkPhoneBottom, followPhoneBottom in js/app_v58.js); su Chromium uno swipe a sinistra e uno a destra cambiano la foto di una, uno obliquo fa
+         scorrere la pagina senza cambiarla, e dopo i gesti la galleria riprende da sola (checkPhoneSwipe);
        - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
          content.js e le modifiche al file non comparivano). Il file si rilegge e si divide in paragrafi con un altro metodo da quello del sito.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
@@ -140,6 +144,8 @@ function measureInPage() {
     }
     out.hamburger = { lines: lines.length, lineW: lines.length ? +lines[0].width.toFixed(2) : 0, lineH: lines.length ? +lines[0].height.toFixed(2) : 0, right: lines.length ? +lines[0].right.toFixed(2) : 0, cy: +cy.toFixed(2), hitW: maxX >= minX ? maxX - minX + 1 : 0, hitH: maxY >= minY ? maxY - minY + 1 : 0 };
   }
+  // Zone in cui il dito non muove la pagina (touch-action: none): su telefono non ce ne devono essere (dal 23 novembre; il testo scorrevole ne era una)
+  out.touchNone = [...document.querySelectorAll('#app *')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).touchAction === 'none'; }).slice(0, 4).map((e) => `${e.tagName.toLowerCase()}${e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : ''}`);
   // Core Archive: lo "0" in fondo
   const words = [...document.querySelectorAll('.archive-word')];
   const zero = document.querySelector('.gallerybar .topbar-index'); const topIndex = document.querySelector('.topbar .topbar-index'); const title = document.querySelector('.topbar-title');
@@ -229,6 +235,7 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
     if (metrics.brokenImages && metrics.brokenImages.length) problems.push(`immagini che non si vedono: ${metrics.brokenImages.join(', ')}`);
     if (metrics.siteFont && !/loaded/.test(metrics.siteFont) && metrics.siteFont !== 'assente') problems.push(`il carattere del sito non si è caricato (stato: ${metrics.siteFont})`);
     if (metrics.docW > metrics.innerW + 1) problems.push(`la pagina è più larga dello schermo (${metrics.docW} px contro ${metrics.innerW} px)`);
+    if (context.__profile === 'telefono' && metrics.touchNone && metrics.touchNone.length) problems.push(`su telefono un dito che parte da qui non fa scorrere la pagina (touch-action: none): ${metrics.touchNone.join(', ')}`);
     const h = metrics.hamburger;
     if (h) {
       if (h.lines !== 3) problems.push(`il tasto "torna alla home" ha ${h.lines} lineette invece di 3`);
@@ -842,6 +849,128 @@ async function checkReachBottom(context, base) {
   return problems;
 }
 
+// Telefono, in fondo alla pagina: ci si resta mentre la galleria cambia foto (dal 23 novembre, followPhoneBottom in js/app_v58.js). Prima la galleria
+// cambiava altezza da sola (ogni 3 s, piano) e la barra con i numeri e le frecce, che dopo la discesa col dito stava in fondo allo schermo, scivolava
+// SOTTO il bordo (misurato su 390 × 844: fino a 32 px in Stills, 71 in Counterpart, 161 in Homes, e in Homes la barra non si vedeva per il 91 % del
+// tempo) e bisognava scendere di nuovo. Qui: Complicity (foto di altezze molto diverse), pagina portata in fondo (scrollTo: per il sito è un
+// movimento dell'utente), poi il tasto → cambia foto quattro volte. A ogni cambio, a transizione finita, la barra deve stare dentro lo schermo (al
+// massimo PHONE_BOTTOM_TOL_PX fuori), a meno che la cima della foto, che si vede, sia già a meno di PHONE_TOP_MARGIN_PX dal bordo alto: la foto ha la
+// precedenza sulla barra, come sul computer («foto sempre intera»). E per tutto il tragitto la barra non deve mai scendere sotto lo schermo di più
+// di PHONE_BOTTOM_TOL_PX (l'allungamento è lento: se la pagina non segue, la barra scivola via a poco a poco).
+const PHONE_BOTTOM_ROUTE = '#/project/boudaries';
+const PHONE_BOTTOM_STEPS = 4;
+const PHONE_BOTTOM_TOL_PX = 3;
+const PHONE_TOP_MARGIN_PX = 26; // FRAME_TOP_MARGIN (24) in js/app_v58.js più 2 px di arrotondamento
+async function checkPhoneBottom(context, base) {
+  const problems = [];
+  if (context.__profile !== 'telefono') return problems;
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${PHONE_BOTTOM_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page); // il mouse sulla galleria ferma l'avanzamento automatico: i cambi di foto sono quelli del tasto →
+    await page.waitForTimeout(SETTLE_MS + 1200);
+    const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
+    if (geo.photos < PHONE_BOTTOM_STEPS + 1 || geo.max <= 150) return problems;
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight - window.innerHeight)); // in fondo
+    await page.waitForTimeout(900); // (il sito aspetta un quarto di secondo dall'ultimo movimento dell'utente prima di seguire il fondo)
+    const read = () => page.evaluate(() => {
+      const bar = document.querySelector('.gallerybar'); const figs = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')]; const vp = document.querySelector('.photo-viewport').getBoundingClientRect();
+      let cur = 0; let best = Infinity; figs.forEach((f, i) => { const d = Math.abs(f.getBoundingClientRect().left - vp.left); if (d < best) { best = d; cur = i; } });
+      const img = figs[cur] && figs[cur].querySelector('.photo-frame img');
+      return { cur: cur + 1, barBottom: bar.getBoundingClientRect().bottom, winH: window.innerHeight, frameTop: img ? img.getBoundingClientRect().top : null, y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight };
+    });
+    // la barra, fotogramma per fotogramma: quanto scende al massimo sotto il bordo dello schermo
+    const watch = (ms) => page.evaluate((duration) => new Promise((resolve) => {
+      const bar = document.querySelector('.gallerybar'); const t0 = performance.now(); let worst = -1e9;
+      const tick = () => { setTimeout(() => { worst = Math.max(worst, bar.getBoundingClientRect().bottom - window.innerHeight); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => resolve(worst), 60); };
+      requestAnimationFrame(tick);
+    }), ms);
+    const start = await read();
+    if (start.barBottom > start.winH + PHONE_BOTTOM_TOL_PX) { console.log(`  [telefono in fondo] ${context.__engine}: non misurata (con la pagina in fondo la barra è a ${Math.round(start.barBottom)} su ${start.winH})`); return problems; }
+    const rows = [];
+    for (let i = 0; i < PHONE_BOTTOM_STEPS; i++) {
+      await page.keyboard.press('ArrowRight');
+      const worst = await watch(6900); // lo scorrimento dura 6 s
+      const end = await read();
+      const photoFirst = end.frameTop !== null && end.frameTop >= 0 && end.frameTop <= PHONE_TOP_MARGIN_PX; // la cima della foto si vede ed è già al margine: la barra resta sotto di proposito (se la cima è fuori dallo schermo non c'è niente da proteggere e la barra deve restare in vista)
+      rows.push(`foto ${end.cur}: barra fino a ${Math.round(worst)} px sotto lo schermo, a fine corsa a ${Math.round(end.barBottom - end.winH)}${photoFirst ? ' (la foto ha la precedenza)' : ''}`);
+      if (!photoFirst && worst > PHONE_BOTTOM_TOL_PX) problems.push(`su telefono, in fondo alla pagina di Complicity, passando alla foto ${end.cur} la barra con i numeri e le frecce scivola sotto lo schermo di ${Math.round(worst)} px (massimo ${PHONE_BOTTOM_TOL_PX}): la pagina non segue il fondo mentre la galleria cambia altezza (followPhoneBottom in js/app_v58.js)`);
+      else if (!photoFirst && end.barBottom - end.winH > PHONE_BOTTOM_TOL_PX) problems.push(`su telefono, in fondo alla pagina di Complicity, alla foto ${end.cur} la barra finisce ${Math.round(end.barBottom - end.winH)} px sotto lo schermo`);
+    }
+    console.log(`  [telefono in fondo] ${context.__engine}: Complicity a 390 × 844, in fondo alla pagina, ${PHONE_BOTTOM_STEPS} cambi di foto: ${rows.join(' · ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
+  } catch (e) {
+    problems.push(`prova del telefono in fondo non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
+// Swipe sulla galleria, con un dito vero simulato (tocco, movimenti ogni 16 ms, rilascio: Chromium soltanto, gli altri due motori non lasciano
+// mandare tocchi grezzi). Stills: swipe a sinistra → una foto avanti; a destra → una indietro; un gesto obliquo (80 px di lato, 140 in giù) fa scorrere la
+// pagina e NON cambia foto (conta solo un movimento più orizzontale che verticale); durante i due swipe la pagina non scorre; e dopo i gesti la
+// galleria riprende ad avanzare da sola (con un tocco il sito la ferma: se un gesto lasciasse la pausa attaccata, la galleria resterebbe ferma per sempre).
+const SWIPE_ROUTE = '#/project/stills';
+async function checkPhoneSwipe(context, base) {
+  const problems = [];
+  if (context.__profile !== 'telefono' || context.__engine !== 'chromium') return problems;
+  const page = await context.newPage();
+  try {
+    const cdp = await context.newCDPSession(page);
+    const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    const swipe = async (x1, y1, x2, y2) => { await touch('touchStart', x1, y1); for (let i = 1; i <= 12; i++) { await touch('touchMove', x1 + ((x2 - x1) * i) / 12, y1 + ((y2 - y1) * i) / 12); await page.waitForTimeout(16); } await touch('touchEnd', x2, y2); };
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${SWIPE_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await page.waitForTimeout(SETTLE_MS);
+    // la galleria in vista, come farebbe il dito con la pagina (con scrollTo: è un movimento dell'utente per il sito)
+    await page.evaluate(() => { const r = document.querySelector('.photo-viewport').getBoundingClientRect(); window.scrollTo(0, Math.max(0, window.scrollY + r.top - 60)); });
+    await page.waitForTimeout(600);
+    const state = () => page.evaluate(() => {
+      const figs = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')].filter((f) => getComputedStyle(f).display !== 'none'); const vp = document.querySelector('.photo-viewport').getBoundingClientRect();
+      let cur = 0; let best = Infinity; figs.forEach((f, i) => { const d = Math.abs(f.getBoundingClientRect().left - vp.left); if (d < best) { best = d; cur = i; } });
+      return { cur, n: figs.length, y: window.scrollY, moving: document.querySelector('.photo-track').getAnimations().some((a) => a.playState === 'running') };
+    });
+    const settle = async (maxMs) => { const t0 = Date.now(); let still = 0; while (Date.now() - t0 < maxMs && still < 4) { still = (await state()).moving ? 0 : still + 1; await page.waitForTimeout(150); } };
+    const where = () => page.evaluate(() => { const r = document.querySelector('.photo-viewport').getBoundingClientRect(); return { y: Math.round((Math.max(r.top, 60) + Math.min(r.bottom, window.innerHeight - 60)) / 2), cx: Math.round(window.innerWidth / 2) }; });
+    // il mouse fuori e poi sopra la galleria: ferma l'avanzamento automatico tra un gesto e l'altro (mouseleave lo riprende, mouseenter lo ferma)
+    const hold = async () => { await page.mouse.move(-5, -5); await page.mouse.move(await page.evaluate(() => innerWidth / 2), await page.evaluate(() => { const r = document.querySelector('.photo-viewport').getBoundingClientRect(); return Math.max(30, Math.min(innerHeight - 30, r.top + r.height / 2)); })); };
+    const s0 = await state();
+    if (s0.n < 4) return problems;
+    const diff = (a, b) => { let d = (((b.cur - a.cur) % a.n) + a.n) % a.n; if (d > a.n / 2) d -= a.n; return d; };
+    const rows = [];
+    await hold();
+    // 1) swipe a sinistra: una foto avanti, la pagina non si muove
+    let w = await where(); const a1 = await state(); await swipe(w.cx + 110, w.y, w.cx - 110, w.y + 5); await page.waitForTimeout(300);
+    const m1 = await state(); await settle(8000); const b1 = await state();
+    if (diff(a1, b1) !== 1) problems.push(`su telefono uno swipe a sinistra sulla galleria non porta alla foto dopo (da ${a1.cur + 1} a ${b1.cur + 1})`);
+    if (Math.abs(m1.y - a1.y) > 2 || Math.abs(b1.y - a1.y) > 2) problems.push(`su telefono uno swipe orizzontale ha fatto scorrere anche la pagina (da ${Math.round(a1.y)} a ${Math.round(b1.y)} px)`);
+    rows.push(`sinistra: foto ${a1.cur + 1}→${b1.cur + 1}`);
+    // 2) swipe a destra: una foto indietro
+    await hold(); w = await where(); const a2 = await state(); await swipe(w.cx - 110, w.y, w.cx + 110, w.y + 5); await settle(8000); const b2 = await state();
+    if (diff(a2, b2) !== -1) problems.push(`su telefono uno swipe a destra sulla galleria non porta alla foto prima (da ${a2.cur + 1} a ${b2.cur + 1})`);
+    if (Math.abs(b2.y - a2.y) > 2) problems.push(`su telefono uno swipe orizzontale ha fatto scorrere anche la pagina (da ${Math.round(a2.y)} a ${Math.round(b2.y)} px)`);
+    rows.push(`destra: foto ${a2.cur + 1}→${b2.cur + 1}`);
+    // 3) gesto obliquo: scorre la pagina, la foto resta
+    await hold(); w = await where(); const a3 = await state(); await swipe(w.cx + 40, w.y - 60, w.cx - 40, w.y + 80); await page.waitForTimeout(1200); const b3 = await state();
+    if (diff(a3, b3) !== 0) problems.push(`su telefono un gesto più verticale che orizzontale ha cambiato foto (da ${a3.cur + 1} a ${b3.cur + 1})`);
+    if (Math.abs(b3.y - a3.y) < 20) problems.push(`su telefono un gesto obliquo sulla galleria non ha fatto scorrere la pagina (${Math.round(a3.y)} → ${Math.round(b3.y)} px)`);
+    rows.push(`obliquo: foto ${a3.cur + 1}→${b3.cur + 1}, pagina ${Math.round(a3.y)}→${Math.round(b3.y)} px`);
+    // 4) dopo i gesti la galleria riprende da sola. Il mouse non si tocca: la pausa del tocco (touchstart) si toglie con la fine del tocco (touchend); se restasse
+    //    attaccata, qui la galleria non si muoverebbe più (un mouseleave la toglierebbe, e la prova non vedrebbe niente)
+    const a4 = await state(); let resumed = false;
+    for (let t = 0; t < 14000 && !resumed; t += 500) { await page.waitForTimeout(500); resumed = diff(a4, await state()) !== 0; }
+    if (!resumed) problems.push('su telefono, dopo gli swipe, la galleria non riprende ad avanzare da sola entro 14 s (il tocco ha lasciato la pausa attaccata?)');
+    rows.push(`dopo i gesti la galleria ${resumed ? 'riprende da sola' : 'RESTA FERMA'}`);
+    console.log(`  [swipe] chromium telefono: Stills a 390 × 844, dito simulato: ${rows.join(' · ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
+  } catch (e) {
+    problems.push(`prova dello swipe non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 const ARCHIVE_ROUTE = '#/archive';
 async function checkArchiveArrows(context, base) {
   const problems = [];
@@ -983,7 +1112,8 @@ async function runEngine(engine, base, origin, routes) {
       if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
       if (route === ABOUT_ROUTE) r.problems.push(...await checkAboutText(context, base));
       if (route === ARCHIVE_ROUTE) r.problems.push(...await checkArchiveArrows(context, base));
-      if (route === REACH_ROUTE) r.problems.push(...await checkReachBottom(context, base));
+      if (route === REACH_ROUTE) { r.problems.push(...await checkReachBottom(context, base)); r.problems.push(...await checkPhoneSwipe(context, base)); }
+      if (route === PHONE_BOTTOM_ROUTE) r.problems.push(...await checkPhoneBottom(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }
     await context.close();

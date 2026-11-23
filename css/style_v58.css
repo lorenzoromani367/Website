@@ -569,7 +569,8 @@ body.edit-mode .topbar-index-input:focus {
 
 .description-track.draggable {
   cursor: grab;
-  touch-action: none;
+  /* Il dito fa scorrere la pagina anche partendo dal testo (pan-y); il testo si trascina solo con il mouse. */
+  touch-action: pan-y;
   user-select: none;
 }
 
