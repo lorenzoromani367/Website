@@ -5556,7 +5556,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
      col dito stava in fondo allo schermo, scivolava sotto il bordo (misurato su 390 × 844, Stills: fino a 32 px e per un quinto del tempo) e bisognava
      scendere di nuovo. Qui, SOLO se la pagina è già scorsa in fondo (a meno di PHONE_BOTTOM_PX), a ogni fotogramma in cui il riquadro cambia altezza
      la pagina si rimette in fondo: la barra resta dov'è, sale o scende la foto. Chi guarda altrove (il testo in alto, la foto a metà pagina) non viene
-     mai spostato, né chi ha un dito sullo schermo o ha mosso la pagina da meno di PHONE_BOTTOM_QUIET_MS (lo strascico del dito conta). */
+     mai spostato, né chi ha un dito sullo schermo o ha mosso la pagina da meno di PHONE_BOTTOM_QUIET_MS (lo strascico del dito conta).
+     Si controlla a ogni fotogramma (requestAnimationFrame) finché dura il cambio di altezza, come la barra ferma del computer: un ResizeObserver sul riquadro
+     faceva dire a Safari (WebKit) «ResizeObserver loop completed with undelivered notifications» nelle pagine con una foto sola, dove un altro osservatore
+     cambia l'altezza del riquadro nello stesso fotogramma (era il controllo su GitHub a segnalarlo, 23 novembre). */
   const PHONE_BOTTOM_PX = 24; // entro questi px dal fondo la pagina si considera «in fondo»
   const PHONE_BOTTOM_QUIET_MS = 250;
   let phoneAtBottom = false;
@@ -5583,9 +5586,19 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const targetY = Math.min(pageMaxScroll(), Math.max(window.scrollY, phoneFollowLimit())); // (mai verso l'alto; se la pagina si accorcia ci pensa il browser)
     if (targetY - window.scrollY > 0.5) setPageScroll(targetY);
   };
-  const phoneBottomObserver = new ResizeObserver(followPhoneBottom);
-  phoneBottomObserver.observe(viewport);
-  resizeObservers.push(phoneBottomObserver);
+  // Il ciclo parte a ogni cambio di foto (goTo) e dura quanto il cambio di altezza (al massimo TRANSITION_MS più un margine): niente che giri a vuoto sul computer
+  let phoneFollowRaf = 0;
+  let phoneFollowUntil = 0;
+  const phoneFollowTick = () => {
+    phoneFollowRaf = 0;
+    followPhoneBottom();
+    if (performance.now() < phoneFollowUntil || viewportHeightAnimating()) phoneFollowRaf = requestAnimationFrame(phoneFollowTick);
+  };
+  const startPhoneFollow = () => {
+    if (!touchScreenLayout()) return;
+    phoneFollowUntil = performance.now() + TRANSITION_MS + 600;
+    if (!phoneFollowRaf) phoneFollowRaf = requestAnimationFrame(phoneFollowTick);
+  };
   window.addEventListener("scroll", readPhoneBottom, { passive: true });
   ["touchstart", "touchend", "touchcancel"].forEach((type) => window.addEventListener(type, countFingers, { passive: true, capture: true }));
 
@@ -5658,6 +5671,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     // La barra col numero e le frecce resta ferma sullo schermo mentre cambia l'altezza (e, a pagina ferma, la pagina scende in fondo): vedi sopra.
     // Se la pagina sta già scendendo in fondo accompagnata, il suo movimento segue la barra anche mentre l'altezza cambia: ripartire la farebbe fermare un attimo.
     if (!carrying) startBarHold(barBefore);
+    startPhoneFollow(); // telefono: se la pagina è in fondo ci resta mentre il riquadro cambia altezza (vedi sopra)
   }
 
   function scheduleNext() {
@@ -5752,7 +5766,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const heightWasChanging = heldAnimations.some((animation) => /height/.test(String(animation.transitionProperty || "")));
     heldAnimations.forEach((animation) => { try { animation.play(); } catch (e) { /* già finita o annullata */ } });
     heldAnimations = [];
-    if (heightWasChanging) startBarHold(snapshotBar());
+    if (heightWasChanging) { startBarHold(snapshotBar()); startPhoneFollow(); }
     settleViewportExtension(); // se nessun allungamento è ancora in corso, il bordo di taglio torna al suo posto
     lastTransitionStart += heldFor; // le transizioni fermate riprendono con il tempo che restava
     if (pendingWrapCleanup) {
@@ -5982,6 +5996,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     window.removeEventListener("touchmove", onAssistTouch);
     window.removeEventListener("scroll", readPhoneBottom);
     ["touchstart", "touchend", "touchcancel"].forEach((type) => window.removeEventListener(type, countFingers, { capture: true }));
+    cancelAnimationFrame(phoneFollowRaf);
     clearTimeout(assistTimer);
     if (window.__assistState === assistState) delete window.__assistState;
     if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
