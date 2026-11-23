@@ -1,124 +1,11 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 484,
-  "updatedAt": "2026-11-23T21:11:21.474Z",
+  "version": 485,
+  "updatedAt": "2026-11-23T21:45:47.091Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
-    "site-archive-pages-v2": [
-      {
-        "id": "page_1",
-        "images": [
-          {
-            "type": "word",
-            "text": "back",
-            "uid": "uid_1791286888502_1417",
-            "linkedImageSrc": "images/beach/beach-1.jpg",
-            "linkedImageLinkTo": "project/beach"
-          },
-          {
-            "type": "word",
-            "text": "field",
-            "uid": "uid_1791300174629_6130",
-            "linkedImageSrc": "images/core archive/lines-11.jpg"
-          },
-          {
-            "type": "word",
-            "text": "church",
-            "uid": "uid_1791300315480_7880",
-            "linkedImageSrc": "images/core archive/lines-5.jpg"
-          },
-          {
-            "type": "word",
-            "text": "fishes",
-            "uid": "uid_1791300380946_5945",
-            "linkedImageSrc": "images/recognition/recognition-9.jpg",
-            "linkedImageLinkTo": "project/recognition"
-          },
-          {
-            "type": "word",
-            "text": "horse",
-            "uid": "uid_1791300691867_6144",
-            "linkedImageSrc": "images/plastic/plastic-1.jpg",
-            "linkedImageLinkTo": "project/plastic"
-          },
-          {
-            "type": "word",
-            "text": "jewelry, rabat",
-            "uid": "uid_1791300744404_2431",
-            "linkedImageSrc": "images/core archive/stills-10.jpg",
-            "linkedImageLinkTo": "archive"
-          },
-          {
-            "type": "word",
-            "text": "tie, saint laurent",
-            "uid": "uid_1791300788906_8601",
-            "linkedImageSrc": "images/stills/stills-13.jpg",
-            "linkedImageLinkTo": "project/stills"
-          },
-          {
-            "type": "word",
-            "text": "hill",
-            "uid": "uid_1791300840051_1654",
-            "linkedImageSrc": "images/boudaries/2 hill.JPG",
-            "linkedImageLinkTo": "project/boudaries"
-          },
-          {
-            "type": "word",
-            "text": "sunset",
-            "uid": "uid_1791300932325_7275",
-            "linkedImageSrc": "images/compression/sunset.JPG",
-            "linkedImageLinkTo": "project/compression"
-          },
-          {
-            "type": "word",
-            "text": "upside down",
-            "uid": "uid_1791300954219_5972",
-            "linkedImageSrc": "images/stills/upside down.JPG",
-            "linkedImageLinkTo": "project/stills"
-          },
-          {
-            "type": "word",
-            "text": "cocoon",
-            "uid": "uid_1791301098682_8677",
-            "linkedImageSrc": "images/recognition/recognition-10.jpg",
-            "linkedImageLinkTo": "project/recognition"
-          },
-          {
-            "type": "word",
-            "text": "upper middle-class",
-            "uid": "uid_1791304250928_133",
-            "linkedImageSrc": "images/homes/2 family.jpg"
-          },
-          {
-            "type": "word",
-            "text": "delta",
-            "uid": "uid_1791304281103_1664",
-            "linkedImageSrc": "images/core archive/michelin-5.jpg",
-            "linkedImageLinkTo": "archive"
-          },
-          {
-            "type": "word",
-            "text": "porcelain",
-            "uid": "uid_1791304323352_9307",
-            "linkedImageSrc": "images/core archive/stills-5.jpg",
-            "linkedImageLinkTo": "archive"
-          },
-          {
-            "type": "word",
-            "text": "cars",
-            "uid": "uid_1791304360871_8891",
-            "linkedImageSrc": "images/pile/cars.JPG"
-          },
-          {
-            "type": "word",
-            "text": "murano",
-            "uid": "uid_1791305668347_6899"
-          }
-        ]
-      }
-    ],
     "site-archive-pages-v3": [
       {
         "id": "page_1",
@@ -225,8 +112,8 @@ window.SITE_STATE = {
             "text": "i watch the sun",
             "uid": "uid_1795468220400_8737",
             "linkedImageSrc": "images/core archive/compression-5.jpg",
-            "linkedImageLinkTo": "archive",
-            "linkedImageProject": "compression"
+            "linkedImageLinkTo": "project/counterpart",
+            "linkedImageProject": "counterpart"
           },
           {
             "type": "word",
@@ -395,9 +282,7 @@ window.SITE_STATE = {
       ]
     },
     "site-home-hidden-v1": [
-      "p:bar",
-      "p:compression",
-      "p:hair"
+      "p:bar"
     ],
     "site-layout-scope-migration-v1": 1,
     "site-order-overrides-v1": {
@@ -722,10 +607,6 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "archive.page.page_1.zoom.uid_1791300932325_7275": {
-        "width": "1055.11px",
-        "height": "916.76px"
-      },
-      "zoom:images/compression/sunset.jpg": {
         "width": "1055.11px",
         "height": "916.76px"
       },
@@ -1223,10 +1104,6 @@ window.SITE_STATE = {
         "width": "233.293px",
         "height": ""
       },
-      "project.compression.image.0": {
-        "width": "299.795px",
-        "height": ""
-      },
       "project.moon.image.0": {
         "width": "271.867px",
         "height": ""
@@ -1237,10 +1114,6 @@ window.SITE_STATE = {
       },
       "project.fluoxetine.image.0": {
         "width": "250.394px",
-        "height": ""
-      },
-      "project.hair.image.0": {
-        "width": "272.143px",
         "height": ""
       },
       "project.plastic.image.0": {

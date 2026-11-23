@@ -27,7 +27,8 @@
          (opacità 0,7) e si schiariscono (1) col mouse sopra, tutti e due allo stesso modo (dal 20 novembre; il nome faceva l'opposto);
        - Stills con una finestra grande come un Mac (1788 × 1118): dopo la discesa con la rotella la pagina è in fondo e la barra con i numeri si vede
          (checkReachBottom; dal 20 novembre: con le foto nuove le misure salvate erano scivolate su foto sbagliate e la discesa si fermava 196 px prima);
-       - telefono (dal 23 novembre): il dito non incontra nessuna zona che non muove la pagina (touch-action: none: il testo scorrevole lo era);
+       - telefono (dal 23 novembre): il dito non incontra nessuna zona che non muove la pagina (touch-action: none), a parte il testo scorrevole, che si trascina
+         col dito per scelta del proprietario (e lo fa: il dito sposta il testo, la pagina resta ferma, un tocco subito dopo lo apre ingrandito);
          portata la pagina in fondo, ci resta mentre la galleria cambia foto da sola (la barra con i numeri e le frecce non scivola sotto lo schermo:
          checkPhoneBottom, followPhoneBottom in js/app_v58.js); su Chromium uno swipe a sinistra e uno a destra cambiano la foto di una, uno obliquo fa
          scorrere la pagina senza cambiarla, e dopo i gesti la galleria riprende da sola (checkPhoneSwipe);
@@ -144,8 +145,8 @@ function measureInPage() {
     }
     out.hamburger = { lines: lines.length, lineW: lines.length ? +lines[0].width.toFixed(2) : 0, lineH: lines.length ? +lines[0].height.toFixed(2) : 0, right: lines.length ? +lines[0].right.toFixed(2) : 0, cy: +cy.toFixed(2), hitW: maxX >= minX ? maxX - minX + 1 : 0, hitH: maxY >= minY ? maxY - minY + 1 : 0 };
   }
-  // Zone in cui il dito non muove la pagina (touch-action: none): su telefono non ce ne devono essere (dal 23 novembre; il testo scorrevole ne era una)
-  out.touchNone = [...document.querySelectorAll('#app *')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).touchAction === 'none'; }).slice(0, 4).map((e) => `${e.tagName.toLowerCase()}${e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : ''}`);
+  // Zone in cui il dito non muove la pagina (touch-action: none): su telefono non ce ne devono essere, tranne il testo scorrevole (si trascina col dito: scelta del proprietario, 23 novembre)
+  out.touchNone = [...document.querySelectorAll('#app *')].filter((e) => { if (e.matches('.description-track')) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).touchAction === 'none'; }).slice(0, 4).map((e) => `${e.tagName.toLowerCase()}${e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : ''}`);
   // Core Archive: lo "0" in fondo
   const words = [...document.querySelectorAll('.archive-word')];
   const zero = document.querySelector('.gallerybar .topbar-index'); const topIndex = document.querySelector('.topbar .topbar-index'); const title = document.querySelector('.topbar-title');
@@ -203,9 +204,13 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
         if (!file) return { file: null };
         const body = (await (await fetch(`testi/${encodeURIComponent(file)}`)).text()).trim();
         const shown = [...document.querySelectorAll('.description-content p')].map((p) => p.textContent.trim()).filter(Boolean).join(' ').length;
-        return { file, length: body.length, shown };
+        // paragrafi e a capo: righe di seguito = un paragrafo, riga vuota = nuovo paragrafo (dal 23 novembre; prima ogni riga era un paragrafo a sé)
+        const inFile = body.replace(/\r\n?/g, '\n').split(/\n[ \t]*\n/).map((b) => b.split('\n').map((l) => l.trim()).filter(Boolean).length).filter((n) => n > 0);
+        const inPage = [...document.querySelector('.description-content').querySelectorAll('p:not(.spacer)')].map((p) => p.innerText.split('\n').map((l) => l.trim()).filter(Boolean).length).filter((n) => n > 0);
+        return { file, length: body.length, shown, inFile, inPage };
       });
       if (textCheck && textCheck.file && textCheck.length > 0 && textCheck.shown === 0) problems.push(`il testo di testi/${textCheck.file} non compare nella pagina del progetto`);
+      else if (textCheck && textCheck.file && textCheck.length > 0 && JSON.stringify(textCheck.inFile) !== JSON.stringify(textCheck.inPage)) problems.push(`il testo di testi/${textCheck.file} compare con paragrafi diversi dal file: righe per paragrafo nella pagina [${textCheck.inPage}], nel file [${textCheck.inFile}] (righe di seguito = un paragrafo, riga vuota = nuovo paragrafo)`);
     } catch (e) { /* controllo accessorio: se non si riesce a farlo non si inventa un errore */ }
     // Anche la galleria deve comparire: se in images/ ci sono foto del progetto (cartella col suo indirizzo interno o col suo nome),
     // la pagina deve mostrarne almeno una. Succedeva che dopo aver rinominato la cartella delle foto ("boudaries" → "collusion") la
@@ -907,8 +912,9 @@ async function checkPhoneBottom(context, base) {
   return problems;
 }
 
-// Swipe sulla galleria, con un dito vero simulato (tocco, movimenti ogni 16 ms, rilascio: Chromium soltanto, gli altri due motori non lasciano
-// mandare tocchi grezzi). Stills: swipe a sinistra → una foto avanti; a destra → una indietro; un gesto obliquo (80 px di lato, 140 in giù) fa scorrere la
+// Swipe sulla galleria (e trascinamento del testo scorrevole), con un dito vero simulato (tocco, movimenti ogni 16 ms, rilascio: Chromium soltanto, gli altri due
+// motori non lasciano mandare tocchi grezzi). Stills: prima il testo scorrevole (il dito lo trascina di 120 px, la pagina resta ferma, un tocco subito dopo lo
+// apre ingrandito), poi: swipe a sinistra → una foto avanti; a destra → una indietro; un gesto obliquo (80 px di lato, 140 in giù) fa scorrere la
 // pagina e NON cambia foto (conta solo un movimento più orizzontale che verticale); durante i due swipe la pagina non scorre; e dopo i gesti la
 // galleria riprende ad avanzare da sola (con un tocco il sito la ferma: se un gesto lasciasse la pausa attaccata, la galleria resterebbe ferma per sempre).
 const SWIPE_ROUTE = '#/project/stills';
@@ -924,6 +930,27 @@ async function checkPhoneSwipe(context, base) {
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await page.waitForTimeout(SETTLE_MS);
+    // 0) Il testo scorrevole si trascina col dito (scelta del proprietario, 23 novembre): un dito che parte da lì sposta il testo e NON fa scorrere la pagina;
+    //    e un tocco subito dopo il trascinamento lo apre ingrandito (la bandierina «appena trascinato» col dito restava alzata e il tocco veniva ignorato).
+    let textNote = '';
+    const textBox = await page.evaluate(() => { const d = document.querySelector('.description'); if (!d) return null; const r = d.getBoundingClientRect(); return r.height > 100 && r.top >= 0 && r.top + 160 < window.innerHeight ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + Math.min(r.height / 2, 150)) } : null; });
+    if (textBox) {
+      const textPos = () => page.evaluate(() => { const a = document.querySelector('.description-content p'); const b = document.querySelector('.description-clone p'); return { a: a.getBoundingClientRect().top, loop: b.getBoundingClientRect().top - a.getBoundingClientRect().top, y: window.scrollY }; });
+      const mod = (v, d) => ((v % d) + d) % d;
+      const t0 = await textPos();
+      await swipe(textBox.x, textBox.y + 60, textBox.x, textBox.y - 60);
+      await page.waitForTimeout(200);
+      const t1 = await textPos();
+      let moved = mod(t1.a - t0.a, t0.loop); if (moved > t0.loop / 2) moved -= t0.loop;
+      if (Math.abs(t1.y - t0.y) > 2) problems.push(`su telefono un dito che parte dal testo scorrevole ha fatto scorrere la pagina (da ${Math.round(t0.y)} a ${Math.round(t1.y)} px): il testo si trascina col dito e la pagina deve restare ferma`);
+      if (moved > -100 || moved < -140) problems.push(`su telefono un dito che trascina il testo scorrevole di 120 px lo sposta di ${Math.round(moved)} px (atteso circa -120): il testo non segue il dito`);
+      await page.waitForTimeout(1000);
+      await touch('touchStart', textBox.x, textBox.y); await page.waitForTimeout(70); await touch('touchEnd', textBox.x, textBox.y); await page.waitForTimeout(1200);
+      const opened = await page.evaluate(() => document.body.style.overflow === 'hidden');
+      if (!opened) problems.push('su telefono un tocco sul testo scorrevole, subito dopo averlo trascinato col dito, non lo apre ingrandito (la bandierina marqueeJustDragged è rimasta alzata?)');
+      else { await page.keyboard.press('Escape'); await page.waitForTimeout(900); }
+      textNote = `testo scorrevole: il dito lo sposta di ${Math.round(moved)} px, la pagina resta ferma, il tocco dopo il trascinamento ${opened ? 'lo apre' : 'NON lo apre'} · `;
+    }
     // la galleria in vista, come farebbe il dito con la pagina (con scrollTo: è un movimento dell'utente per il sito)
     await page.evaluate(() => { const r = document.querySelector('.photo-viewport').getBoundingClientRect(); window.scrollTo(0, Math.max(0, window.scrollY + r.top - 60)); });
     await page.waitForTimeout(600);
@@ -963,7 +990,7 @@ async function checkPhoneSwipe(context, base) {
     for (let t = 0; t < 14000 && !resumed; t += 500) { await page.waitForTimeout(500); resumed = diff(a4, await state()) !== 0; }
     if (!resumed) problems.push('su telefono, dopo gli swipe, la galleria non riprende ad avanzare da sola entro 14 s (il tocco ha lasciato la pausa attaccata?)');
     rows.push(`dopo i gesti la galleria ${resumed ? 'riprende da sola' : 'RESTA FERMA'}`);
-    console.log(`  [swipe] chromium telefono: Stills a 390 × 844, dito simulato: ${rows.join(' · ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
+    console.log(`  [swipe] chromium telefono: Stills a 390 × 844, dito simulato: ${textNote}${rows.join(' · ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
   } catch (e) {
     problems.push(`prova dello swipe non riuscita: ${String(e.message).split('\n')[0]}`);
   }

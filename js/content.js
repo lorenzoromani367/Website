@@ -259,12 +259,6 @@ mobile: { width: "320px", height: "363px" },
       { caption: "untitled (part of series)", src: "images/sospension/recognition-9.jpg", width: "563.422px", zoomBox: { width: "869.961px", height: "916.76px" } },
     ],
   },
-  {
-    slug: "hair",
-    name: "Hair",
-    images: [{ caption: "", src: "images/hair/hair-1.jpg", align: "left", offset: { x: 0, y: 52 }, width: "430.547px" }]
-  },
-
   // Progetto ricreato da zero (era rimasto bloccato da un'eliminazione
   // fatta tempo fa in modalità modifica sul vecchio "orig:0" di questa
   // posizione — vedi imageRemovalId/descriptionRemovalId in app.js, che
@@ -285,14 +279,6 @@ mobile: { width: "320px", height: "363px" },
     name: "Moon",
     images: [{ caption: "embossing", src: "images/moon/moon-1.jpg", align: "left", offset: { x: 0, y: 52 }, width: "413.504px", zoomBox: { width: "863.727px", height: "916.76px" } }],
   },
-  {
-    slug: "compression",
-    name: "Compression",
-        images: [
-      { caption: "sunset", src: "images/compression/sunset.JPG", align: "left", offset: { x: 0, y: 52 }, width: "413.033px", zoomBox: { width: "1055.11px", height: "916.76px" } }
-    ],
-  },
-
   {
     slug: "pile",
     name: "Pile",
@@ -454,8 +440,8 @@ const ARCHIVE = {
                   "text": "i watch the sun",
                   "uid": "uid_1795468220400_8737",
                   "linkedImageSrc": "images/core archive/compression-5.jpg",
-                  "linkedImageLinkTo": "archive",
-                  "linkedImageProject": "compression"
+                  "linkedImageLinkTo": "project/counterpart",
+                  "linkedImageProject": "counterpart"
               },
               {
                   "type": "word",

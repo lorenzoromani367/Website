@@ -17,7 +17,6 @@ window.DYNAMIC_IMAGES = [
   "images/complicity/pines.JPG",
   "images/complicity/skyline, milan.JPG",
   "images/complicity/towel.JPG",
-  "images/compression/sunset.JPG",
   "images/core archive/J. Kronester Bavaria Tea Set.jpg",
   "images/core archive/back.jpg",
   "images/core archive/church.jpg",
@@ -62,9 +61,8 @@ window.DYNAMIC_IMAGES = [
   "images/endless circle/sunset-of-flower.jpg",
   "images/endless circle/youre-ugly-catherine.jpg",
   "images/fluoxetine/dinner.JPG",
-  "images/hair/hair-1.jpg",
   "images/homes/1 wine.jpg",
-  "images/homes/3 left.JPG",
+  "images/homes/3 left.jpg",
   "images/homes/4 squatting.jpg",
   "images/homes/5 church.jpg",
   "images/homes/6 huts.jpg",
@@ -157,7 +155,6 @@ window.IMAGE_SIZES = {
   "images/complicity/pines.JPG": [588, 455],
   "images/complicity/skyline, milan.JPG": [697, 556],
   "images/complicity/towel.JPG": [674, 674],
-  "images/compression/sunset.JPG": [3565, 2115],
   "images/core archive/J. Kronester Bavaria Tea Set.jpg": [1655, 2200],
   "images/core archive/back.jpg": [1610, 1700],
   "images/core archive/church.jpg": [1308, 1848],
@@ -202,9 +199,8 @@ window.IMAGE_SIZES = {
   "images/endless circle/sunset-of-flower.jpg": [903, 1700],
   "images/endless circle/youre-ugly-catherine.jpg": [600, 1500],
   "images/fluoxetine/dinner.JPG": [1000, 1250],
-  "images/hair/hair-1.jpg": [1700, 1591],
   "images/homes/1 wine.jpg": [2000, 1613],
-  "images/homes/3 left.JPG": [531, 618],
+  "images/homes/3 left.jpg": [531, 618],
   "images/homes/4 squatting.jpg": [1393, 2200],
   "images/homes/5 church.jpg": [1308, 1848],
   "images/homes/6 huts.jpg": [822, 973],
@@ -296,4 +292,4 @@ window.IMAGE_TWINS = {
   "images/core archive/stills-11.jpg": "images/stills/stills-11.jpg",
   "images/core archive/tourette.JPG": "images/mediality/mediality-6.JPG"
 };
-window.DYNAMIC_TEXTS = ["about.txt","cement.txt","complicity.txt","compression.txt","core_archive.txt","counterpart.txt","homes.txt","maniac.txt","mediality.txt","sospension.txt","stills.txt"];
+window.DYNAMIC_TEXTS = ["about.txt","cement.txt","complicity.txt","core_archive.txt","counterpart.txt","homes.txt","maniac.txt","mediality.txt","sospension.txt","stills.txt"];

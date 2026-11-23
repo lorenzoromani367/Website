@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + dito sul testo scorre la pagina";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -3076,7 +3076,7 @@ function openTextLightbox(paragraphs, sizeKeyPrefix, descBlock, pageTitle = "", 
   const content = el(
     "div",
     { class: "lightbox-text-content description-content" },
-    paragraphs.map((p) => el("p", p === "" ? { style: "min-height: 1em;" } : {}, p || "\u00A0"))
+    paragraphs.map((p) => el("p", p === "" ? { style: "min-height: 1em;" } : p.includes("\n") ? { style: "white-space: pre-line;" } : {}, p || "\u00A0"))
   );
   
   const descTrack = el("div", { class: "description-track" }, [content]);
@@ -4310,6 +4310,18 @@ function bezierProgressAt(curve, x) {
   return at(y1, y2, (lo + hi) / 2);
 }
 
+// Righe di un testo (una per riga del file, "" = riga vuota) → gruppi: ogni gruppo è l'elenco delle righe di UN paragrafo; una riga vuota è `null`.
+function groupTextLines(lines) {
+  const groups = [];
+  let current = null;
+  lines.forEach((line) => {
+    if (line === "") { groups.push(null); current = null; return; }
+    if (!current) { current = []; groups.push(current); }
+    current.push(line);
+  });
+  return groups;
+}
+
 function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav, galleryKey }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
@@ -4350,8 +4362,12 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     .flatMap(text => text.split(/\n/))
     .map(s => s.trim());
 
-  // Creiamo i paragrafi in modo nativo così il CSS originale ".description p+p" li formatta correttamente
-  const makeParagraphs = (texts) => texts.map((paragraph) => el("p", paragraph === "" ? { class: "spacer" } : { html: paragraph }));
+  // Creiamo i paragrafi in modo nativo così il CSS originale ".description p+p" li formatta correttamente.
+  // Come nel file di testo (testi/<progetto>.txt): righe di seguito = UN paragrafo, con gli a capo dove li hai scritti; una riga vuota = nuovo
+  // paragrafo (dal 23 novembre: prima ogni riga era un paragrafo a sé e le righe vuote non si vedevano, quindi un testo scritto a gruppi di righe,
+  // come quello di Mediality, usciva tutto spaziato). La riga vuota resta nella pagina come «spacer» (vuoto, senza altezza): la modalità modifica
+  // la legge da lì per salvare la divisione in paragrafi.
+  const makeParagraphs = (texts) => groupTextLines(texts).map((group) => (group ? el("p", { html: group.join("<br>") }) : el("p", { class: "spacer" })));
   
   const descContent = el("div", { class: "description-content" }, makeParagraphs(normalizedDescription));
   const secondCopyWrapper = el("div", { class: "description-clone", "aria-hidden": "true" }, makeParagraphs(normalizedDescription));
@@ -4873,9 +4889,6 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   descTrack.classList.add("draggable");
   descTrack.addEventListener("pointerdown", (e) => {
     if (isEditMode()) return;
-    // Il dito non trascina il testo: sul telefono un dito che parte dal testo deve far scorrere la pagina
-    // (altrimenti lì sopra la pagina non si muove e sembra "bloccata"). Il testo si trascina con il mouse.
-    if (e.pointerType === "touch") return;
     e.preventDefault();
     marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos, moved: false };
     descTrack.classList.add("is-dragging");
@@ -4893,7 +4906,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
   function onMarqueeDragEnd(e) {
     if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
-    if (marqueeDragState.moved) marqueeJustDragged = true;
+    // Dopo un trascinamento col mouse arriva subito un "click" e lo consuma (non deve aprire il testo). Con il dito il click non arriva: la bandierina
+    // restava alzata e il primo tocco dopo il trascinamento veniva ignorato. Si abbassa da sola dopo un attimo.
+    if (marqueeDragState.moved) { marqueeJustDragged = true; setTimeout(() => { marqueeJustDragged = false; }, 400); }
     marqueeDragState = null;
     descTrack.classList.remove("is-dragging");
     document.removeEventListener("pointermove", onMarqueeDragMove);
@@ -4904,7 +4919,10 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     descBlock.addEventListener("click", () => {
       if (isEditMode()) return;
       if (marqueeJustDragged) { marqueeJustDragged = false; return; }
-      const currentLines = descContent.innerText.split(/\n/).map(s => s.trim()).filter(s => s !== "");
+      // un elemento per paragrafo, con gli a capo come nella pagina (le righe di un paragrafo separate da \n)
+      const currentLines = [...descContent.querySelectorAll("p:not(.spacer)")]
+        .map((p) => p.innerText.split(/\n/).map((line) => line.trim()).filter((line) => line !== "").join("\n"))
+        .filter((text) => text !== "");
         openTextLightbox(
           currentLines, 
           sizeKeyPrefix, 
@@ -6329,7 +6347,6 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
     descTrack.classList.add("draggable");
     descTrack.addEventListener("pointerdown", (e) => {
       if (isEditMode()) return;
-      if (e.pointerType === "touch") return; // il dito fa scorrere la pagina, non il testo (vedi sopra)
       e.preventDefault();
       marqueeDragState = { pointerId: e.pointerId, startY: e.clientY, startPos: marqueePos, moved: false };
       descTrack.classList.add("is-dragging");
@@ -6350,7 +6367,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
     
     var onMarqueeDragEndHandler = function(e) {
       if (!marqueeDragState || e.pointerId !== marqueeDragState.pointerId) return;
-      if (marqueeDragState.moved) marqueeJustDragged = true;
+      if (marqueeDragState.moved) { marqueeJustDragged = true; setTimeout(() => { marqueeJustDragged = false; }, 400); } // (vedi l'altro gestore: col dito il click non arriva)
       marqueeDragState = null;
       descTrack.classList.remove("is-dragging");
       document.removeEventListener("pointermove", onMarqueeDragMoveHandler);
