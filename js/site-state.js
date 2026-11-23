@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 311,
-  "updatedAt": "2026-11-20T22:02:57.905Z",
+  "version": 448,
+  "updatedAt": "2026-11-23T15:41:08.559Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -346,7 +346,25 @@ window.SITE_STATE = {
       "project.homes.captionText.@homes/epson0070-positive-2-2.jpg": "upper middle class, \nnorway",
       "project.mediality.captionText.@mediality/mediality-6.jpg": "free",
       "project.homes.captionText.@homes/4 squatting.jpg": "wildfire",
-      "project.homes.captionText.@homes/7 ongoing.jpg": "shadows"
+      "project.homes.captionText.@homes/7 ongoing.jpg": "shadows",
+      "project.counterpart.captionText.@counterpart/epson0059-positive-3-1.jpg": "me as a clock",
+      "project.counterpart.captionText.@counterpart/epson0059-positive-4-1.jpg": "me above an unr, between two candelabra",
+      "project.counterpart.captionText.@counterpart/epson0067-positive-2-1.jpg": "the middle window and autumn leaves",
+      "project.counterpart.captionText.@counterpart/img20250518_15023303-positive-modifica-3-1.jpg": "i'm black and a house",
+      "project.counterpart.captionText.@counterpart/recognition-1.jpg": "my foetus",
+      "project.counterpart.captionText.@counterpart/k100pro92-4-3-2-1.jpg": "i'm there",
+      "project.counterpart.captionText.@counterpart/_02-positive-2-1.jpg": "i'm rock",
+      "project.counterpart.captionText.@counterpart/_03-positive-6-1.jpg": "towel",
+      "project.counterpart.captionText.@counterpart/alkjsdh-1.jpg": "between a head and sanding paper",
+      "project.counterpart.captionText.@counterpart/bwjuju_15-positive-2-1.jpg": "above and between i'm cosy",
+      "project.counterpart.captionText.@counterpart/bwjuju_35-positive-2-1.jpg": "from a roof i jump into the sky",
+      "project.counterpart.captionText.@counterpart/recognition-10.jpg": "shell",
+      "project.counterpart.captionText.@counterpart/recognition-2.jpg": "dreaming with a broken leg",
+      "project.counterpart.captionText.@counterpart/recognition-4.jpg": "i shine darkly",
+      "project.counterpart.captionText.@counterpart/vision500_14-2-2-1.jpg": "i watch the sun",
+      "project.counterpart.captionText.@counterpart/recognition-9.jpg": "with fishes",
+      "project.counterpart.captionText.@counterpart/recognition-6.jpg": "clean, no mess",
+      "project.counterpart.captionText.@counterpart/k100pro92-4-2-2-1.jpg": "me as a white shape"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -380,7 +398,9 @@ window.SITE_STATE = {
       ]
     },
     "site-home-hidden-v1": [
-      "p:bar"
+      "p:bar",
+      "p:compression",
+      "p:hair"
     ],
     "site-layout-scope-migration-v1": 1,
     "site-order-overrides-v1": {
@@ -451,6 +471,26 @@ window.SITE_STATE = {
         5,
         7,
         8
+      ],
+      "project.counterpart.imageOrder": [
+        7,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        16,
+        0,
+        17,
+        18
       ]
     },
     "site-position-overrides-v1:d": {
@@ -533,6 +573,18 @@ window.SITE_STATE = {
       "project.cement.captionPos.5": {
         "x": 62.37890625,
         "y": 0
+      },
+      "project.counterpart.captionPos.11": {
+        "x": 66.546875,
+        "y": 0
+      },
+      "project.counterpart.captionPos.14": {
+        "x": 61.890625,
+        "y": 0
+      },
+      "project.counterpart.imagePos.18": {
+        "x": 0,
+        "y": 300
       }
     },
     "site-position-overrides-v1:m": {
@@ -566,6 +618,9 @@ window.SITE_STATE = {
         "src:images/recognition/recognition-4.jpg",
         "src:images/recognition/recognition-3.jpg",
         "src:images/recognition/recognition-7.jpg"
+      ],
+      "project.counterpart": [
+        "src:images/counterpart/recognition-5.jpg"
       ]
     },
     "site-size-overrides-v1:d": {
@@ -1000,6 +1055,142 @@ window.SITE_STATE = {
       "project.stills.image.23": {
         "width": "554.846px",
         "height": ""
+      },
+      "project.counterpart.image.0": {
+        "width": "477.614px",
+        "height": ""
+      },
+      "project.counterpart.zoom.0": {
+        "width": "933.637px",
+        "height": "916.76px"
+      },
+      "zoom:images/counterpart/k100pro92-4-2-2-1.jpg": {
+        "width": "933.637px",
+        "height": "916.76px"
+      },
+      "project.counterpart.image.7": {
+        "width": "413.222px",
+        "height": ""
+      },
+      "project.counterpart.image.8": {
+        "width": "546.11px",
+        "height": ""
+      },
+      "project.counterpart.zoom.8": {
+        "width": "1221.7px",
+        "height": "916.76px"
+      },
+      "zoom:images/counterpart/epson0059-positive-4-1.jpg": {
+        "width": "1221.7px",
+        "height": "916.76px"
+      },
+      "project.counterpart.zoom.9": {
+        "width": "1065.65px",
+        "height": "916.76px"
+      },
+      "zoom:images/counterpart/epson0067-positive-2-1.jpg": {
+        "width": "1065.65px",
+        "height": "916.76px"
+      },
+      "project.counterpart.image.10": {
+        "width": "518.497px",
+        "height": ""
+      },
+      "project.counterpart.zoom.10": {
+        "width": "1180.14px",
+        "height": "916.76px"
+      },
+      "zoom:images/counterpart/img20250518_15023303-positive-modifica-3-1.jpg": {
+        "width": "1180.14px",
+        "height": "916.76px"
+      },
+      "project.counterpart.image.11": {
+        "width": "330.152px",
+        "height": ""
+      },
+      "project.counterpart.image.1": {
+        "width": "487.175px",
+        "height": ""
+      },
+      "project.counterpart.zoom.1": {
+        "width": "703.488px",
+        "height": "916.76px"
+      },
+      "zoom:images/counterpart/k100pro92-4-3-2-1.jpg": {
+        "width": "703.488px",
+        "height": "916.76px"
+      },
+      "project.counterpart.image.2": {
+        "width": "511.761px",
+        "height": ""
+      },
+      "project.counterpart.zoom.2": {
+        "width": "1369.62px",
+        "height": "918.974px"
+      },
+      "zoom:images/counterpart/_02-positive-2-1.jpg": {
+        "width": "1369.62px",
+        "height": "918.974px"
+      },
+      "project.counterpart.image.3": {
+        "width": "405.992px",
+        "height": ""
+      },
+      "project.counterpart.image.4": {
+        "width": "483.473px",
+        "height": ""
+      },
+      "project.counterpart.image.5": {
+        "width": "531.737px",
+        "height": ""
+      },
+      "project.counterpart.image.6": {
+        "width": "383.749px",
+        "height": ""
+      },
+      "project.counterpart.image.12": {
+        "width": "355.104px",
+        "height": ""
+      },
+      "project.counterpart.zoom.12": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "zoom:images/counterpart/recognition-10.jpg": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "project.counterpart.image.13": {
+        "width": "371.805px",
+        "height": ""
+      },
+      "project.counterpart.image.14": {
+        "width": "352.279px",
+        "height": ""
+      },
+      "project.counterpart.zoom.14": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "zoom:images/counterpart/recognition-4.jpg": {
+        "width": "1519.8px",
+        "height": "1022px"
+      },
+      "project.counterpart.image.18": {
+        "width": "576.28px",
+        "height": ""
+      },
+      "project.counterpart.zoom.18": {
+        "width": "1263.44px",
+        "height": "916.76px"
+      },
+      "zoom:images/counterpart/vision500_14-2-2-1.jpg": {
+        "width": "1263.44px",
+        "height": "916.76px"
+      },
+      "project.counterpart.image.16": {
+        "width": "450.434px",
+        "height": ""
       }
     },
     "site-size-overrides-v1:m": {
@@ -1237,6 +1428,18 @@ window.SITE_STATE = {
       },
       "project.cement.image.0": {
         "width": "248.207px",
+        "height": ""
+      },
+      "project.counterpart.image.11": {
+        "width": "238.918px",
+        "height": ""
+      },
+      "project.counterpart.image.13": {
+        "width": "280.626px",
+        "height": ""
+      },
+      "project.counterpart.image.14": {
+        "width": "265.478px",
         "height": ""
       }
     },
