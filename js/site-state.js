@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 448,
-  "updatedAt": "2026-11-23T15:41:08.559Z",
+  "version": 450,
+  "updatedAt": "2026-11-23T15:46:39.450Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -491,6 +491,14 @@ window.SITE_STATE = {
         0,
         17,
         18
+      ],
+      "project.cement.imageOrder": [
+        3,
+        1,
+        2,
+        5,
+        0,
+        4
       ]
     },
     "site-position-overrides-v1:d": {
