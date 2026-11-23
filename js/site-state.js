@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 450,
-  "updatedAt": "2026-11-23T15:46:39.450Z",
+  "version": 484,
+  "updatedAt": "2026-11-23T21:11:21.474Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -125,11 +125,11 @@ window.SITE_STATE = {
         "images": [
           {
             "type": "word",
-            "text": "back",
-            "uid": "uid_1791286888502_1417",
-            "linkedImageSrc": "images/beach/beach-1.jpg",
-            "linkedImageLinkTo": "project/beach",
-            "linkedImageProject": "beach"
+            "text": "remnant of a garment",
+            "uid": "uid_1795467916564_2136",
+            "linkedImageSrc": "images/stills/Remnant of a garment.JPG",
+            "linkedImageLinkTo": "project/stills",
+            "linkedImageProject": "stills"
           },
           {
             "type": "word",
@@ -149,8 +149,8 @@ window.SITE_STATE = {
             "type": "word",
             "text": "fishes",
             "uid": "uid_1791300380946_5945",
-            "linkedImageSrc": "images/recognition/recognition-9.jpg",
-            "linkedImageLinkTo": "project/recognition",
+            "linkedImageSrc": "images/counterpart/recognition-9.jpg",
+            "linkedImageLinkTo": "project/counterpart",
             "linkedImageProject": "recognition"
           },
           {
@@ -196,7 +196,7 @@ window.SITE_STATE = {
             "type": "word",
             "text": "wire",
             "uid": "uid_1791600000001_4001",
-            "linkedImageSrc": "images/boudaries/1 wire.JPG",
+            "linkedImageSrc": "images/complicity/1 wire.JPG",
             "linkedImageLinkTo": "project/boudaries",
             "linkedImageProject": "boudaries"
           },
@@ -204,7 +204,7 @@ window.SITE_STATE = {
             "type": "word",
             "text": "hill",
             "uid": "uid_1791300840051_1654",
-            "linkedImageSrc": "images/boudaries/2 hill.JPG",
+            "linkedImageSrc": "images/complicity/2 hill.JPG",
             "linkedImageLinkTo": "project/boudaries",
             "linkedImageProject": "boudaries"
           },
@@ -222,10 +222,10 @@ window.SITE_STATE = {
           },
           {
             "type": "word",
-            "text": "sunset",
-            "uid": "uid_1791300932325_7275",
-            "linkedImageSrc": "images/compression/sunset.JPG",
-            "linkedImageLinkTo": "project/compression",
+            "text": "i watch the sun",
+            "uid": "uid_1795468220400_8737",
+            "linkedImageSrc": "images/core archive/compression-5.jpg",
+            "linkedImageLinkTo": "archive",
             "linkedImageProject": "compression"
           },
           {
@@ -235,10 +235,6 @@ window.SITE_STATE = {
             "linkedImageSrc": "images/stills/upside down.JPG",
             "linkedImageLinkTo": "project/stills",
             "linkedImageProject": "stills"
-          },
-          {
-            "type": "break",
-            "uid": "uid_break_4"
           },
           {
             "type": "word",
@@ -263,16 +259,17 @@ window.SITE_STATE = {
             "type": "word",
             "text": "cocoon",
             "uid": "uid_1791301098682_8677",
-            "linkedImageSrc": "images/recognition/recognition-10.jpg",
-            "linkedImageLinkTo": "project/recognition",
+            "linkedImageSrc": "images/counterpart/recognition-10.jpg",
+            "linkedImageLinkTo": "project/counterpart",
             "linkedImageProject": "recognition"
           },
           {
             "type": "word",
             "text": "upper middle class",
             "uid": "uid_1791304250928_133",
-            "linkedImageSrc": "images/homes/2 family.jpg",
-            "linkedImageProject": "homes"
+            "linkedImageSrc": "images/homes/epson0070-positive-2-2.JPG",
+            "linkedImageProject": "homes",
+            "linkedImageLinkTo": "project/homes"
           },
           {
             "type": "word",
@@ -306,8 +303,8 @@ window.SITE_STATE = {
             "type": "word",
             "text": "cigarettes",
             "uid": "uid_added_cigarettes",
-            "linkedImageSrc": "images/recognition/recognition-5.jpg",
-            "linkedImageLinkTo": "project/recognition",
+            "linkedImageSrc": "images/counterpart/recognition-5.jpg",
+            "linkedImageLinkTo": "project/counterpart",
             "linkedImageProject": "recognition"
           },
           {
@@ -641,7 +638,7 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.mediality.image.2": {
-        "width": "614.141px",
+        "width": "559.39px",
         "height": ""
       },
       "project.mediality.zoom.3": {
@@ -945,19 +942,19 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.mediality.image.0": {
-        "width": "386.195px",
+        "width": "354.827px",
         "height": ""
       },
       "project.mediality.image.1": {
-        "width": "436.474px",
+        "width": "385.862px",
         "height": ""
       },
       "project.mediality.image.3": {
-        "width": "405.511px",
+        "width": "382.442px",
         "height": ""
       },
       "project.mediality.image.4": {
-        "width": "466.388px",
+        "width": "446.382px",
         "height": ""
       },
       "project.mediality.zoom.4": {
@@ -1199,6 +1196,14 @@ window.SITE_STATE = {
       "project.counterpart.image.16": {
         "width": "450.434px",
         "height": ""
+      },
+      "archive.page.page_1.zoom.uid_1795468220400_8737": {
+        "width": "1068.6px",
+        "height": "916.76px"
+      },
+      "zoom:images/core archive/compression-5.jpg": {
+        "width": "1068.6px",
+        "height": "916.76px"
       }
     },
     "site-size-overrides-v1:m": {
@@ -1427,11 +1432,11 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.mediality.image.2": {
-        "width": "272.514px",
+        "width": "330px",
         "height": ""
       },
       "project.mediality.image.5": {
-        "width": "277.83px",
+        "width": "330px",
         "height": ""
       },
       "project.cement.image.0": {
@@ -1448,6 +1453,18 @@ window.SITE_STATE = {
       },
       "project.counterpart.image.14": {
         "width": "265.478px",
+        "height": ""
+      },
+      "project.mediality.image.1": {
+        "width": "255.957px",
+        "height": ""
+      },
+      "project.mediality.image.3": {
+        "width": "247.523px",
+        "height": ""
+      },
+      "project.mediality.image.4": {
+        "width": "289.963px",
         "height": ""
       }
     },

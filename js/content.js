@@ -314,11 +314,11 @@ mobile: { width: "320px", height: "363px" },
     slug: "mediality",
     name: "Mediality",
     images: [
-      { caption: "", src: "images/mediality/mediality-1.jpg", zoomBox: { width: "1519.8px", height: "1022px" }, width: "386.195px" },
-      { caption: "", src: "images/mediality/mediality-2.jpg", width: "436.474px" },
-      { caption: "", src: "images/mediality/mediality-3.jpg", zoomBox: { width: "915.969px", height: "916.76px" }, width: "614.141px" },
-      { caption: "", src: "images/mediality/mediality-4.jpg", width: "405.511px", zoomBox: { width: "1519.8px", height: "986.157px" } },
-      { caption: "", src: "images/mediality/mediality-5.jpg", width: "466.388px", zoomBox: { width: "1519.8px", height: "795.457px" } },
+      { caption: "", src: "images/mediality/mediality-1.jpg", zoomBox: { width: "1519.8px", height: "1022px" }, width: "354.827px" },
+      { caption: "", src: "images/mediality/mediality-2.jpg", width: "385.862px" },
+      { caption: "", src: "images/mediality/mediality-3.jpg", zoomBox: { width: "915.969px", height: "916.76px" }, width: "559.39px" },
+      { caption: "", src: "images/mediality/mediality-4.jpg", width: "382.442px", zoomBox: { width: "1519.8px", height: "986.157px" } },
+      { caption: "", src: "images/mediality/mediality-5.jpg", width: "446.382px", zoomBox: { width: "1519.8px", height: "795.457px" } },
       { caption: "", src: "images/mediality/senza titolo-1-2.JPG", width: "503.383px", zoomBox: { width: "1519.8px", height: "994.45px" } },
     ]
   },
@@ -354,11 +354,11 @@ const ARCHIVE = {
           "images": [
               {
                   "type": "word",
-                  "text": "back",
-                  "uid": "uid_1791286888502_1417",
-                  "linkedImageSrc": "images/beach/beach-1.jpg",
-                  "linkedImageLinkTo": "project/beach",
-                  "linkedImageProject": "beach"
+                  "text": "remnant of a garment",
+                  "uid": "uid_1795467916564_2136",
+                  "linkedImageSrc": "images/stills/Remnant of a garment.JPG",
+                  "linkedImageLinkTo": "project/stills",
+                  "linkedImageProject": "stills"
               },
               {
                   "type": "word",
@@ -378,8 +378,8 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "fishes",
                   "uid": "uid_1791300380946_5945",
-                  "linkedImageSrc": "images/recognition/recognition-9.jpg",
-                  "linkedImageLinkTo": "project/recognition",
+                  "linkedImageSrc": "images/counterpart/recognition-9.jpg",
+                  "linkedImageLinkTo": "project/counterpart",
                   "linkedImageProject": "recognition"
               },
               {
@@ -425,7 +425,7 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "wire",
                   "uid": "uid_1791600000001_4001",
-                  "linkedImageSrc": "images/boudaries/1 wire.JPG",
+                  "linkedImageSrc": "images/complicity/1 wire.JPG",
                   "linkedImageLinkTo": "project/boudaries",
                   "linkedImageProject": "boudaries"
               },
@@ -433,7 +433,7 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "hill",
                   "uid": "uid_1791300840051_1654",
-                  "linkedImageSrc": "images/boudaries/2 hill.JPG",
+                  "linkedImageSrc": "images/complicity/2 hill.JPG",
                   "linkedImageLinkTo": "project/boudaries",
                   "linkedImageProject": "boudaries"
               },
@@ -451,10 +451,10 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "sunset",
-                  "uid": "uid_1791300932325_7275",
-                  "linkedImageSrc": "images/compression/sunset.JPG",
-                  "linkedImageLinkTo": "project/compression",
+                  "text": "i watch the sun",
+                  "uid": "uid_1795468220400_8737",
+                  "linkedImageSrc": "images/core archive/compression-5.jpg",
+                  "linkedImageLinkTo": "archive",
                   "linkedImageProject": "compression"
               },
               {
@@ -464,10 +464,6 @@ const ARCHIVE = {
                   "linkedImageSrc": "images/stills/upside down.JPG",
                   "linkedImageLinkTo": "project/stills",
                   "linkedImageProject": "stills"
-              },
-              {
-                  "type": "break",
-                  "uid": "uid_break_4"
               },
               {
                   "type": "word",
@@ -492,16 +488,17 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "cocoon",
                   "uid": "uid_1791301098682_8677",
-                  "linkedImageSrc": "images/recognition/recognition-10.jpg",
-                  "linkedImageLinkTo": "project/recognition",
+                  "linkedImageSrc": "images/counterpart/recognition-10.jpg",
+                  "linkedImageLinkTo": "project/counterpart",
                   "linkedImageProject": "recognition"
               },
               {
                   "type": "word",
                   "text": "upper middle class",
                   "uid": "uid_1791304250928_133",
-                  "linkedImageSrc": "images/homes/2 family.jpg",
-                  "linkedImageProject": "homes"
+                  "linkedImageSrc": "images/homes/epson0070-positive-2-2.JPG",
+                  "linkedImageProject": "homes",
+                  "linkedImageLinkTo": "project/homes"
               },
               {
                   "type": "word",
@@ -535,8 +532,8 @@ const ARCHIVE = {
                   "type": "word",
                   "text": "cigarettes",
                   "uid": "uid_added_cigarettes",
-                  "linkedImageSrc": "images/recognition/recognition-5.jpg",
-                  "linkedImageLinkTo": "project/recognition",
+                  "linkedImageSrc": "images/counterpart/recognition-5.jpg",
+                  "linkedImageLinkTo": "project/counterpart",
                   "linkedImageProject": "recognition"
               },
               {
