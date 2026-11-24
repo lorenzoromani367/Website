@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 495,
-  "updatedAt": "2026-11-24T13:27:14.339Z",
+  "version": 501,
+  "updatedAt": "2026-11-24T13:36:32.747Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -210,8 +210,7 @@ window.SITE_STATE = {
       "project.homes.captionText.@homes/2 family.jpg": "upper-middle class",
       "project.stills.captionText.@stills/stills-1.jpg": "J. Kronester Bavaria Tea Set",
       "project.stills.captionText.@stills/stills-3.jpg": "furla messenger bag",
-      "project.mediality.captionText.@mediality/mediality-1.jpg": "holiday",
-      "project.mediality.captionText.@mediality/mediality-2.jpg": "folds, morocco",
+      "project.mediality.captionText.@mediality/mediality-2.jpg": "body, morocco",
       "project.mediality.captionText.@mediality/mediality-3.jpg": "bristol",
       "project.mediality.captionText.@mediality/mediality-4.jpg": "leather arm",
       "project.mediality.captionText.@mediality/mediality-5.jpg": "pp",
@@ -250,7 +249,8 @@ window.SITE_STATE = {
       "project.counterpart.captionText.@counterpart/recognition-6.jpg": "clean, no mess",
       "project.counterpart.captionText.@counterpart/k100pro92-4-2-2-1.jpg": "me as a white shape",
       "project.stills.captionText.@stills/neon.jpg": "neon light, \ncasa boschi di stefano",
-      "project.stills.captionText.@stills/murano.jpg": "murano, glasstress"
+      "project.stills.captionText.@stills/murano.jpg": "murano, glasstress",
+      "project.mediality.captionText.@mediality/mediality-1.jpg": "arm"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -284,7 +284,8 @@ window.SITE_STATE = {
       ]
     },
     "site-home-hidden-v1": [
-      "p:bar"
+      "p:bar",
+      "p:whitening"
     ],
     "site-layout-scope-migration-v1": 1,
     "site-order-overrides-v1": {
@@ -1344,6 +1345,10 @@ window.SITE_STATE = {
       },
       "project.mediality.image.4": {
         "width": "289.963px",
+        "height": ""
+      },
+      "project.mediality.image.0": {
+        "width": "259.988px",
         "height": ""
       }
     },
