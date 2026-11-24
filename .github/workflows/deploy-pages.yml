@@ -18,7 +18,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url || steps.deployment3.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -59,22 +59,31 @@ jobs:
         with:
           path: "_site"
 
-      # GitHub a volte non mostra subito il file appena caricato: il passo dopo scrive «Found 0 artifact(s)» / «No artifacts named "github-pages" were
-      # found for this workflow run» e la pubblicazione fallisce anche se il file c'è (23-24 novembre: cinque pubblicazioni su sette fallite così al primo tentativo; un paio di minuti
-      # dopo l'elenco mostrava il file). Prima di pubblicare si aspetta (fino a 2 minuti) che l'elenco lo mostri. Se non compare si va avanti lo stesso:
-      # sarà il passo dopo a fallire, col suo messaggio, come prima.
-      - name: Wait until GitHub lists the uploaded file
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for i in $(seq 1 24); do
-            n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[] | select(.name == "github-pages")] | length' 2>/dev/null || echo 0)
-            echo "Tentativo $i: ${n:-0} file github-pages nell'elenco"
-            if [ "${n:-0}" -ge 1 ]; then exit 0; fi
-            sleep 5
-          done
-          echo "::warning::Dopo 2 minuti l'elenco non mostra ancora il file: si prova a pubblicare lo stesso"
-
+      # GitHub a volte non trova ancora il file appena caricato: il passo che pubblica scrive «Found 0 artifact(s)» / «No artifacts named "github-pages" were
+      # found for this workflow run» e la pubblicazione fallisce anche se il file c'è (23-24 novembre: cinque pubblicazioni su sette fallite così al primo
+      # tentativo; un paio di minuti dopo il file risultava nell'elenco). Aspettare che l'elenco «normale» di GitHub mostri il file non basta (24 novembre,
+      # 12:03: l'elenco lo mostrava subito e il passo che pubblica no: guardano due servizi diversi). Si riprova quindi a pubblicare, dopo una pausa:
+      # tre tentativi in tutto (subito, dopo 20 secondi, dopo altri 60). Se falliscono tutti e tre la pubblicazione risulta fallita, come prima.
       - name: Deploy to GitHub Pages
         id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Pause before the second try
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 20
+
+      - name: Deploy to GitHub Pages (second try)
+        id: deployment2
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Pause before the last try
+        if: steps.deployment.outcome == 'failure' && steps.deployment2.outcome == 'failure'
+        run: sleep 60
+
+      - name: Deploy to GitHub Pages (last try)
+        id: deployment3
+        if: steps.deployment.outcome == 'failure' && steps.deployment2.outcome == 'failure'
         uses: actions/deploy-pages@v4
