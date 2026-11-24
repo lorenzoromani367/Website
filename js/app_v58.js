@@ -5952,6 +5952,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
 
   const onEditModeToggled = () => {
+    // Le misure possono essere cambiate in modifica (foto ridimensionate, didascalie e spazi spostati): all'entrata e all'uscita la riduzione per la finestra
+    // si ricalcola (in modifica il foglio di stile la ignora; all'uscita vale subito quella nuova, senza aspettare un cambio di finestra).
+    fitPhotosToWindow();
     if (isEditMode()) { clearTimeout(autoplayTimer); stopBarHold(); }
     else if (!paused) scheduleNext();
   };

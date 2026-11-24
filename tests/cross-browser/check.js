@@ -1090,6 +1090,15 @@ async function checkFitToWindow(context, base) {
       if (shrunk) problems.push(`${FIT_TALL.name}, finestra ${FIT_TALL.width} × ${FIT_TALL.height}: ${shrunk} foto sono ridotte anche se la finestra è alta (nessuna dovrebbe)`);
       if (diff) problems.push(`${FIT_TALL.name}, finestra ${FIT_TALL.width} × ${FIT_TALL.height}: ${diff} foto hanno una larghezza diversa dalla misura vera`);
       rows.push(`${FIT_TALL.name} ${FIT_TALL.height}: ${shrunk} ridotte`);
+      // in modifica una foto diventa più grande (misura messa a mano, come con la maniglia): uscendo dalla modifica la riduzione si ricalcola subito, senza aspettare un cambio di finestra
+      const widthBefore = real.widths[0];
+      await page.evaluate(() => { const f = document.querySelector('.photo-track > figure.photo:not(.photo-clone) .photo-frame'); if (f) f.style.width = '660px'; });
+      await page.waitForTimeout(500);
+      await setEdit(page, false);
+      const back = await read(page);
+      const labelBack = `${FIT_TALL.name}, finestra ${FIT_TALL.width} × ${FIT_TALL.height}`;
+      if (!back.reduced[0] || !(back.widths[0] < 659)) problems.push(`${labelBack}: ingrandita una foto in modifica (da ${Math.round(widthBefore)} a 660 px) e usciti dalla modifica, la foto non è stata ridotta per la finestra (larghezza ${Math.round(back.widths[0])} px): la riduzione va ricalcolata all'uscita dalla modifica`);
+      rows.push(`dopo la modifica di una foto (${Math.round(widthBefore)} → 660 px) la riduzione si aggiorna: ${back.reduced[0] ? 'sì, ' + Math.round(back.widths[0]) + ' px' : 'NO'}`);
       await page.close();
     }
     // finestra troppo bassa: una foto ne vorrebbe più del tetto, la galleria resta com'era (tutto o niente)
