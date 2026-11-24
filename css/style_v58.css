@@ -654,7 +654,9 @@ body.edit-mode .description-editable {
 .photo-frame {
   display: inline-block;
   position: relative;
-  max-width: 100%;
+  /* "--fit-w": larghezza massima messa dal codice (fitPhotosToWindow in app_v58.js) quando la finestra è bassa e la foto, insieme al
+     vuoto sotto di lei e alla barra con numero e frecce, non ci starebbe. Senza la variabile vale 100 %, come sempre. */
+  max-width: min(100%, var(--fit-w, 100%));
   height: fit-content;
 }
 
@@ -1361,6 +1363,12 @@ body.edit-mode .description,
 body.edit-mode .photo-frame {
   outline: 2px dashed #8a3b2b;
   outline-offset: 3px;
+}
+
+/* In modifica la foto ha la misura vera, quella che si salva con le maniglie: mai quella ridotta per la finestra bassa
+   (altrimenti trascinando una maniglia si salverebbe la misura ridotta). */
+body.edit-mode .photo-frame {
+  max-width: 100%;
 }
 
 /* Griglia di allineamento: visibile solo in modalità modifica, per

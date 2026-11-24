@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality + scritta free legata alla foto";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality + scritta free legata alla foto + foto ridotte nelle finestre basse";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -5321,6 +5321,97 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     });
     return FRAME_TOP_MARGIN + need;
   };
+
+  /* ---- Foto che stanno nella finestra insieme alla barra (solo computer) ----
+     Scelta C del proprietario (24 novembre), dopo che su Chrome e Safari la discesa accompagnata si fermava prima del fondo e su Firefox e
+     Vivaldi no. Era la regola «foto sempre intera» (13 novembre, scelta B): in una finestra bassa la foto più alta, col vuoto che ha sotto
+     (la didascalia sta 160 px sotto la foto, poi lo spazio prima delle frecce) e la barra con numero e frecce, non entra tutta; vinceva la
+     foto, e la barra restava sotto il bordo con la pagina ferma prima del fondo (a 950 px di altezza: 160 px prima, in Stills). Da 1100 px
+     di altezza in su non succedeva quasi mai: per questo cambiava da un browser all'altro (Chrome con la barra dei preferiti e Safari hanno la
+     finestra più bassa).
+     Adesso, quando non ci starebbero, si rimpicciolisce la sola FOTO (non il vuoto sotto di lei, che il proprietario ha scelto a mano:
+     didascalia a 160 px, spazi regolabili con le maniglie in modifica) quanto basta perché foto intera + vuoto + barra stiano insieme
+     nella finestra, con la cima della foto a FRAME_TOP_MARGIN dal bordo alto: la pagina arriva in fondo, la foto è intera, la barra si vede.
+     - Per foto: lo stesso spazio vale per tutte (finestra - barra e fondo pagina - margine in alto - spazio prima delle frecce), meno il vuoto
+       sotto QUELLA foto (didascalia compresa, anche se è stata trascinata più in basso); la foto non può diventare più alta di così.
+     - Con un tetto (FIT_MAX_SHRINK) e «tutto o niente» per galleria: la barra sta in un punto solo per tutta la galleria (quello che serve alla
+       foto più alta), quindi ridurre le altre foto serve solo se ci stanno TUTTE. Se anche col tetto una foto non ci starebbe (finestre molto
+       basse, portatili da 800 px: il vuoto fisso sotto la foto, da solo, è più alto della foto) non si riduce niente in quella galleria e vale
+       com'era, la regola «foto sempre intera» (barra sotto il bordo): niente foto rimpicciolite che poi non arrivano comunque in fondo, in mezzo a
+       una distesa vuota. «Ci sta» vuol dire con la cima della foto non sopra il bordo alto (la riduzione mira a FRAME_TOP_MARGIN dal bordo).
+     - La misura salvata (maniglie, content.js, site-state.js) non si tocca mai: la riduzione è solo a schermo, una larghezza massima
+       (variabile CSS --fit-w sul riquadro, vedi ".photo-frame" nel foglio di stile) ricalcolata a ogni cambio di finestra, a ogni foto che
+       arriva, e tolta in modalità modifica (lì si lavora sulle misure vere).
+     - Non su telefono né su schermi tattili (lì la barra non si tiene ferma e la pagina arriva sempre in fondo).
+     La misura è la stessa di barYForTallestPhoto (cima del riquadro foto → fondo di foto, didascalia e figura, più lo spazio prima della barra):
+     quando ogni foto sta nello spazio, la barra può stare in fondo alla pagina senza tagliare la cima di nessuna foto e framingHoldY la lascia lì. */
+  const FIT_PHOTOS_TO_WINDOW = true; // false: le foto restano sempre alla misura salvata (come fino al 24 novembre)
+  const FIT_MAX_SHRINK = 0.45; // la foto non si rimpicciolisce mai di più di così (0,45 = al massimo −45 %); con una foto che ne vorrebbe di più, la galleria resta com'è
+  let fitSummary = { active: false, reason: "non ancora calcolato", photos: 0, shrunk: 0, maxShrink: 0, cap: FIT_MAX_SHRINK, wanted: 0 }; // per il contatore di fluidità (assistState); "wanted": quanto ne vorrebbe la foto che ne vuole di più
+
+  // Le copie temporanee del giro (makePhotoClone) hanno la stessa riduzione della foto vera da cui vengono.
+  function syncFitToClones() {
+    track.querySelectorAll(":scope > .photo-clone").forEach((clone) => {
+      const source = figures[Number(clone.dataset.cloneOf)];
+      const from = source && source.querySelector(".photo-frame");
+      const to = clone.querySelector(".photo-frame");
+      if (!from || !to) return;
+      const value = from.style.getPropertyValue("--fit-w");
+      if (value) to.style.setProperty("--fit-w", value); else to.style.removeProperty("--fit-w");
+    });
+  }
+
+  function fitPhotosToWindow() {
+    const frames = figures.map((figure) => figure.querySelector(".photo-frame"));
+    frames.forEach((frame) => { if (frame) frame.style.removeProperty("--fit-w"); }); // prima si misura la foto com'è, senza riduzione
+    let reason = "";
+    if (!FIT_PHOTOS_TO_WINDOW) reason = "spenta nel codice";
+    else if (!frames.length) reason = "nessuna foto";
+    else if (isMobileViewport()) reason = "telefono";
+    else if (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches) reason = "schermo tattile";
+    fitSummary = { active: !reason, reason: reason || "attiva", photos: frames.length, shrunk: 0, maxShrink: 0, cap: FIT_MAX_SHRINK, wanted: 0 };
+    if (reason) { syncFitToClones(); return; }
+    // Tutte le misure insieme (un solo calcolo del layout), poi tutte le scritture.
+    const viewportRect = viewport.getBoundingClientRect();
+    const gapToBar = footerBar.getBoundingClientRect().top - viewportRect.bottom + viewportExt; // lo spazio prima delle frecce (senza l'estensione temporanea)
+    const endBlock = document.documentElement.scrollHeight - barTopInPage(); // dalla cima della barra al fondo della pagina
+    const room = window.innerHeight - endBlock - FRAME_TOP_MARGIN; // dalla cima della foto (a FRAME_TOP_MARGIN) alla cima della barra a fine pagina
+    const rows = frames.map((frame, i) => {
+      if (!frame) return null;
+      const img = frame.querySelector("img");
+      const imgHeight = img ? img.getBoundingClientRect().height : 0;
+      const frameRect = frame.getBoundingClientRect();
+      if (!(imgHeight > 40) || !(frameRect.width > 0)) return null;
+      let bottom = figures[i].getBoundingClientRect().bottom;
+      figures[i].querySelectorAll(".photo-frame, .caption-box").forEach((node) => { bottom = Math.max(bottom, node.getBoundingClientRect().bottom); });
+      return { frame, width: frameRect.width, imgHeight, below: bottom - frameRect.top - imgHeight }; // "below": il vuoto sotto la foto vera (didascalia compresa)
+    });
+    // Per ogni foto: la scala per avere la cima a FRAME_TOP_MARGIN dal bordo (quella che si applica) e la minima possibile con la cima proprio sul
+    // bordo alto (più giù la cima uscirebbe: vedi framingHoldY). Se per qualche foto anche la minima sta sotto il tetto, la galleria non si tocca.
+    const plans = [];
+    let wanted = 0;
+    rows.forEach((row) => {
+      if (!row) return;
+      const target = (room - gapToBar - row.below) / row.imgHeight;
+      const lowest = (room + FRAME_TOP_MARGIN - gapToBar - row.below) / row.imgHeight;
+      wanted = Math.max(wanted, 1 - lowest);
+      plans.push({ row, scale: Math.max(1 - FIT_MAX_SHRINK, Math.min(1, target)) });
+    });
+    fitSummary.wanted = Math.max(0, wanted);
+    if (wanted > FIT_MAX_SHRINK + 0.0005) {
+      fitSummary.reason = `una foto ne vorrebbe −${Math.round(wanted * 100)} %, oltre il tetto (−${Math.round(FIT_MAX_SHRINK * 100)} %): la galleria resta com'è`;
+      syncFitToClones();
+      return;
+    }
+    plans.forEach(({ row, scale }) => {
+      if (scale >= 0.999) return;
+      row.frame.style.setProperty("--fit-w", `${Math.floor(row.width * scale * 100) / 100}px`);
+      fitSummary.shrunk += 1;
+      fitSummary.maxShrink = Math.max(fitSummary.maxShrink, 1 - scale);
+    });
+    syncFitToClones();
+  }
+
   const setPageScroll = (y) => {
     noteProgrammaticScroll();
     try { window.scrollTo({ top: y, left: window.scrollX, behavior: "instant" }); } catch (e) { window.scrollTo(window.scrollX, y); }
@@ -5680,7 +5771,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   window.addEventListener("pointerup", onAssistPointerUp, { passive: true });
   window.addEventListener("touchmove", onAssistTouch, { passive: true });
   // Per il contatore di fluidità: l'accompagnamento è attivo adesso, o cosa lo ferma
-  const assistState = () => ({ blocker: assistBlocker(), y: Math.round(window.scrollY), target: Math.round(assistTargetY()), last: assistLastNote, stats: { ...assistStats }, glide: assistLastGlide });
+  const assistState = () => ({ blocker: assistBlocker(), y: Math.round(window.scrollY), target: Math.round(assistTargetY()), last: assistLastNote, stats: { ...assistStats }, glide: assistLastGlide, fit: { ...fitSummary } });
   window.__assistState = assistState;
 
   /* ---- Telefono: arrivati in fondo alla pagina, ci si resta (23 novembre) ----
@@ -6090,6 +6181,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
         if (img) img.style.maxHeight = `${targetHeight}px`;
       }
     });
+    fitPhotosToWindow(); // dopo le misure di serie, prima dell'altezza del riquadro: ogni cambio di finestra o foto che arriva passa da qui
     updateViewportHeight();
   }
   applyDefaultPhotoHeights();

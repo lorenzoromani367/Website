@@ -32,6 +32,11 @@
          (opacità 0,7) e si schiariscono (1) col mouse sopra, tutti e due allo stesso modo (dal 20 novembre; il nome faceva l'opposto);
        - Stills con una finestra grande come un Mac (1788 × 1118): dopo la discesa con la rotella la pagina è in fondo e la barra con i numeri si vede
          (checkReachBottom; dal 20 novembre: con le foto nuove le misure salvate erano scivolate su foto sbagliate e la discesa si fermava 196 px prima);
+       - finestre più basse (dal 24 novembre, scelta C del proprietario; fitPhotosToWindow in js/app_v58.js): sul computer le foto che con il vuoto sotto di loro e la barra
+         non starebbero nella finestra si rimpiccioliscono (solo a schermo, mai oltre il tetto FIT_MAX_SHRINK, mai le misure salvate); così in Stills, Licking (una foto sola),
+         Counterpart e Michelin, con la finestra alta 950 o 1000 px, la discesa con la rotella arriva in fondo e la barra si vede; con la finestra alta (1300 px) nessuna foto è
+         ridotta; con una finestra troppo bassa (Homes a 800 px: una foto ne vorrebbe più del tetto) la galleria resta com'è, tutto o niente; in modalità modifica le foto hanno
+         la misura vera; su telefono niente è ridotto (checkFitToWindow);
        - telefono (dal 23 novembre): il dito non incontra nessuna zona che non muove la pagina (touch-action: none), a parte il testo scorrevole, che si trascina
          col dito per scelta del proprietario (e lo fa: il dito sposta il testo, la pagina resta ferma, un tocco subito dopo lo apre ingrandito);
          portata la pagina in fondo, ci resta mentre la galleria cambia foto da sola (la barra con i numeri e le frecce non scivola sotto lo schermo:
@@ -399,11 +404,17 @@ async function checkPhotoRise(context, base) {
 // Una foto non finisce mai con la cima fuori dalla finestra (13 novembre, scelta del proprietario: «foto sempre intera»). Prima la barra col numero
 // restava in fondo e la cima delle foto alte poteva restare fuori fino a 200 px (FRAME_MAX_TOP_CUT): con una finestra alta 950 px 62 foto su 99, e in
 // un video del proprietario la foto 2 di Homes lo era di 135 px. Si prova il caso della barra «tenuta» (startBarHold, protectFrame): Homes, finestra
-// del formato «computer» (1440 × 900), la pagina messa dove la barra sta a 80 px dal bordo basso (si vede) e la prima foto sta tutta dentro; poi il
+// alta 860 px (NOCUT_WINDOW: vedi sotto), la pagina messa dove la barra sta a 60 px dal bordo basso (si vede) e la prima foto sta tutta dentro; poi il
 // tasto → verso la foto 2, la più alta. A transizione finita la cima della sua cornice deve stare dentro la finestra (al massimo 1,5 px fuori dal
 // margine di 24 px, o da dov'era se più su), e la pagina non deve muoversi di scatto (la barra scende piano con la foto che si allunga). Se Homes
 // cambia (foto ridimensionate) e la prova non ha più da misurare, lo dice e passa.
 const NOCUT_ROUTE = '#/project/homes';
+// Dal 24 novembre le foto si rimpiccioliscono nelle finestre basse (fitPhotosToWindow): con la finestra a 900 px Homes sta tutta nella finestra e la foto 2 non
+// ha più bisogno che la barra scenda. Per continuare a provare questo meccanismo (che resta per le gallerie che non ci stanno nemmeno col tetto) si usa
+// una finestra alta 860 px, dove la foto più alta di Homes ne vorrebbe circa −47 % (−44 % solo con la cima sul bordo alto), oltre il tetto (−45 %): la galleria
+// resta com'era. Con la barra a 80 px dal bordo basso la prima foto non ci sta più dentro (la cima uscirebbe): qui la barra sta a 60 px.
+const NOCUT_WINDOW = { width: 1440, height: 860 };
+const NOCUT_BAR_FROM_BOTTOM_PX = 60;
 const NOCUT_TOP_MARGIN_PX = 24; // FRAME_TOP_MARGIN in js/app_v58.js
 const NOCUT_TOLERANCE_PX = 1.5;
 async function checkPhotoNotCut(context, base) {
@@ -411,6 +422,7 @@ async function checkPhotoNotCut(context, base) {
   if (context.__profile !== 'computer') return problems; // una volta sola per motore (il retina ha la stessa altezza; il telefono non ha la barra ferma)
   const page = await context.newPage();
   try {
+    await page.setViewportSize(NOCUT_WINDOW);
     await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${NOCUT_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
     await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
@@ -418,10 +430,10 @@ async function checkPhotoNotCut(context, base) {
     await page.waitForTimeout(SETTLE_MS + 1200); // (nei primi 2 s il sito non conta i movimenti della pagina)
     const geo = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
     if (geo.photos < 2 || geo.max <= 150) return problems;
-    await page.evaluate(() => { // la pagina messa dove la barra sta a 80 px dal bordo basso (con window.scrollTo: non vale come gesto dell'utente)
+    await page.evaluate((fromBottom) => { // la pagina messa dove la barra sta a "fromBottom" px dal bordo basso (con window.scrollTo: non vale come gesto dell'utente)
       const barTop = document.querySelector('.gallerybar').getBoundingClientRect().top + window.scrollY;
-      window.scrollTo(0, Math.max(0, Math.min(document.documentElement.scrollHeight - window.innerHeight, barTop - (window.innerHeight - 80))));
-    });
+      window.scrollTo(0, Math.max(0, Math.min(document.documentElement.scrollHeight - window.innerHeight, barTop - (window.innerHeight - fromBottom))));
+    }, NOCUT_BAR_FROM_BOTTOM_PX);
     await page.waitForTimeout(700);
     const pointer = await page.evaluate(() => { const r = document.querySelector('.photo-viewport').getBoundingClientRect(); return { x: r.left + r.width / 2, y: Math.max(30, Math.min(window.innerHeight - 30, r.top + r.height / 2)) }; });
     await page.mouse.move(pointer.x, pointer.y); // sulla galleria: ferma l'autoplay, che cambierebbe foto per conto suo
@@ -982,6 +994,126 @@ async function checkReachBottom(context, base) {
   return problems;
 }
 
+// Foto ridotte nelle finestre basse (24 novembre). Segnalazione del proprietario: «su chrome e safari lo scroll down automatico non arriva a fondo pagina, su
+// firefox e vivaldi sì». Era l'altezza della finestra: con la regola «foto sempre intera» (13 novembre) la barra con i numeri restava sotto il bordo, e la pagina si
+// fermava prima del fondo, se la foto più alta, col vuoto sotto di lei e la barra, non stava nella finestra (a 950 px, in Stills: 160 px prima). Scelta C: si
+// rimpiccioliscono le foto (solo a schermo, fino a FIT_MAX_SHRINK) quanto basta. Qui, sul computer: (1) con la finestra alta 950 o 1000 px, in gallerie dove nessuna foto
+// ha bisogno di più del tetto (Stills, Licking che ha una foto sola, Counterpart, Michelin), la discesa con la rotella porta la pagina in fondo (al massimo 12 px prima)
+// con la barra dentro la finestra, le foto sono state ridotte (almeno una), mai più del tetto e mai di più della misura vera (letta in modifica); (2) con la finestra alta
+// (1300 px) nessuna foto è ridotta e le misure sono quelle vere; (3) in modifica il riquadro non ha limiti di larghezza e ha la misura vera; (4) con una finestra
+// troppo bassa (Homes a 800 px: la foto più alta ne vorrebbe −57 %, oltre il tetto) la galleria non si tocca: tutto o niente, niente foto rimpicciolite che poi non arrivano
+// comunque in fondo. Su telefono nessuna riduzione.
+const FIT_CASES = [
+  { route: '#/project/stills', width: 1440, height: 950, name: 'Stills' },
+  { route: '#/project/stills', width: 1440, height: 1000, name: 'Stills' },
+  { route: '#/project/licking', width: 1440, height: 950, name: 'Licking (una foto sola)' },
+  { route: '#/project/counterpart', width: 1440, height: 950, name: 'Counterpart' },
+  { route: '#/project/michelin', width: 1440, height: 1000, name: 'Michelin' },
+];
+const FIT_TALL = { route: '#/project/stills', width: 1440, height: 1300, name: 'Stills' };
+const FIT_TOO_LOW = { route: '#/project/homes', width: 1440, height: 800, name: 'Homes' };
+async function checkFitToWindow(context, base) {
+  const problems = [];
+  const phone = context.__profile === 'telefono';
+  if (context.__profile === 'computer retina') return problems; // stesso codice del computer
+  const open = async (route, size) => {
+    const page = await context.newPage();
+    if (size) await page.setViewportSize({ width: size.width, height: size.height });
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${route}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page); // il mouse sulle foto ferma l'avanzamento automatico, che a metà discesa cambierebbe l'altezza
+    await page.waitForTimeout(SETTLE_MS);
+    return page;
+  };
+  // larghezze di tutte le foto vere, il limite di larghezza del foglio di stile, e lo stato della riduzione letto dal sito
+  const read = (page) => page.evaluate(() => {
+    const frames = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone) .photo-frame')];
+    const st = window.__assistState ? window.__assistState() : null;
+    return { widths: frames.map((f) => f.getBoundingClientRect().width), reduced: frames.map((f) => Boolean(f.style.getPropertyValue('--fit-w'))), maxW: frames.map((f) => getComputedStyle(f).maxWidth), fit: st ? st.fit : null };
+  });
+  const setEdit = async (page, on) => { await page.evaluate((v) => { document.body.classList.toggle('edit-mode', v); window.dispatchEvent(new Event('edit-mode-toggled')); }, on); await page.waitForTimeout(900); };
+  try {
+    if (phone) {
+      const page = await open('#/project/stills');
+      const r = await read(page);
+      const any = r.reduced.filter(Boolean).length;
+      if (any) problems.push(`su telefono ${any} foto sono ridotte per la finestra: la riduzione vale solo sul computer`);
+      if (r.fit && r.fit.active) problems.push(`su telefono la riduzione delle foto risulta attiva (${r.fit.reason}): deve essere spenta`);
+      console.log(`  [foto ridotte] ${context.__engine} telefono: ${any ? any + ' foto ridotte' : 'nessuna foto ridotta'}${r.fit ? ` (riduzione ${r.fit.active ? 'attiva' : 'spenta: ' + r.fit.reason})` : ''}`);
+      await page.close();
+      return problems;
+    }
+    const rows = [];
+    for (const c of FIT_CASES) {
+      const page = await open(c.route, c);
+      const r = await read(page);
+      await setEdit(page, true);
+      const real = await read(page); // in modifica: la misura vera
+      await setEdit(page, false);
+      const label = `${c.name}, finestra ${c.width} × ${c.height}`;
+      const cap = r.fit && r.fit.cap;
+      const shrunk = r.reduced.filter(Boolean).length;
+      if (!r.fit || typeof cap !== 'number') { problems.push(`${label}: il sito non dice se riduce le foto (nessuno stato della riduzione)`); await page.close(); continue; }
+      if (!r.fit.active) problems.push(`${label}: la riduzione delle foto non è attiva (${r.fit.reason})`);
+      if (!shrunk) problems.push(`${label}: nessuna foto è stata ridotta, ma la finestra è troppo bassa perché stiano tutte con la barra`);
+      if (real.maxW.some((m) => m !== '100%')) problems.push(`${label}: in modifica il riquadro della foto ha ancora un limite di larghezza (${[...new Set(real.maxW)].join(', ')}): lì devono valere le misure vere`);
+      let worst = 0; let wider = 0; let changed = 0;
+      r.widths.forEach((w, i) => {
+        const rw = real.widths[i]; if (!(rw > 0)) return;
+        worst = Math.max(worst, 1 - w / rw);
+        if (w > rw + 0.6) wider += 1;
+        if (!r.reduced[i] && Math.abs(w - rw) > 0.6) changed += 1;
+      });
+      if (worst > cap + 0.006) problems.push(`${label}: una foto è ridotta del ${(worst * 100).toFixed(1)} %, più del tetto (${(cap * 100).toFixed(0)} %)`);
+      if (wider) problems.push(`${label}: ${wider} foto sono più larghe della misura vera`);
+      if (changed) problems.push(`${label}: ${changed} foto senza riduzione hanno una larghezza diversa da quella vera`);
+      // la discesa con la rotella, come farebbe una persona
+      const before = await page.evaluate(() => ({ max: document.documentElement.scrollHeight - window.innerHeight }));
+      for (let i = 0; i < 12; i++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(120); }
+      await page.waitForTimeout(7500); // la discesa dura fino a 6 s
+      const after = await page.evaluate(() => { const b = document.querySelector('.gallerybar'); const rect = b ? b.getBoundingClientRect() : null; return { y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, winH: window.innerHeight, barBottom: rect ? rect.bottom : null }; });
+      const missing = after.max - after.y;
+      const barHidden = after.barBottom !== null && after.barBottom > after.winH + 1;
+      if (before.max > 8 && (missing > 12 || barHidden)) problems.push(`${label}: dopo la discesa con la rotella la pagina non arriva in fondo (mancano ${Math.round(missing)} px, fino a 12 si accetta) o la barra con i numeri resta sotto il bordo (finisce a ${Math.round(after.barBottom)} px su ${after.winH}); foto ridotte: ${shrunk} su ${r.widths.length}, al massimo del ${(worst * 100).toFixed(0)} % (tetto ${(cap * 100).toFixed(0)} %)`);
+      rows.push(`${c.name} ${c.height}: ${shrunk}/${r.widths.length} ridotte (al massimo −${(worst * 100).toFixed(0)} %), mancano ${Math.round(missing)} px`);
+      await page.close();
+    }
+    // finestra alta: nessuna riduzione, misure vere
+    {
+      const page = await open(FIT_TALL.route, FIT_TALL);
+      const r = await read(page);
+      const shrunk = r.reduced.filter(Boolean).length;
+      await setEdit(page, true);
+      const real = await read(page);
+      const diff = r.widths.filter((w, i) => Math.abs(w - real.widths[i]) > 0.6).length;
+      if (shrunk) problems.push(`${FIT_TALL.name}, finestra ${FIT_TALL.width} × ${FIT_TALL.height}: ${shrunk} foto sono ridotte anche se la finestra è alta (nessuna dovrebbe)`);
+      if (diff) problems.push(`${FIT_TALL.name}, finestra ${FIT_TALL.width} × ${FIT_TALL.height}: ${diff} foto hanno una larghezza diversa dalla misura vera`);
+      rows.push(`${FIT_TALL.name} ${FIT_TALL.height}: ${shrunk} ridotte`);
+      await page.close();
+    }
+    // finestra troppo bassa: una foto ne vorrebbe più del tetto, la galleria resta com'era (tutto o niente)
+    {
+      const page = await open(FIT_TOO_LOW.route, FIT_TOO_LOW);
+      const r = await read(page);
+      const shrunk = r.reduced.filter(Boolean).length;
+      await setEdit(page, true);
+      const real = await read(page);
+      const diff = r.widths.filter((w, i) => Math.abs(w - real.widths[i]) > 0.6).length;
+      const label = `${FIT_TOO_LOW.name}, finestra ${FIT_TOO_LOW.width} × ${FIT_TOO_LOW.height}`;
+      if (shrunk) problems.push(`${label}: ${shrunk} foto sono ridotte, ma una foto ne vorrebbe più del tetto: la galleria doveva restare com'è (tutto o niente)`);
+      if (diff) problems.push(`${label}: ${diff} foto hanno una larghezza diversa dalla misura vera`);
+      if (!r.fit || !(r.fit.wanted > r.fit.cap)) problems.push(`${label}: il sito non dice che una foto ne vorrebbe più del tetto (dice ${r.fit ? Math.round(r.fit.wanted * 100) + ' %, tetto ' + Math.round(r.fit.cap * 100) + ' %' : 'niente'})`);
+      rows.push(`${FIT_TOO_LOW.name} ${FIT_TOO_LOW.height}: ${shrunk} ridotte (una foto ne vorrebbe −${r.fit ? Math.round(r.fit.wanted * 100) : '?'} %, tetto −${r.fit ? Math.round(r.fit.cap * 100) : '?'} %)`);
+      await page.close();
+    }
+    console.log(`  [foto ridotte] ${context.__engine} computer: ${rows.join(' · ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
+  } catch (e) {
+    problems.push(`prova delle foto ridotte non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
+  }
+  return problems;
+}
+
 // Telefono, in fondo alla pagina: ci si resta mentre la galleria cambia foto (dal 23 novembre, followPhoneBottom in js/app_v58.js). Prima la galleria
 // cambiava altezza da sola (ogni 3 s, piano) e la barra con i numeri e le frecce, che dopo la discesa col dito stava in fondo allo schermo, scivolava
 // SOTTO il bordo (misurato su 390 × 844: fino a 32 px in Stills, 71 in Counterpart, 161 in Homes, e in Homes la barra non si vedeva per il 91 % del
@@ -1295,7 +1427,7 @@ async function runEngine(engine, base, origin, routes) {
       if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
       if (route === ABOUT_ROUTE) r.problems.push(...await checkAboutText(context, base));
       if (route === ARCHIVE_ROUTE) r.problems.push(...await checkArchiveArrows(context, base));
-      if (route === REACH_ROUTE) { r.problems.push(...await checkReachBottom(context, base)); r.problems.push(...await checkPhoneSwipe(context, base)); }
+      if (route === REACH_ROUTE) { r.problems.push(...await checkReachBottom(context, base)); r.problems.push(...await checkFitToWindow(context, base)); r.problems.push(...await checkPhoneSwipe(context, base)); }
       if (route === PHONE_BOTTOM_ROUTE) r.problems.push(...await checkPhoneBottom(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }

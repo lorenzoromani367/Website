@@ -184,7 +184,17 @@
         + (assist.glide ? `. Ultima discesa accompagnata: ${assist.glide.ms} ms per ${assist.glide.px} px (${Math.round((Date.now() - assist.glide.at) / 1000)} s fa)` : ". Nessuna discesa accompagnata da quando la pagina è aperta")
         + (assist.stats ? `. Scatti di rotella visti dal sito: ${assist.stats.wheels} (${assist.stats.uncancelable} non annullabili), discese partite: ${assist.stats.taken}, scatti assorbiti: ${assist.stats.absorbed}${assist.stats.last ? `; l'ultimo: ${assist.stats.last}` : ""}` : "")
       : "Accompagnamento verso il fondo: non c'è in questa pagina (non è una galleria, o la pagina non ha il codice nuovo: ricaricare con Cmd+Maiusc+R)";
+    // Foto rimpicciolite perché stiano nella finestra insieme alla barra (fitPhotosToWindow in app_v58.js, dal 24 novembre)
+    const fit = assist && assist.fit;
+    const fitLine = fit
+      ? (fit.active
+        ? (fit.shrunk
+          ? `Foto ridotte per la finestra (${innerHeight} px di altezza): ${fit.shrunk} su ${fit.photos}, al massimo −${Math.round(fit.maxShrink * 100)} % (tetto −${Math.round((fit.cap || 0) * 100)} %)`
+          : fit.wanted > (fit.cap || 0) ? `Foto ridotte per la finestra (${innerHeight} px di altezza): nessuna, ${fit.reason}` : `Foto ridotte per la finestra (${innerHeight} px di altezza): nessuna (la finestra è abbastanza alta)`)
+        : `Foto ridotte per la finestra: no (${fit.reason})`)
+      : null;
     const lines = [log.length ? `Barra ferma, ultimi scorrimenti della galleria (${log.length}):` : "Barra ferma: nessuno scorrimento della galleria da quando la pagina è aperta", conditions, assistLine];
+    if (fitLine) lines.push(fitLine + (document.body.classList.contains("edit-mode") ? " — in modalità modifica si vedono le misure vere, senza riduzione" : ""));
     log.slice(-limit).reverse().forEach((e) => lines.push(`- ${describeHold(e)} (${e.hash || "#/"})`));
     return lines;
   };
