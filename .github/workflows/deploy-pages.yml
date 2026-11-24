@@ -59,6 +59,22 @@ jobs:
         with:
           path: "_site"
 
+      # GitHub a volte non mostra subito il file appena caricato: il passo dopo scrive «Found 0 artifact(s)» / «No artifacts named "github-pages" were
+      # found for this workflow run» e la pubblicazione fallisce anche se il file c'è (23-24 novembre: cinque pubblicazioni su sette fallite così al primo tentativo; un paio di minuti
+      # dopo l'elenco mostrava il file). Prima di pubblicare si aspetta (fino a 2 minuti) che l'elenco lo mostri. Se non compare si va avanti lo stesso:
+      # sarà il passo dopo a fallire, col suo messaggio, come prima.
+      - name: Wait until GitHub lists the uploaded file
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 24); do
+            n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[] | select(.name == "github-pages")] | length' 2>/dev/null || echo 0)
+            echo "Tentativo $i: ${n:-0} file github-pages nell'elenco"
+            if [ "${n:-0}" -ge 1 ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::warning::Dopo 2 minuti l'elenco non mostra ancora il file: si prova a pubblicare lo stesso"
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
