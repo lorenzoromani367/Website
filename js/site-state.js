@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 485,
-  "updatedAt": "2026-11-23T21:45:47.091Z",
+  "version": 495,
+  "updatedAt": "2026-11-24T13:27:14.339Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -101,7 +101,7 @@ window.SITE_STATE = {
           },
           {
             "type": "word",
-            "text": "murano",
+            "text": "murano, glasstress",
             "uid": "uid_1791305668347_6899",
             "linkedImageSrc": "images/stills/murano.JPG",
             "linkedImageLinkTo": "project/stills",
@@ -144,7 +144,7 @@ window.SITE_STATE = {
           },
           {
             "type": "word",
-            "text": "cocoon",
+            "text": "shell",
             "uid": "uid_1791301098682_8677",
             "linkedImageSrc": "images/counterpart/recognition-10.jpg",
             "linkedImageLinkTo": "project/counterpart",
@@ -244,11 +244,13 @@ window.SITE_STATE = {
       "project.counterpart.captionText.@counterpart/bwjuju_35-positive-2-1.jpg": "from a roof i jump into the sky",
       "project.counterpart.captionText.@counterpart/recognition-10.jpg": "shell",
       "project.counterpart.captionText.@counterpart/recognition-2.jpg": "dreaming with a broken leg",
-      "project.counterpart.captionText.@counterpart/recognition-4.jpg": "i shine darkly",
+      "project.counterpart.captionText.@counterpart/recognition-4.jpg": "shine darkly",
       "project.counterpart.captionText.@counterpart/vision500_14-2-2-1.jpg": "i watch the sun",
       "project.counterpart.captionText.@counterpart/recognition-9.jpg": "with fishes",
       "project.counterpart.captionText.@counterpart/recognition-6.jpg": "clean, no mess",
-      "project.counterpart.captionText.@counterpart/k100pro92-4-2-2-1.jpg": "me as a white shape"
+      "project.counterpart.captionText.@counterpart/k100pro92-4-2-2-1.jpg": "me as a white shape",
+      "project.stills.captionText.@stills/neon.jpg": "neon light, \ncasa boschi di stefano",
+      "project.stills.captionText.@stills/murano.jpg": "murano, glasstress"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -1085,6 +1087,10 @@ window.SITE_STATE = {
       "zoom:images/core archive/compression-5.jpg": {
         "width": "1068.6px",
         "height": "916.76px"
+      },
+      "project.stills.captionSize.@stills/neon.jpg": {
+        "width": "196.961px",
+        "height": ""
       }
     },
     "site-size-overrides-v1:m": {

@@ -429,7 +429,7 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "murano",
+                  "text": "murano, glasstress",
                   "uid": "uid_1791305668347_6899",
                   "linkedImageSrc": "images/stills/murano.JPG",
                   "linkedImageLinkTo": "project/stills",
@@ -472,7 +472,7 @@ const ARCHIVE = {
               },
               {
                   "type": "word",
-                  "text": "cocoon",
+                  "text": "shell",
                   "uid": "uid_1791301098682_8677",
                   "linkedImageSrc": "images/counterpart/recognition-10.jpg",
                   "linkedImageLinkTo": "project/counterpart",
