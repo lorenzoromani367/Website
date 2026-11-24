@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -3598,7 +3598,10 @@ function warmLightboxPhoto(src) {
 }
 
 // nav (solo Core Archive, parole con foto): l'elenco in cui questa apertura si mette, nell'ordine delle parole; serve alle frecce (zoomGo).
-function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
+// labelText (solo Core Archive): una scritta scelta a mano da mostrare accanto alla foto al posto del nome di un progetto (campo linkedImageLabel della
+// parola). Non porta da nessuna parte: non è un collegamento (niente puntatore, il clic la attraversa e chiude l'ingrandimento).
+function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav, labelText) {
+  const hasLabel = Boolean(linkTo || labelText); // c'è una scritta accanto alla foto (nome del progetto, o scritta scelta a mano)
   const warmThisPhoto = () => { if (!isEditMode()) warmLightboxPhoto(img.currentSrc || img.src); };
   frame.addEventListener("pointerenter", warmThisPhoto, { passive: true });
   frame.addEventListener("pointerdown", warmThisPhoto, { passive: true });
@@ -3651,28 +3654,35 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
       }
     };
 
-    if (linkTo) {
-      const parts = linkTo.split("/");
-      let labelName = linkTo;
-      if (parts[0] === "project" && parts[1]) {
-        const proj = PROJECTS.find(p => p.slug === parts[1]);
-        // Il nome com'è scritto nella home (con la maiuscola)
-        if (proj) labelName = proj.name;
-      } else if (linkTo === "archive") {
-        labelName = ARCHIVE.title.toLowerCase();
+    if (hasLabel) {
+      let labelName = labelText || "";
+      if (linkTo) {
+        const parts = linkTo.split("/");
+        labelName = linkTo;
+        if (parts[0] === "project" && parts[1]) {
+          const proj = PROJECTS.find(p => p.slug === parts[1]);
+          // Il nome com'è scritto nella home (con la maiuscola)
+          if (proj) labelName = proj.name;
+        } else if (linkTo === "archive") {
+          labelName = ARCHIVE.title.toLowerCase();
+        }
       }
       zoomProjectLabel.innerText = labelName;
       zoomProjectLabel.style.display = "block";
+      // Una scritta scelta a mano non è un collegamento: niente puntatore a mano né schiarirsi col mouse (è "is-static" nel foglio di stile), e il clic la attraversa
+      zoomProjectLabel.classList.toggle("is-static", !linkTo);
+      zoomProjectLabel.style.cursor = linkTo ? "pointer" : "default";
+      zoomProjectLabel.style.pointerEvents = linkTo ? "auto" : "none";
       placeLabel();
 
       // Il colore a riposo / col mouse sopra / col dito premuto del nome sta nel foglio di stile (".lightbox-project-label"), uguale a quello
       // delle frecce: qui non si scrive nessuna trasparenza in riga, che altrimenti vincerebbe sulle regole del foglio di stile.
-      zoomProjectLabel.onclick = (e) => {
+      zoomProjectLabel.onclick = linkTo ? (e) => {
         e.stopPropagation();
         if (zoomCurrentClose) zoomCurrentClose();
         // Diamo il tempo all'animazione di chiusura di partire prima di navigare
         setTimeout(() => location.hash = `#/${linkTo}`, 50);
-      };
+      } : null;
     } else {
       zoomProjectLabel.style.display = "none";
       zoomProjectLabel.onclick = null;
@@ -3747,7 +3757,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
       let archiveArea = null; // { left, width, maxWidth }: lo spazio ideale e il massimo in cui sta la foto dell'archivio
       if (isArchiveZoom) {
         const edge = Math.max(24, window.innerWidth * 0.03) + (zoomSequence ? ZOOM_NAV_ROOM : 0); // (con le frecce, un po' più di margine: ZOOM_NAV_ROOM)
-        const labelRoom = linkTo ? LIGHTBOX_LABEL_GAP + zoomProjectLabel.offsetWidth : 0; // quanto serve alla scritta, a destra della foto
+        const labelRoom = hasLabel ? LIGHTBOX_LABEL_GAP + zoomProjectLabel.offsetWidth : 0; // quanto serve alla scritta, a destra della foto
         const hardRight = window.innerWidth - edge - labelRoom;               // fin qui può arrivare il bordo destro della foto
         const areaRight = Math.min(window.innerWidth * 0.75, hardRight);      // lo spazio ideale: i tre quarti di sinistra
         archiveArea = { left: edge, width: Math.max(160, areaRight - edge), maxWidth: Math.max(160, hardRight - edge) };
@@ -3767,7 +3777,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
       // bassi, telefono messo in orizzontale) la scritta finiva sotto il bordo e non si vedeva né si poteva toccare.
       // Allora si lascia lo spazio alla scritta: la foto si rimpicciolisce solo se serve e il gruppo foto+scritta si centra.
       // Le foto che hanno già posto sotto restano esattamente dove erano.
-      if (isMobile && linkTo) {
+      if (isMobile && hasLabel) {
         const labelRoom = LIGHTBOX_LABEL_GAP_MOBILE + zoomProjectLabel.offsetHeight;
         if (targetY + targetH + labelRoom > window.innerHeight - 8) {
           if (targetH + labelRoom > window.innerHeight - 16) {
@@ -3833,7 +3843,7 @@ function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav) {
     // Se lo schermo cambia mentre la foto è aperta (telefono ruotato), la foto si rimette a misura dello schermo nuovo,
     // subito e senza animazione (vedi il listener di "resize" in ensureZoomElements).
     zoomRefit = () => {
-      if (linkTo) placeLabel();
+      if (hasLabel) placeLabel();
       const target = fitTarget();
       activeFrame.style.transition = "none";
       activeFrame.style.width = `${target.targetW}px`;
@@ -4310,6 +4320,23 @@ function bezierProgressAt(curve, x) {
   return at(y1, y2, (lo + hi) / 2);
 }
 
+// La stessa curva, ma la VELOCITÀ: quante volte la velocità media sta andando la transizione quando è passata la frazione di tempo "x"
+// (da 0 a 1; 1 = velocità media, 0 = ferma). Serve a far ripartire uno scorrimento con la velocità di quello interrotto (vedi goTo).
+function bezierSlopeAt(curve, x) {
+  const [x1, y1, x2, y2] = curve;
+  const at = (a, b, s) => 3 * (1 - s) * (1 - s) * s * a + 3 * (1 - s) * s * s * b + s * s * s;
+  const rate = (a, b, s) => 3 * (1 - s) * (1 - s) * a + 6 * (1 - s) * s * (b - a) + 3 * s * s * (1 - b);
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (at(x1, x2, mid) < x) lo = mid; else hi = mid;
+  }
+  const s = (lo + hi) / 2;
+  const dx = rate(x1, x2, s);
+  return dx > 1e-9 ? rate(y1, y2, s) / dx : 0;
+}
+
 // Righe di un testo (una per riga del file, "" = riga vuota) → gruppi: ogni gruppo è l'elenco delle righe di UN paragrafo; una riga vuota è `null`.
 function groupTextLines(lines) {
   const groups = [];
@@ -4365,7 +4392,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // Creiamo i paragrafi in modo nativo così il CSS originale ".description p+p" li formatta correttamente.
   // Come nel file di testo (testi/<progetto>.txt): righe di seguito = UN paragrafo, con gli a capo dove li hai scritti; una riga vuota = nuovo
   // paragrafo (dal 23 novembre: prima ogni riga era un paragrafo a sé e le righe vuote non si vedevano, quindi un testo scritto a gruppi di righe,
-  // come quello di Mediality, usciva tutto spaziato). La riga vuota resta nella pagina come «spacer» (vuoto, senza altezza): la modalità modifica
+  // come quello che era di Mediality, usciva tutto spaziato). La riga vuota resta nella pagina come «spacer» (vuoto, senza altezza): la modalità modifica
   // la legge da lì per salvare la divisione in paragrafi.
   const makeParagraphs = (texts) => groupTextLines(texts).map((group) => (group ? el("p", { html: group.join("<br>") }) : el("p", { class: "spacer" })));
   
@@ -4952,6 +4979,9 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   // risolve (swipe touch / hover+click che riprendono l'autoplay troppo
   // presto dopo una transizione avviata mentre l'autoplay era in pausa).
   let lastTransitionStart = -Infinity;
+  // La curva con cui sta andando lo scorrimento in corso, quando NON è quella del foglio di stile (riparte con la velocità di quello
+  // interrotto: vedi goTo); null = quella del foglio di stile. La legge growTransitionFor per sapere quanto in fretta si scopre la foto in arrivo.
+  let slideCurveOverride = null;
   let isAnimating = false;
   // Finché una foto è ingrandita la galleria dietro sta FERMA (vedi holdGallery più sotto): così, chiudendo,
   // la foto torna esattamente sulla miniatura da cui è partita.
@@ -5002,7 +5032,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     const gap = Math.max(0, dx > 0 ? fr.left - vp.right : vp.left - fr.right); // strada da fare prima che la foto si veda
     const free = Math.max(0, boxBottom - fr.bottom) + extension; // quanto può stare oltre il bordo di taglio senza tagliare la foto
     const slideMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--transition-ms")) || TRANSITION_MS;
-    const slideCurve = cssCubicBezier("--transition-ease", [0.25, 0.1, 0.25, 1]);
+    const slideCurve = slideCurveOverride || cssCubicBezier("--transition-ease", [0.25, 0.1, 0.25, 1]);
     const fits = (ms, curve) => {
       let maxCut = 0;
       let maxArea = 0;
@@ -5115,39 +5145,121 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   }
 
   // "height: false": solo il binario, senza toccare l'altezza del riquadro (la cambia la chiamata successiva, quella che anima davvero).
+  // "position": il posto nel binario (0 = il primo), anche con la virgola: serve a fermare il binario esattamente dov'è (vedi goTo).
   function applyPosition({ instant = false, position = current, height = true } = {}) {
+    const transform = `translateX(-${Math.round(position * 1e6) / 1e4}%)`;
     if (instant) {
       // Scatto senza transizione: usato solo per i riancoraggi invisibili
       // del trucco del "loop infinito" — vedi goTo(). Non è mai quello che
       // l'utente vede muoversi: o mostra esattamente la stessa foto di
       // prima (nessun cambiamento visibile), o avviene DOPO che lo slide
-      // animato è già arrivato al clone (vedi sotto).
+      // animato è già arrivato alla copia (vedi sotto).
       track.style.transition = "none";
-      track.style.transform = `translateX(-${position * 100}%)`;
+      track.style.transform = transform;
       track.getBoundingClientRect(); // forza il reflow prima di riattivare la transizione
       track.style.transition = "";
     } else {
-      track.style.transform = `translateX(-${position * 100}%)`;
+      track.style.transform = transform;
     }
     if (height) updateViewportHeight({ glide: !instant, destination: track.children[position] });
   }
 
-  // Chiudere il giro (dall'ultima foto alla prima, o viceversa) deve
-  // sembrare un passo avanti/indietro NORMALE, alla stessa velocità delle
-  // altre transizioni — non uno scatto istantaneo né un riavvolgimento
-  // veloce attraverso tutte le foto di mezzo. Trucco standard dei
-  // caroselli infiniti: si clona temporaneamente la foto di arrivo,
-  // agganciandola subito dopo (o prima) di quella attuale nel binario, e
-  // ci si anima sopra normalmente; a transizione finita il clone (identico
-  // in tutto e per tutto alla foto vera) sparisce e si riancora
-  // all'istante sulla foto vera, senza che si veda alcuna differenza.
-  let pendingWrapCleanup = null;
+  // Chiudere il giro (dall'ultima foto alla prima, o viceversa) deve sembrare un passo avanti/indietro NORMALE, alla stessa velocità delle altre
+  // transizioni — non uno scatto istantaneo né un riavvolgimento veloce attraverso tutte le foto di mezzo. Trucco standard dei caroselli
+  // infiniti: si aggancia temporaneamente al binario una COPIA della foto di arrivo, dopo l'ultima (o prima della prima), e ci si anima sopra
+  // normalmente; a scorrimento finito le copie (identiche in tutto e per tutto alle foto vere) spariscono e il binario si riancora all'istante
+  // sulla foto vera, senza che si veda alcuna differenza.
+  //
+  // Ma chi preme di nuovo PRIMA che lo scorrimento sia finito (dura 6 s: succede di continuo, con i clic nei margini e con le frecce)
+  // trovava, nella registrazione del 24 novembre, tre difetti:
+  //  1. dall'ultima alla prima foto, o al contrario, il binario SALTAVA di centinaia o migliaia di px in un fotogramma: a ogni pressione le copie si
+  //     toglievano e il binario veniva rimesso sulla foto vera, e per una copia in testa (che sposta tutte le foto di un posto) lo si rimetteva dove
+  //     sta a riposo, come se fosse fermo: due salti nel giro di tre secondi;
+  //  2. a ogni pressione la velocità crollava: lo scorrimento ripartiva dal suo inizio lento (la curva «ease» comincia a 0,4 volte la velocità
+  //     media) invece di continuare ad andare come andava, e solo dopo riprendeva velocità: a scatti;
+  //  3. il clic nel margine confrontava il punto col riquadro della foto VERA, che mentre si va verso una copia sta altrove: un clic a sinistra
+  //     poteva far andare avanti.
+  // Ora il binario ha, secondo serve, più copie in testa e in coda (in testa stanno ai posti virtuali −1, −2…, in coda a n, n+1…, con n il numero
+  // delle foto); "virt" è la foto di arrivo contata SENZA tornare a capo (da 0 a n−1 sono le foto vere, fuori da lì le copie). Ogni pressione:
+  //  - aggiunge le copie che mancano; con quelle in testa, che spostano tutto di un posto, compensa la posizione: nulla cambia di visibile;
+  //  - ferma il binario ESATTAMENTE dov'è (letto dalla trasformazione vera) e riparte da lì verso la nuova foto, con una curva che comincia alla
+  //    velocità che c'era (stesso arrivo dolcissimo di sempre): né salti né frenate;
+  //  - le copie si tolgono solo a scorrimento finito (finishWrap), quando riancorarsi sulla foto vera è davvero invisibile.
+  const MAX_WRAP_CLONES = 30; // copie nel binario al massimo: chi preme di continuo per giri e giri (più di mezzo minuto) aspetta la fine dello scorrimento
+  let pendingWrapCleanup = null; // { finish, timer }: ci sono copie nel binario; "finish" le toglie, a scorrimento finito (timer)
+  let leadClones = []; // copie in testa, dalla più lontana alla più vicina alla prima foto vera
+  let trailClones = []; // copie in coda, dalla più vicina all'ultima foto vera
+  let virt = 0; // foto di arrivo senza tornare a capo (vedi sopra); uguale a "current" quando non ci sono copie
+  let slide = null; // lo scorrimento in corso: { from, to, ms, curve }, in posti del binario, cominciato a lastTransitionStart
 
   function makePhotoClone(sourceIndex) {
     const clone = figures[sourceIndex].cloneNode(true);
     clone.classList.add("photo-clone");
+    clone.dataset.cloneOf = String(sourceIndex); // (di quale foto vera è la copia: lo leggono i controlli automatici per seguire la stessa foto)
     clone.querySelectorAll(".resize-handle, .move-handle, .resizable-label").forEach((el) => el.remove());
     return clone;
+  }
+
+  // Dove sta il binario in questo istante, in posti (anche con lo scorrimento in corso), letto dalla trasformazione vera; null se non si sa.
+  function trackSlotsNow() {
+    const width = track.getBoundingClientRect().width;
+    if (!(width > 0)) return null;
+    const transform = getComputedStyle(track).transform;
+    if (!transform || transform === "none") return 0;
+    const m = /^matrix(3d)?\(([^)]*)\)$/.exec(transform);
+    if (!m) return null;
+    const values = m[2].split(",").map(parseFloat);
+    const tx = m[1] ? values[12] : values[4];
+    return Number.isFinite(tx) ? -tx / width : null;
+  }
+
+  // Durata (ms) della transizione del binario, quella del foglio di stile.
+  function trackTransitionMs() {
+    const first = String(getComputedStyle(track).transitionDuration || "").split(",")[0].trim();
+    const value = parseFloat(first);
+    if (!(value >= 0)) return TRANSITION_MS;
+    return /ms$/.test(first) ? value : value * 1000;
+  }
+
+  // Velocità (posti al millisecondo, col segno: più = verso le foto dopo) dello scorrimento "s" quando sono passati "elapsed" ms dal suo inizio.
+  function slideSpeedAt(s, elapsed) {
+    const u = elapsed / s.ms;
+    if (!(s.ms > 0) || !(u >= 0) || u >= 1) return 0;
+    return ((s.to - s.from) * bezierSlopeAt(s.curve, u)) / s.ms;
+  }
+
+  // La curva per ripartire verso "distance" posti (col segno) con la velocità "speed" (posti al ms, col segno) che c'è adesso: quella del foglio di stile
+  // (stesso arrivo dolcissimo), col primo punto di controllo (x1, y1) spostato in modo che la pendenza di partenza, y1 / x1, sia quella che serve perché la
+  // velocità non cambi. Di norma x1 resta quello del foglio di stile e si alza o si abbassa y1. Se serve una pendenza così forte che y1 uscirebbe dai limiti
+  // (verso l'arrivo oltre 1: il binario supererebbe l'arrivo e tornerebbe indietro; dall'altra parte oltre MATCH_BACK_MAX: l'inversione sarebbe un colpo),
+  // si accorcia x1: la pendenza resta quella e la frenata avviene in meno tempo (le pressioni vicine all'arrivo, o per tornare indietro: il binario
+  // rallenta e, se serve, continua ancora un poco nel verso di prima prima di tornare, come un oggetto con la sua inerzia, senza un'inversione di colpo).
+  const MATCH_FORWARD_MAX = 0.98;
+  const MATCH_BACK_MAX = 5;
+  function matchedSlideCurve(distance, speed, ms, base) {
+    if (!(Math.abs(distance) > 1e-6) || !(ms > 0) || !(base[0] > 0)) return null;
+    const startSlope = (speed * ms) / distance;
+    if (Math.abs(startSlope - base[1] / base[0]) < 0.05) return null; // è già quella del foglio di stile
+    let x1 = base[0];
+    let y1 = x1 * startSlope;
+    const limit = startSlope >= 0 ? MATCH_FORWARD_MAX : MATCH_BACK_MAX;
+    if (Math.abs(y1) > limit) {
+      x1 = Math.max(0.005, limit / Math.abs(startSlope));
+      y1 = x1 * startSlope;
+    }
+    return [x1, y1, base[2], base[3]];
+  }
+
+  function finishWrap() {
+    if (pendingWrapCleanup) clearTimeout(pendingWrapCleanup.timer);
+    pendingWrapCleanup = null;
+    leadClones.concat(trailClones).forEach((copy) => copy.remove());
+    leadClones = [];
+    trailClones = [];
+    virt = current;
+    slide = null;
+    slideCurveOverride = null;
+    applyPosition({ instant: true, position: current }); // la copia su cui si è arrivati è identica alla foto vera: nessun cambiamento visibile
   }
 
   /* ---- Numero e frecce FERMI sullo schermo (solo computer) ----
@@ -5627,70 +5739,90 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
     if (isAnimating) return;
     if (!figures.length) return;
     if (lightboxHold) return; // una foto è ingrandita: la galleria dietro sta ferma (vedi holdGallery)
+    const n = figures.length;
+    // Con una foto sola non c'è dove andare (e il giro su se stessa clonerebbe inutilmente l'unica foto).
+    if (n < 2) return;
+    const now = performance.now();
+    // Lo scorrimento di prima ha già finito il suo tempo ma il timer che toglie le copie non è ancora scattato (qualche millisecondo): si chiude adesso.
+    if (pendingWrapCleanup && slide && now >= lastTransitionStart + slide.ms) finishWrap();
+
+    // La foto di arrivo, contata senza tornare a capo (vedi il commento sulle copie): dopo l'ultima (n−1) viene n, la copia della prima; prima della prima viene −1,
+    // la copia dell'ultima; e così via se si preme ancora mentre il binario sta andando verso una copia.
+    if (!leadClones.length && !trailClones.length) virt = current;
+    const newVirt = virt + (i - current);
+    const needTrail = Math.max(0, newVirt - (n - 1) - trailClones.length);
+    const needLead = Math.max(0, -newVirt - leadClones.length);
+    if (leadClones.length + trailClones.length + needTrail + needLead > MAX_WRAP_CLONES) return;
+
     const barBefore = snapshotBar(); // dov'è la barra sullo schermo prima che cambi l'altezza (vedi sopra)
     const carrying = Boolean(framing && framing.assist && framing.approaching); // la pagina sta venendo accompagnata in fondo: continua da sola
 
-    lastTransitionStart = performance.now();
-    isAnimating = true;
-    setTimeout(() => { isAnimating = false; }, 500); // 500ms di debounce per evitare doppi clic veloci, ma senza bloccare i 6s di transizione
-    
-    if (pendingWrapCleanup) {
-      clearTimeout(pendingWrapCleanup.timer);
-      pendingWrapCleanup.cleanup();
-      pendingWrapCleanup = null;
+    // Dove sta il binario ADESSO e a che velocità va (se sta ancora scorrendo), prima di toccare qualsiasi cosa.
+    const sliding = Boolean(slide) && now < lastTransitionStart + slide.ms;
+    let from = leadClones.length + virt; // a riposo: sulla foto di arrivo di prima
+    let speed = 0;
+    if (sliding) {
+      const elapsed = now - lastTransitionStart;
+      const measured = trackSlotsNow();
+      from = measured == null ? slide.from + (slide.to - slide.from) * bezierProgressAt(slide.curve, elapsed / slide.ms) : measured;
+      speed = slideSpeedAt(slide, elapsed);
     }
 
-    const n = figures.length;
-    // "n > 1" evita che con una sola foto (n===1, current===0) entrambe le
-    // condizioni sotto risultino vere per lo stesso "i" (current-1 === 0-1
-    // === -1 e current+1 === 0+1 === 1 coincidono modulo 1 con l'unica
-    // foto), il che clonerebbe inutilmente l'unica foto e animerebbe un
-    // giro completo su se stessa invece di restare ferma.
-    const wrapForward = n > 1 && current === n - 1 && i === current + 1;
-    const wrapBackward = n > 1 && current === 0 && i === current - 1;
-    current = (i + n) % n;
+    lastTransitionStart = now;
+    isAnimating = true;
+    setTimeout(() => { isAnimating = false; }, 500); // 500ms di debounce per evitare doppi clic veloci, ma senza bloccare i 6s di transizione
 
-    if (wrapForward) {
-      const clone = makePhotoClone(0);
-      track.appendChild(clone);
-      applyPosition({ position: n }); // un passo avanti normale, verso il clone appena aggiunto in coda
-      // "finish" è quello che si fa a transizione finita: lo tiene a parte anche holdGallery/releaseGallery, per
-      // poterlo rimandare se la galleria viene fermata a metà (una foto ingrandita).
-      const finish = () => {
-        clone.remove();
-        applyPosition({ instant: true, position: current }); // current = 0, identico al clone: nessun cambiamento visibile
-        pendingWrapCleanup = null;
-      };
-      pendingWrapCleanup = {
-        finish,
-        timer: setTimeout(finish, TRANSITION_MS),
-        cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
-      };
-    } else if (wrapBackward) {
-      const clone = makePhotoClone(n - 1);
-      track.insertBefore(clone, track.firstChild);
-      // Inserire il clone in testa sposta la foto reale attuale (era in
-      // posizione 0) alla posizione 1: la riancoriamo lì all'istante,
-      // senza transizione, così finora non è cambiato nulla di visibile.
-      applyPosition({ instant: true, position: 1, height: false }); // l'altezza la cambia la riga sotto, dolcemente: prima, se l'ultima foto è più alta, il riquadro si allungava di colpo
-      applyPosition({ position: 0 }); // un passo indietro normale, verso il clone appena aggiunto in testa
-      const finish = () => {
-        clone.remove();
-        applyPosition({ instant: true, position: current }); // current = n-1, identico al clone: nessun cambiamento visibile
-        pendingWrapCleanup = null;
-      };
-      pendingWrapCleanup = {
-        finish,
-        timer: setTimeout(finish, TRANSITION_MS),
-        cleanup: () => { clone.remove(); applyPosition({ instant: true, position: current }); },
-      };
-    } else {
-      applyPosition();
+    virt = newVirt;
+    current = ((newVirt % n) + n) % n;
+
+    // Le copie che mancano. In coda basta aggiungerle; quelle in testa spostano ogni foto di un posto verso destra, quindi la posizione va compensata.
+    let shifted = 0;
+    for (let k = 0; k < needTrail; k++) {
+      const copy = makePhotoClone(trailClones.length % n);
+      track.appendChild(copy);
+      trailClones.push(copy);
+    }
+    for (let k = 0; k < needLead; k++) {
+      const copy = makePhotoClone((((-leadClones.length - 1) % n) + n) % n);
+      track.insertBefore(copy, track.firstChild);
+      leadClones.unshift(copy);
+      shifted++;
+    }
+    from += shifted;
+    const to = leadClones.length + newVirt;
+
+    // Si riparte da dove si è, con la velocità che c'era. Il binario si ferma esattamente lì (senza transizione: nessuno spostamento visibile, anche con una
+    // copia in più in testa) e da lì parte la transizione verso la nuova foto, con una curva che comincia alla velocità di prima invece che dal suo inizio lento.
+    const baseCurve = cssCubicBezier("--transition-ease", [0.25, 0.1, 0.25, 1]);
+    const ms = trackTransitionMs();
+    let curve = baseCurve;
+    if (sliding || shifted) applyPosition({ instant: true, position: from, height: false });
+    if (sliding) {
+      curve = matchedSlideCurve(to - from, speed, ms, baseCurve) || baseCurve;
+    }
+    slideCurveOverride = curve === baseCurve ? null : curve;
+    track.style.transitionTimingFunction = curve === baseCurve ? "" : `cubic-bezier(${curve.map((v) => Math.round(v * 1e4) / 1e4).join(", ")})`;
+    applyPosition({ position: to }); // verso la foto di arrivo (o la sua copia)
+    if (sliding && typeof track.getAnimations === "function" && document.timeline && document.timeline.currentTime != null) {
+      // Una transizione nuova parte «in attesa»: per uno o due fotogrammi mostra il suo punto di partenza, e a metà corsa sarebbe una sosta a ogni
+      // pressione (misurata: 2 fotogrammi fermi, 33 ms). Si fissa a mano il suo istante di partenza, quello dell'ultimo fotogramma, che è
+      // anche l'istante in cui è stata letta la posizione da cui riparte: il fotogramma dopo la mostra già in movimento, alla velocità di prima.
+      const started = track.getAnimations().find((a) => a.transitionProperty === "transform");
+      try { if (started) started.startTime = document.timeline.currentTime; } catch (e) { /* un motore che non lo permette: resta la sosta di un fotogramma, nient'altro */ }
+    }
+    slide = { from, to, ms, curve };
+
+    // Finché ci sono copie nel binario, a scorrimento finito si tolgono (e il binario si riancora sulla foto vera): "finish" lo tiene a parte anche
+    // holdGallery/releaseGallery, per poterlo rimandare se la galleria viene fermata a metà (una foto ingrandita).
+    if (leadClones.length || trailClones.length) {
+      if (!pendingWrapCleanup) pendingWrapCleanup = { finish: finishWrap, timer: null };
+      clearTimeout(pendingWrapCleanup.timer);
+      pendingWrapCleanup.timer = setTimeout(finishWrap, ms);
     }
 
     if (user) restartAutoplay();
     // La barra col numero e le frecce resta ferma sullo schermo mentre cambia l'altezza (e, a pagina ferma, la pagina scende in fondo): vedi sopra.
-    // Se la pagina sta già scendendo in fondo accompagnata, il suo movimento segue la barra anche mentre l'altezza cambia: ripartire la farebbe fermare un attimo.
+    // Se la pagina sta già scendendo in fondo accompagnata, il suo movimento segue la barra anche mentre l'altezza cambia: ripartirla la farebbe fermare un attimo.
     if (!carrying) startBarHold(barBefore);
     startPhoneFollow(); // telefono: se la pagina è in fondo ci resta mentre il riquadro cambia altezza (vedi sopra)
   }
@@ -5852,11 +5984,18 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
   viewport.addEventListener("click", (e) => {
     if (figures.length < 2) return;
     if (pressStartedOnEditing || (e.target.closest && e.target.closest(EDITING_PARTS))) { pressStartedOnEditing = false; return; }
-    const activeFrame = figures[current].querySelector(".photo-frame");
+    // La foto di arrivo sta al suo posto nel binario: la copia, mentre si va verso una copia (la foto vera, in quel momento, sta lontanissimo).
+    const arrivalSlot = leadClones.length + virt;
+    const activeFigure = track.children[arrivalSlot] || figures[current];
+    const activeFrame = activeFigure.querySelector(".photo-frame");
     const r = activeFrame.getBoundingClientRect();
     if (e.clientY < r.top || e.clientY > r.bottom) return; // sopra/sotto la foto (didascalia, margini): non fare nulla
-    if (e.clientX < r.left) goTo(current - 1, { user: true });
-    else if (e.clientX > r.right) goTo(current + 1, { user: true });
+    // Il margine è quello della foto dove sta per FERMARSI, non di dove si trova adesso: mentre scorre (e un clic di seguito all'altro arriva quasi sempre a
+    // scorrimento in corso) la foto in arrivo passa sotto il puntatore, e un clic nel margine sinistro poteva risultare «a destra della foto» e andare avanti.
+    const slots = trackSlotsNow();
+    const shift = slots == null ? 0 : (slots - arrivalSlot) * track.getBoundingClientRect().width;
+    if (e.clientX < r.left + shift) goTo(current - 1, { user: true });
+    else if (e.clientX > r.right + shift) goTo(current + 1, { user: true });
   });
 
   viewport.addEventListener("mouseenter", () => { if (!isTouchEcho()) handlePause(); });
@@ -6997,7 +7136,10 @@ function renderArchivePagesMode(param) {
         // Accanto alla foto ingrandita compare il progetto a cui appartiene (cliccandolo si apre quel progetto)
         const project = archiveImageProject(src, poolImg && poolImg.linkTo, item.linkedImageProject);
         // L'ultimo parametro: l'elenco delle parole con foto, nell'ordine in cui compaiono: le frecce dell'ingrandimento passano di una all'altra
-        makeZoomable(frame, hiddenImg, project ? `project/${project.slug}` : null, `${galleryKey}.zoom.${item.uid}`, poolImg && poolImg.zoomBox, archiveZoomNav);
+        // Una scritta scelta a mano (linkedImageLabel, es. «part of tourette syndrome project») prende il posto del nome del progetto: non è un collegamento
+        const customLabel = typeof item.linkedImageLabel === "string" ? item.linkedImageLabel.trim() : "";
+        if (customLabel) frame.dataset.zoomLabel = customLabel; // (lo leggono i controlli automatici)
+        makeZoomable(frame, hiddenImg, customLabel || !project ? null : `project/${project.slug}`, `${galleryKey}.zoom.${item.uid}`, poolImg && poolImg.zoomBox, archiveZoomNav, customLabel);
         frame.classList.add("is-linked");
       }
 
@@ -7008,6 +7150,7 @@ function renderArchivePagesMode(param) {
         showArchivePoolModal(page, pages, "link", (selectedImg) => {
           item.linkedImageSrc = selectedImg.src;
           item.linkedImageLinkTo = selectedImg.linkTo;
+          delete item.linkedImageLabel; // (una scritta scelta a mano valeva per la foto di prima)
           const chosen = archiveImageProject(selectedImg.src, selectedImg.linkTo);
           if (chosen) item.linkedImageProject = chosen.slug;
           else delete item.linkedImageProject;

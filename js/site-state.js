@@ -2,7 +2,11 @@
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
   "version": 502,
+<<<<<<< HEAD
   "updatedAt": "2026-11-24T15:36:59.068Z",
+=======
+  "updatedAt": "2026-11-24T16:35:56.570Z",
+>>>>>>> e48c8bd46a2c39d7085a2d34220bcd0c99e0c037
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -136,7 +140,8 @@ window.SITE_STATE = {
             "text": "free",
             "uid": "uid_1791600000002_4002",
             "linkedImageSrc": "images/core archive/tourette.JPG",
-            "linkedImageLinkTo": "archive"
+            "linkedImageLinkTo": "archive",
+            "linkedImageLabel": "part of tourette syndrome project"
           },
           {
             "type": "break",
@@ -210,14 +215,9 @@ window.SITE_STATE = {
       "project.homes.captionText.@homes/2 family.jpg": "upper-middle class",
       "project.stills.captionText.@stills/stills-1.jpg": "J. Kronester Bavaria Tea Set",
       "project.stills.captionText.@stills/stills-3.jpg": "furla messenger bag",
-      "project.mediality.captionText.@mediality/mediality-2.jpg": "body, morocco",
-      "project.mediality.captionText.@mediality/mediality-3.jpg": "bristol",
-      "project.mediality.captionText.@mediality/mediality-4.jpg": "leather arm",
-      "project.mediality.captionText.@mediality/mediality-5.jpg": "pp",
       "project.sofa.captionText.@sofa/sushi discotheque.jpg": "sushi disco",
       "project.whitening.captionText.@whitening/smile.jpg": "smile",
       "project.boudaries.captionText.@boudaries/lines-1-2.jpg": "window",
-      "project.mediality.captionText.@mediality/senza titolo-1.jpg": "free",
       "project.stills.captionText.@stills/upside down.jpg": "upside down, vase",
       "project.stills.captionText.@stills/stills-11.jpg": "mercedes back seat",
       "project.stills.captionText.@stills/stills-10.jpg": "jewelry store, rabat",
@@ -227,7 +227,6 @@ window.SITE_STATE = {
       "project.sospension.captionText.@sospension/estrangement-1.jpg": "untitled (part of a series)",
       "project.cement.captionText.@cement/employee-looking-outside-his-window.jpg": "employee looking outside \nhis window",
       "project.homes.captionText.@homes/epson0070-positive-2-2.jpg": "upper middle class, \nnorway",
-      "project.mediality.captionText.@mediality/mediality-6.jpg": "free",
       "project.homes.captionText.@homes/4 squatting.jpg": "wildfire",
       "project.homes.captionText.@homes/7 ongoing.jpg": "shadows",
       "project.counterpart.captionText.@counterpart/epson0059-positive-3-1.jpg": "me as a clock",
@@ -249,8 +248,7 @@ window.SITE_STATE = {
       "project.counterpart.captionText.@counterpart/recognition-6.jpg": "clean, no mess",
       "project.counterpart.captionText.@counterpart/k100pro92-4-2-2-1.jpg": "me as a white shape",
       "project.stills.captionText.@stills/neon.jpg": "neon light, \ncasa boschi di stefano",
-      "project.stills.captionText.@stills/murano.jpg": "murano, glasstress",
-      "project.mediality.captionText.@mediality/mediality-1.jpg": "arm"
+      "project.stills.captionText.@stills/murano.jpg": "murano, glasstress"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -290,14 +288,6 @@ window.SITE_STATE = {
     ],
     "site-layout-scope-migration-v1": 1,
     "site-order-overrides-v1": {
-      "project.mediality.imageOrder": [
-        0,
-        1,
-        2,
-        3,
-        4,
-        5
-      ],
       "project.homes.imageOrder": [
         0,
         9,
@@ -526,18 +516,6 @@ window.SITE_STATE = {
         "width": "50.8828px",
         "height": ""
       },
-      "project.mediality.image.2": {
-        "width": "559.39px",
-        "height": ""
-      },
-      "project.mediality.zoom.3": {
-        "width": "1519.8px",
-        "height": "986.157px"
-      },
-      "project.mediality.image.5": {
-        "width": "557.624px",
-        "height": ""
-      },
       "archive.page.page_1.zoom.uid_1791286888502_1417": {
         "width": "1519.8px",
         "height": "648.158px"
@@ -578,12 +556,8 @@ window.SITE_STATE = {
         "width": "944.355px",
         "height": "916.76px"
       },
-      "zoom:images/mediality/senza titolo-1.jpg": {
-        "width": "944.355px",
-        "height": "916.76px"
-      },
       "zoom:images/core archive/tourette.jpg": {
-        "width": "944.355px",
+        "width": "891.543px",
         "height": "916.76px"
       },
       "archive.page.page_1.zoom.uid_1791300380946_5945": {
@@ -826,30 +800,6 @@ window.SITE_STATE = {
         "width": "331.875px",
         "height": ""
       },
-      "project.mediality.image.0": {
-        "width": "354.827px",
-        "height": ""
-      },
-      "project.mediality.image.1": {
-        "width": "385.862px",
-        "height": ""
-      },
-      "project.mediality.image.3": {
-        "width": "382.442px",
-        "height": ""
-      },
-      "project.mediality.image.4": {
-        "width": "446.382px",
-        "height": ""
-      },
-      "project.mediality.zoom.4": {
-        "width": "1519.8px",
-        "height": "795.457px"
-      },
-      "zoom:images/mediality/mediality-5.jpg": {
-        "width": "1519.8px",
-        "height": "795.457px"
-      },
       "project.homes.image.2": {
         "width": "504.941px",
         "height": ""
@@ -897,14 +847,6 @@ window.SITE_STATE = {
       "zoom:images/homes/epson0070-positive-2-2.jpg": {
         "width": "1519.8px",
         "height": "948.695px"
-      },
-      "project.mediality.zoom.5": {
-        "width": "891.543px",
-        "height": "916.76px"
-      },
-      "zoom:images/mediality/mediality-6.jpg": {
-        "width": "891.543px",
-        "height": "916.76px"
       },
       "project.stills.image.22": {
         "width": "373.6px",
@@ -1312,14 +1254,6 @@ window.SITE_STATE = {
         "width": "270.885px",
         "height": ""
       },
-      "project.mediality.image.2": {
-        "width": "330px",
-        "height": ""
-      },
-      "project.mediality.image.5": {
-        "width": "330px",
-        "height": ""
-      },
       "project.cement.image.0": {
         "width": "248.207px",
         "height": ""
@@ -1334,22 +1268,6 @@ window.SITE_STATE = {
       },
       "project.counterpart.image.14": {
         "width": "265.478px",
-        "height": ""
-      },
-      "project.mediality.image.1": {
-        "width": "255.957px",
-        "height": ""
-      },
-      "project.mediality.image.3": {
-        "width": "247.523px",
-        "height": ""
-      },
-      "project.mediality.image.4": {
-        "width": "289.963px",
-        "height": ""
-      },
-      "project.mediality.image.0": {
-        "width": "259.988px",
         "height": ""
       }
     },
