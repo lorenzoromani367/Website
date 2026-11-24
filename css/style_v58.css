@@ -360,10 +360,22 @@ body.edit-mode .home-word-delete-btn:hover {
 .home-footer {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
   padding-top: 32px;
   font-size: 0.95rem;
   color: var(--ink);
+}
+
+/* «core archive» è la porta dell'archivio e deve essere la voce che si clicca di più: una freccia «→» dopo il nome dice «vai» e un po' più
+   di spazio sotto la stacca da contacts e about (idea B del 23 novembre, scelta dal proprietario il 24 novembre, SENZA la riga orizzontale che
+   nello schizzo stava sopra). La freccia è nel CSS e non nel testo del collegamento: il nome resta «core archive» (per chi legge lo schermo il
+   nome non cambia, e la freccia è la stessa «→» delle frecce delle gallerie). Un test (check.js, «Home») la pretende e pretende che non ci sia la riga. */
+.home-footer .footer-link[href="#/archive"] {
+  margin-bottom: 22px;
+}
+.home-footer .footer-link[href="#/archive"]::after {
+  content: " →";
+  content: " →" / "";
 }
 
 @media (hover: hover) {

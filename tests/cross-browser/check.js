@@ -32,6 +32,8 @@
          portata la pagina in fondo, ci resta mentre la galleria cambia foto da sola (la barra con i numeri e le frecce non scivola sotto lo schermo:
          checkPhoneBottom, followPhoneBottom in js/app_v58.js); su Chromium uno swipe a sinistra e uno a destra cambiano la foto di una, uno obliquo fa
          scorrere la pagina senza cambiarla, e dopo i gesti la galleria riprende da sola (checkPhoneSwipe);
+       - Home (dal 24 novembre): «core archive» ha la freccia «→» dopo il nome (nel CSS, il testo del collegamento resta «core archive»), sta su una riga,
+         ha un po' di spazio sotto e NESSUNA riga orizzontale (scelta del proprietario: idea B dello schizzo, senza la riga);
        - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
          content.js e le modifiche al file non comparivano). Il file si rilegge e si divide in paragrafi con un altro metodo da quello del sito.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
@@ -147,6 +149,14 @@ function measureInPage() {
   }
   // Zone in cui il dito non muove la pagina (touch-action: none): su telefono non ce ne devono essere, tranne il testo scorrevole (si trascina col dito: scelta del proprietario, 23 novembre)
   out.touchNone = [...document.querySelectorAll('#app *')].filter((e) => { if (e.matches('.description-track')) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).touchAction === 'none'; }).slice(0, 4).map((e) => `${e.tagName.toLowerCase()}${e.className && typeof e.className === 'string' ? '.' + e.className.split(' ')[0] : ''}`);
+  // Home: «core archive» è la porta dell'archivio. Dal 24 novembre ha una freccia «→» dopo il nome e un po' di spazio sotto (scelta del proprietario:
+  // idea B dello schizzo, SENZA la riga orizzontale). Si legge lo stile calcolato (la freccia sta nel CSS, non nel testo del collegamento).
+  const arch = document.querySelector('.home-footer a.footer-link[href="#/archive"]');
+  if (arch) {
+    const cs = getComputedStyle(arch); const footerCs = getComputedStyle(arch.parentElement);
+    const links = [...arch.parentElement.querySelectorAll('a.footer-link')]; const next = links[links.indexOf(arch) + 1];
+    out.homeArchive = { arrow: getComputedStyle(arch, '::after').content, before: getComputedStyle(arch, '::before').content, borderTop: cs.borderTopWidth, borderBottom: cs.borderBottomWidth, footerBorderTop: footerCs.borderTopWidth, h: +(arch.getBoundingClientRect().height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - parseFloat(cs.borderTopWidth) - parseFloat(cs.borderBottomWidth)).toFixed(2), fontSize: parseFloat(cs.fontSize), gapNext: next ? +(next.getBoundingClientRect().top - arch.getBoundingClientRect().bottom).toFixed(2) : null, text: arch.textContent.trim() };
+  }
   // Core Archive: lo "0" in fondo
   const words = [...document.querySelectorAll('.archive-word')];
   const zero = document.querySelector('.gallerybar .topbar-index'); const topIndex = document.querySelector('.topbar .topbar-index'); const title = document.querySelector('.topbar-title');
@@ -246,6 +256,14 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
       if (h.lines !== 3) problems.push(`il tasto "torna alla home" ha ${h.lines} lineette invece di 3`);
       // 44 px è il minimo di Apple; la misura si fa su pixel interi e ogni motore arrotonda a modo suo (Firefox dà 43 dove gli altri danno 44): 1 px di tolleranza
       if (context.__profile === 'telefono' && (h.hitW < 43 || h.hitH < 43)) problems.push(`il tasto "torna alla home" è troppo piccolo da toccare (${h.hitW} × ${h.hitH} px, minimo 44 × 44)`);
+    }
+    const ha = metrics.homeArchive;
+    if (ha) {
+      if (!String(ha.arrow).includes('→')) problems.push(`Home: «core archive» non ha la freccia «→» dopo il nome (contenuto trovato: ${ha.arrow})`);
+      if (ha.text !== 'core archive') problems.push(`Home: il nome del collegamento è «${ha.text}» invece di «core archive» (la freccia sta nel CSS, non nel testo)`);
+      if (parseFloat(ha.borderTop) > 0 || parseFloat(ha.borderBottom) > 0 || parseFloat(ha.footerBorderTop) > 0 || (ha.before && ha.before !== 'none' && ha.before !== 'normal')) problems.push(`Home: accanto a «core archive» c'è una riga orizzontale o un'aggiunta davanti (bordi ${ha.borderTop}/${ha.borderBottom}/${ha.footerBorderTop}): il proprietario ha scelto la freccia SENZA la riga`);
+      if (ha.h > ha.fontSize * 2) problems.push(`Home: «core archive →» va a capo (altezza del testo ${ha.h} px con un carattere di ${ha.fontSize} px)`);
+      if (ha.gapNext !== null && ha.gapNext < 20) problems.push(`Home: sotto «core archive» manca lo spazio che lo stacca da contacts e about (${ha.gapNext} px, ne servono almeno 20)`);
     }
     const a = metrics.archive;
     if (a) {
