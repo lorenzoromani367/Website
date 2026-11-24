@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 501,
-  "updatedAt": "2026-11-24T13:36:32.747Z",
+  "version": 502,
+  "updatedAt": "2026-11-24T15:36:59.068Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -285,7 +285,8 @@ window.SITE_STATE = {
     },
     "site-home-hidden-v1": [
       "p:bar",
-      "p:whitening"
+      "p:whitening",
+      "p:mediality"
     ],
     "site-layout-scope-migration-v1": 1,
     "site-order-overrides-v1": {
