@@ -14,8 +14,8 @@
          le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
          non si muove; in Mediality la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa);
          chi scende con la rotella viene portato in fondo subito, senza pause, anche se si ferma a metà; chi sale resta dove si ferma;
-       - testo scorrevole di una galleria: le stesse RIGHE al secondo su computer (6 px al secondo, MARQUEE_PX_PER_SEC) e su telefono (4,95 px al
-         secondo, MARQUEE_PX_PER_SEC_PHONE: il carattere è più piccolo), misurate sul testo vero e non lette dalla costante: fallisce se il sito lo
+       - testo scorrevole di una galleria: le stesse RIGHE al secondo su computer (3 px al secondo, MARQUEE_PX_PER_SEC; dal 24 novembre, prima 6) e su telefono
+         (2,475 px al secondo, MARQUEE_PX_PER_SEC_PHONE: il carattere è più piccolo), misurate sul testo vero e non lette dalla costante: fallisce se il sito lo
          sposta di più o di meno, se qualcosa lo scala o lo ferma, se le righe al secondo di telefono e computer non tornano, o se il testo
          SCENDE invece di salire (dal 15 novembre va dal basso verso l'alto; prima scendeva: marqueeAdvance in js/app_v58.js);
        - didascalie (gallerie e Core Archive): il peso del carattere è 700, il grassetto vero. Con un peso a metà (era 550) ogni browser sceglie a modo suo e
@@ -457,8 +457,9 @@ async function checkPhotoNotCut(context, base) {
 // Verso l'alto no: chi sale resta dove si ferma. Si prova con la rotella, come un utente: due scatti in giù dalla cima. Si guarda, fotogramma per
 // fotogramma, quando la pagina comincia a muoversi dopo il primo scatto (al massimo ASSIST_START_MS), il tratto più lungo in cui sta ferma tra
 // l'inizio e l'arrivo (al massimo ASSIST_STALL_MS: una pausa vera sarebbe mezzo secondo), con che velocità si muove al massimo (ASSIST_PEAK_PX_S: la
-// discesa deve muoversi COME LA GALLERIA, stessa curva e durata fino a 6 s, vedi assistGlideFor in js/app_v58.js; la prima versione partiva a piena
-// velocità in 50 ms e arrivava in 1 s, 2425 px al secondo: «velocissima, uno scatto») e dove arriva: il numero con le frecce deve stare dove dice il
+// discesa si muove con la curva della galleria, piano e morbida: dal 24 novembre al DOPPIO della sua velocità (circa 3 s per 800 px; prima, fino a 6 s),
+// vedi assistGlideFor in js/app_v58.js; la prima versione partiva a piena velocità in 50 ms e arrivava in 1 s, 2425 px al secondo: «velocissima, uno
+// scatto») e dove arriva: il numero con le frecce deve stare dove dice il
 // registro del sito (holdY). Poi un scatto in su, e la pagina non deve più muoversi.
 // Poi gli stessi controlli nei casi in cui sul Mac vero la discesa si fermava o non partiva (il browser di prova li manda tutti puliti; quelli veri no):
 //   - «trackpad vero»: la spinta che si spegne con in mezzo scatti nulli, di lato e di pochi pixel in su (il tremolio di un dito): non devono fermare niente;
@@ -471,11 +472,11 @@ async function checkPhotoNotCut(context, base) {
 const ASSIST_START_MS = 300;
 const ASSIST_STALL_MS = 250;
 const ASSIST_PEAK_WINDOW_MS = 400; // la velocità della discesa si misura su almeno così tanto: un blocco di 100-200 ms del computer, col recupero in un fotogramma, non è una velocità
-const ASSIST_PEAK_PX_S = 600; // la galleria con la sua curva su 6 s: 314 px/s per 823 px (2,3 volte la media), fino a ~440 se si sovrappone uno scorrimento automatico della galleria (misurato su Firefox); la discesa veloce di prima: 2425
-const ASSIST_MIN_MS_PER_PX = 4; // la discesa dura come la galleria (circa 6,2 ms per px fino a 6 s): meno di 4 ms per px (al massimo 3 s) è troppo presto, anche in un solo fotogramma
+const ASSIST_PEAK_PX_S = 1200; // la discesa di oggi (dal 24 novembre, il doppio di prima): ~630 px/s per 823 px (2,3 volte la media), fino a ~830 se si sovrappone uno scorrimento automatico della galleria (stima da Firefox); quella di prima: 314, fino a ~440; la versione «uno scatto»: 2425
+const ASSIST_MIN_MS_PER_PX = 2; // la discesa dura circa 3,1 ms per px (dal 24 novembre; prima 6,2) fino a 6 s: meno di 2 ms per px (al massimo 3 s) è troppo presto, anche in un solo fotogramma (la versione «uno scatto»: 1-2 ms per px)
 const ASSIST_MAX_STEP_PX = 120; // di quanto può muoversi la pagina tra due fotogrammi consecutivi (la discesa morbida: 6-15; un salto: centinaia)
 const ASSIST_ARRIVAL_PX = 12; // «arrivata»: a meno di così dal punto finale (la curva della galleria frena piano, gli ultimi pixel durano a lungo)
-const ASSIST_GLIDE_MIN_WAIT_MS = 6400; // la discesa dura fino a 6 s: prima di questo tempo non si dà per finita
+const ASSIST_GLIDE_MIN_WAIT_MS = 4200; // la discesa dura fino a circa 3,5 s (prima fino a 6): prima di questo tempo non si dà per finita
 
 // La coda di un gesto di trackpad come la manda un dito vero: la spinta che si spegne, con scatti di lato, nulli e di pochi pixel in su in mezzo
 const trackpadTail = () => {
@@ -552,7 +553,7 @@ function assistVerdict(label, m, problems) {
     if (m.stall > ASSIST_STALL_MS) problems.push(`${label}: la pagina sta ferma per ${Math.round(m.stall)} ms a metà strada (al massimo ${ASSIST_STALL_MS}): deve scendere di seguito, senza pause`);
     if (m.travelled >= 200 && m.endMs < Math.min(3000, m.travelled * ASSIST_MIN_MS_PER_PX)) problems.push(`${label}: la pagina fa ${Math.round(m.travelled)} px in ${Math.round(m.endMs)} ms (almeno ${Math.round(Math.min(3000, m.travelled * ASSIST_MIN_MS_PER_PX))} ms): arriva di colpo, non piano come la galleria`);
     if (m.maxStep > ASSIST_MAX_STEP_PX) problems.push(`${label}: tra due fotogrammi la pagina si sposta di ${Math.round(m.maxStep)} px (al massimo ${ASSIST_MAX_STEP_PX}): è un salto, non una discesa morbida`);
-    if (m.peak > ASSIST_PEAK_PX_S) problems.push(`${label}: la pagina scende troppo veloce, fino a ${Math.round(m.peak)} px al secondo (al massimo ${ASSIST_PEAK_PX_S}): deve muoversi come la galleria, piano e morbida (assistGlideFor in js/app_v58.js)`);
+    if (m.peak > ASSIST_PEAK_PX_S) problems.push(`${label}: la pagina scende troppo veloce, fino a ${Math.round(m.peak)} px al secondo (al massimo ${ASSIST_PEAK_PX_S}): deve restare una discesa piano e morbida, con la curva della galleria e al massimo al doppio della sua velocità (assistGlideFor in js/app_v58.js)`);
     if (after.glides > 1) problems.push(`${label}: la discesa è stata fermata a metà e rifatta partire ${after.glides} volte (deve essere una sola, di seguito)`);
     return true;
   }
@@ -597,7 +598,7 @@ async function checkAssist(context, base) {
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(700);
     await page.mouse.wheel(0, 100);
-    await page.waitForTimeout(1300); // (la discesa dura 6 s: a 1,3 s è a circa un terzo)
+    await page.waitForTimeout(650); // (la discesa dura circa 3 s dal 24 novembre, prima 6: a 0,65 s è dove prima era a 1,3 s, a circa un terzo)
     await page.mouse.wheel(0, -120);
     await page.waitForTimeout(1500);
     const cut1 = await page.evaluate(() => window.scrollY);
@@ -645,9 +646,11 @@ async function checkAssist(context, base) {
 // (il rettangolo del testo rispetto al suo riquadro: la pagina che si muove per conto suo, sul computer, non conta). Non entrano i fotogrammi oltre
 // i 100 ms (il sito non conta quel tempo, per non far saltare il testo dopo una pausa) e il giro che ricomincia (un salto di qualche centinaio di px,
 // invisibile: la seconda copia prende il posto della prima). Sul telefono il carattere è più piccolo (12,5 px invece di 15,2, riga di 20,7 invece di
-// 25,1 px): alla stessa velocità in pixel il testo farebbe passare il 21 % di righe in più al secondo, quindi il telefono va a 4,95 px al secondo
-// (dal 31 ottobre; prima 6) e il confronto tra i due formati si fa sulle RIGHE al secondo (0,239).
-const MARQUEE_SAMPLE_MS = 6000;
+// 25,1 px): alla stessa velocità in pixel il testo farebbe passare il 21 % di righe in più al secondo, quindi il telefono va più piano del computer
+// (dal 31 ottobre; dal 24 novembre il computer va a 3 px al secondo e il telefono a 2,475, la metà di prima) e il confronto tra i due formati si fa
+// sulle RIGHE al secondo (0,120). Si guarda per 12 s, non più 6: a metà velocità il tratto misurato resta di circa 36 px, come prima (su 18 px un
+// rettangolo arrotondato al pixel sbaglierebbe del 5 %, oltre la tolleranza).
+const MARQUEE_SAMPLE_MS = 12000;
 const MARQUEE_CODE_TOLERANCE = 0.01; // quello che il sito scrive: deve essere la costante (1 %)
 const MARQUEE_SEEN_TOLERANCE = 0.04; // quello che si vede: 4 % (su 36 px, un rettangolo arrotondato al pixel sbaglia anche di 1 px)
 const marqueeNum = (n, d = 2) => Number(n).toFixed(d).replace('.', ',');
@@ -696,7 +699,7 @@ async function checkMarqueeSpeed(context, base, seen) {
     if (!m) { problems.push(`testo scorrevole (${label}): non c'è il testo che scorre`); return problems; }
     const secs = m.dtSum / 1000;
     if (m.used < 30 || secs < 1.5) { console.log(`  [testo scorrevole] ${engine} ${label}: saltata (solo ${m.used} fotogrammi utili su ${m.frames})`); return problems; }
-    const expected = label === 'telefono' ? m.expectedPhone : (m.expectedComputer || 6); // (la costante del telefono, se la pagina non la espone, non si controlla in assoluto)
+    const expected = label === 'telefono' ? m.expectedPhone : (m.expectedComputer || 3); // (la costante del telefono, se la pagina non la espone, non si controlla in assoluto)
     // Il testo SALE: la transform e il rettangolo vanno verso l'alto, cioè gli spostamenti sommati sono NEGATIVI: si cambia segno, così "velocità" è
     // quanto sale al secondo (positiva se sale, negativa se scende) e il resto del controllo non cambia.
     const codeSpeed = -m.code / secs;

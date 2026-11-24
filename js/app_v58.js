@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -572,19 +572,19 @@ const siteStore = (() => {
    ------------------------------------------------------------------------- */
 const AUTOPLAY_DELAY = 3000;   // ms di pausa su ogni foto prima di avanzare (19 novembre: da 6000 a 3000, richiesta del proprietario; lo scorrimento, qui sotto, è rimasto di 6 s)
 const TRANSITION_MS = 6000;    // durata dello slide orizzontale tra le foto (già coerente con --transition-ms in style.css)
-const MARQUEE_PX_PER_SEC = 6;  // velocità dello scorrimento del testo (computer)
-// Su telefono il carattere è più piccolo (12,5 px invece di 15,2: riga di 20,7 invece di 25,1 px), quindi a 6 px al secondo
-// passerebbero il 21 % di righe in più al secondo. Per averne le stesse del computer (6 / 25,08 = 0,239 righe al secondo) il
-// testo va più piano: 6 × 20,68 / 25,08 = 4,95 px al secondo. Se si cambia il carattere del telefono va rifatto questo conto
-// (il controllo su GitHub confronta le righe al secondo di computer e telefono e diventa rosso se non tornano).
-const MARQUEE_PX_PER_SEC_PHONE = 4.95;
+const MARQUEE_PX_PER_SEC = 3;  // velocità dello scorrimento del testo (computer). 24 novembre: DIMEZZATA, da 6 a 3 («rallenta la velocità dello scroll del testo della metà»)
+// Su telefono il carattere è più piccolo (12,5 px invece di 15,2: riga di 20,7 invece di 25,1 px), quindi alla stessa velocità in pixel
+// passerebbe il 21 % di righe in più al secondo. Per averne le stesse del computer (3 / 25,08 = 0,120 righe al secondo) il
+// testo va più piano: 3 × 20,68 / 25,08 = 2,47 px al secondo (2,475: la metà dei 4,95 di prima). Se si cambia il carattere del telefono va
+// rifatto questo conto (il controllo su GitHub confronta le righe al secondo di computer e telefono e diventa rosso se non tornano).
+const MARQUEE_PX_PER_SEC_PHONE = 2.475;
 const marqueeSpeed = () => (isMobileViewport() ? MARQUEE_PX_PER_SEC_PHONE : MARQUEE_PX_PER_SEC);
 // VERSO del testo scorrevole: il testo SALE, dal basso verso l'alto (scelta del proprietario, 15 novembre; fino ad allora scendeva).
 // La striscia (testo, vuoto, copia del testo) è spostata di "pos - distanza" px, con pos tra 0 e la distanza del giro: col tempo pos
 // DIMINUISCE, quindi la striscia va verso l'alto. Arrivata a 0 pos ricomincia da "distanza": è lo stesso identico fotogramma, perché la
 // seconda copia del testo prende il posto della prima. È l'unico punto che decide il verso: lo usano tutti i testi scorrevoli (gallerie e
 // About) e il trascinamento col dito lo lascia com'è (il testo segue il dito), poi lo scorrimento riparte da lì, sempre verso l'alto.
-// La velocità (6 px al secondo, 4,95 su telefono) e la partenza (prima riga sul bordo alto del riquadro) non cambiano.
+// La velocità (dal 24 novembre 3 px al secondo, 2,475 su telefono; prima 6 e 4,95) e la partenza (prima riga sul bordo alto del riquadro) non cambiano il verso.
 const marqueeAdvance = (pos, distance, dt) => (((pos - dt * marqueeSpeed()) % distance) + distance) % distance;
 // Spazio minimo (px) tra la FINE del testo scorrevole e il suo ricominciare: è quello del testo "recognition".
 // Con meno spazio, appena si apre la pagina si vedeva la coda del testo sopra il suo inizio, come se partisse
@@ -5380,7 +5380,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
      (startBarHold). Due strade, la prima senza nessuna pausa:
      1. SUBITO (onAssistWheel, onAssistKey): al primo scatto di rotella, o primo movimento di trackpad, o tasto ↓ Pag↓ Spazio, verso il basso, il
         sito si prende il gesto (preventDefault: la pagina non si muove per conto suo) e porta la pagina in fondo con un movimento che parte subito,
-        piano, e frena piano: lo stesso della galleria (assistGlideFor: stessa curva e durata, fino a 6 s). Gli scatti che seguono (anche la coda di inerzia del trackpad, con i
+        piano, e frena piano: la stessa curva della galleria, al doppio della sua velocità (assistGlideFor, dal 24 novembre). Gli scatti che seguono (anche la coda di inerzia del trackpad, con i
         suoi scatti nulli, di lato o di pochi pixel in su) vengono assorbiti finché fanno parte della stessa sequenza (meno di ASSIST_GAP_MS tra uno
         e l'altro); un gesto nuovo ricomincia da capo. Se il browser non lascia annullare lo scatto (a quanto so Chrome può non permetterlo, per il
         resto di un gesto di trackpad, se il primo scatto non è stato annullato: qui non si può verificare) la discesa parte lo stesso: scrive la
@@ -5397,12 +5397,15 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
        poche ore prima, con «riduci movimento», saltava in fondo in un solo fotogramma: sul Mac del proprietario era «uno scatto», e la
        versione prima ancora non partiva proprio);
      - se uno scorrimento della galleria parte mentre la pagina scende, la discesa non si interrompe (goTo). */
-  // La discesa accompagnata si muove ESATTAMENTE come la galleria: la stessa curva (--transition-ease) e, per le strade lunghe, la stessa durata
-  // (--transition-ms, 6 s). Per le strade corte la durata scende con la strada (ASSIST_GLIDE_MS_PER_PX: 6 s per circa 800 px, cioè la stessa
-  // velocità media) ma non sotto ASSIST_GLIDE_MIN_MS. Partenza a 64 px/s, picco 2,3 volte la media (314 px/s per 823 px in 6 s). Una versione
-  // di poche ore prima partiva a piena velocità in 50 ms e finiva in 1 s (picco 2425 px/s, 40 px per fotogramma): «velocissima, uno scatto».
-  const ASSIST_GLIDE_MIN_MS = 1500;
-  const ASSIST_GLIDE_MS_PER_PX = 7.5;
+  // La discesa accompagnata si muove COME la galleria: la stessa curva (--transition-ease), partenza piano, picco 2,3 volte la media, arrivo piano.
+  // La durata cresce con la strada (ASSIST_GLIDE_MS_PER_PX) ma non scende sotto ASSIST_GLIDE_MIN_MS né sale oltre quella della galleria
+  // (--transition-ms, 6 s). Fino al 24 novembre era la stessa velocità media della galleria (7,5 ms per px: 6 s per circa 800 px, picco 314 px/s per
+  // 823 px; minimo 1,5 s). Il 24 novembre il proprietario ha chiesto di aumentarla («aumenta la velocità di scroll down per arrivare a fine pagina
+  // nelle pagine con gallerie»): ora IL DOPPIO, 3,75 ms per px (circa 3 s per 800 px, picco intorno ai 630 px/s) e minimo 0,75 s. Il limite verso
+  // l'alto resta lontano da quando era «velocissima, uno scatto»: una versione di poche ore dopo la prima partiva a piena velocità in 50 ms e finiva in
+  // 1 s (picco 2425 px/s, 40 px per fotogramma). Per regolarla basta questo numero: più basso = più veloce.
+  const ASSIST_GLIDE_MIN_MS = 750;
+  const ASSIST_GLIDE_MS_PER_PX = 3.75;
   function assistGlideFor(distance) {
     const galleryMs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--transition-ms")) || TRANSITION_MS;
     return { ms: Math.min(galleryMs, Math.max(ASSIST_GLIDE_MIN_MS, distance * ASSIST_GLIDE_MS_PER_PX)), curve: cssCubicBezier("--transition-ease", [0.25, 0.1, 0.25, 1]) };
