@@ -62,7 +62,7 @@ window.DYNAMIC_IMAGES = [
   "images/endless circle/youre-ugly-catherine.jpg",
   "images/fluoxetine/dinner.JPG",
   "images/homes/1 wine.jpg",
-  "images/homes/3 left.JPG",
+  "images/homes/3 left.jpg",
   "images/homes/4 squatting.jpg",
   "images/homes/5 church.jpg",
   "images/homes/6 huts.jpg",
@@ -77,12 +77,6 @@ window.DYNAMIC_IMAGES = [
   "images/maniac/maniac-4.jpg",
   "images/maniac/maniac-5.jpg",
   "images/maniac/maniac-6.JPG",
-  "images/mediality/mediality-1.jpg",
-  "images/mediality/mediality-2.jpg",
-  "images/mediality/mediality-3.jpg",
-  "images/mediality/mediality-4.jpg",
-  "images/mediality/mediality-5.jpg",
-  "images/mediality/mediality-6.JPG",
   "images/michelin/michelin-1.jpg",
   "images/michelin/michelin-2.jpg",
   "images/michelin/michelin-3.jpg",
@@ -200,7 +194,7 @@ window.IMAGE_SIZES = {
   "images/endless circle/youre-ugly-catherine.jpg": [600, 1500],
   "images/fluoxetine/dinner.JPG": [1000, 1250],
   "images/homes/1 wine.jpg": [2000, 1613],
-  "images/homes/3 left.JPG": [531, 618],
+  "images/homes/3 left.jpg": [531, 618],
   "images/homes/4 squatting.jpg": [1393, 2200],
   "images/homes/5 church.jpg": [1308, 1848],
   "images/homes/6 huts.jpg": [822, 973],
@@ -215,12 +209,6 @@ window.IMAGE_SIZES = {
   "images/maniac/maniac-4.jpg": [1467, 2200],
   "images/maniac/maniac-5.jpg": [2200, 1775],
   "images/maniac/maniac-6.JPG": [1111, 1700],
-  "images/mediality/mediality-1.jpg": [1309, 2200],
-  "images/mediality/mediality-2.jpg": [1491, 2200],
-  "images/mediality/mediality-3.jpg": [2200, 1577],
-  "images/mediality/mediality-4.jpg": [1416, 2200],
-  "images/mediality/mediality-5.jpg": [1308, 1604],
-  "images/mediality/mediality-6.JPG": [417, 361],
   "images/michelin/michelin-1.jpg": [1449, 2200],
   "images/michelin/michelin-2.jpg": [1727, 2200],
   "images/michelin/michelin-3.jpg": [1886, 2200],
@@ -289,7 +277,6 @@ window.IMAGE_TWINS = {
   "images/core archive/michelin-1.jpg": "images/michelin/michelin-1.jpg",
   "images/core archive/michelin-5.jpg": "images/michelin/michelin-5.jpg",
   "images/core archive/stasis1.jpg": "images/sospension/recognition-3.jpg",
-  "images/core archive/stills-11.jpg": "images/stills/stills-11.jpg",
-  "images/core archive/tourette.JPG": "images/mediality/mediality-6.JPG"
+  "images/core archive/stills-11.jpg": "images/stills/stills-11.jpg"
 };
-window.DYNAMIC_TEXTS = ["about.txt","cement.txt","complicity.txt","core_archive.txt","counterpart.txt","homes.txt","maniac.txt","mediality.txt","sospension.txt","stills.txt"];
+window.DYNAMIC_TEXTS = ["about.txt","cement.txt","complicity.txt","core_archive.txt","counterpart.txt","homes.txt","maniac.txt","sospension.txt","stills.txt"];

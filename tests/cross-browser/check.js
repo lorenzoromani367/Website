@@ -12,8 +12,11 @@
          che in alto c'è tra il "0" e il titolo;
        - galleria di un progetto, su computer: mentre la galleria scorre e la foto cambia altezza (foto più alta e più bassa) il numero con
          le frecce resta FERMO sullo schermo (sposta la pagina, non la barra: startBarHold in js/app_v58.js); su telefono la pagina
-         non si muove; in Mediality la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa);
+         non si muove; in Counterpart la foto non sale di scatto quando la successiva è più alta (al massimo 150 px al secondo: la stessa onda lenta della discesa);
          chi scende con la rotella viene portato in fondo subito, senza pause, anche se si ferma a metà; chi sale resta dove si ferma;
+       - galleria di un progetto, su computer, con i tasti ← e → premuti a intervalli di 1-2 s (anche a cavallo tra la prima e l'ultima foto, nei due versi):
+         la stessa foto non salta mai di colpo (più del 4 % del riquadro in un fotogramma), la velocità subito dopo una pressione resta almeno al 60 % di quella di
+         prima, e a fine corsa si vede la foto giusta senza copie rimaste nel binario (checkRapidNavigation; dal 24 novembre: dalla registrazione del proprietario);
        - testo scorrevole di una galleria: le stesse RIGHE al secondo su computer (3 px al secondo, MARQUEE_PX_PER_SEC; dal 24 novembre, prima 6) e su telefono
          (2,475 px al secondo, MARQUEE_PX_PER_SEC_PHONE: il carattere è più piccolo), misurate sul testo vero e non lette dalla costante: fallisce se il sito lo
          sposta di più o di meno, se qualcosa lo scala o lo ferma, se le righe al secondo di telefono e computer non tornano, o se il testo
@@ -23,7 +26,9 @@
        - Core Archive, foto ingrandita di una parola: ci sono le frecce avanti/indietro (visibili, dentro lo schermo, almeno 44 px; su computer un po'
          staccate dal bordo e senza toccare né la foto né il nome del progetto); → porta alla parola
          dopo, ← a quella prima, dalla prima ← porta all'ultima, il tasto → fa lo stesso; a passaggio finito non resta una copia della foto vecchia;
-         chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre); il colore: frecce e nome del progetto sono «più scuri» a riposo
+         chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre); se una parola ha una scritta scelta a mano al posto del nome del progetto
+         (linkedImageLabel, nella pagina data-zoom-label; dal 24 novembre) la foto ingrandita mostra quella, la scritta sta tutta nello schermo, non tocca la foto e non è un
+         collegamento (cliccandola si resta nel Core Archive); il colore: frecce e nome del progetto sono «più scuri» a riposo
          (opacità 0,7) e si schiariscono (1) col mouse sopra, tutti e due allo stesso modo (dal 20 novembre; il nome faceva l'opposto);
        - Stills con una finestra grande come un Mac (1788 × 1118): dopo la discesa con la rotella la pagina è in fondo e la barra con i numeri si vede
          (checkReachBottom; dal 20 novembre: con le foto nuove le misure salvate erano scivolate su foto sbagliate e la discesa si fermava 196 px prima);
@@ -344,9 +349,10 @@ async function checkFraming(context, base) {
 // movimento è la salita della foto sullo schermo. Dal 30 ottobre (growTransitionFor in js/app_v58.js) si allunga con la stessa onda lenta di 6 secondi
 // dell'accorciamento (velocità massima 2,3 volte la media: per 190 px circa 75 px al secondo); prima ci metteva da 0,2 a 2,3 s (da 200 a 2000 px al
 // secondo): la salita era uno «scatto» in confronto alla discesa. Si guarda il primo passo, tra il secondo e il quinto, in cui la foto in arrivo è più alta di
-// almeno RISE_MIN_PX (in Mediality, a 1440 × 900, dalla foto 3 alla 4: +190 px), così la prova non dipende da una misura precisa di una foto: chi
-// ridimensiona le foto con l'editor ne cambia l'altezza.
-const RISE_ROUTE = '#/project/mediality';
+// almeno RISE_MIN_PX (in Counterpart, a 1440 × 900, dalla foto 3 alla 4: +160 px; fino al 24 novembre era Mediality, +190 px, tolta dal sito), così la prova non
+// dipende da una misura precisa di una foto: chi ridimensiona le foto con l'editor ne cambia l'altezza.
+const RISE_ROUTE = '#/project/counterpart';
+const RISE_NAME = 'Counterpart';
 const RISE_MIN_PX = 60;
 const PHOTO_PEAK_PX_S = 150;
 async function checkPhotoRise(context, base) {
@@ -381,8 +387,8 @@ async function checkPhotoRise(context, base) {
     await page.keyboard.press('ArrowRight'); // il passo con la foto più alta
     const w = await watchPage(page, 3000);
     console.log(`  [salita della foto] ${context.__engine}: passo con +${Math.round(rise)} px (dalla foto ${from + 1} alla ${from + 2}); nei primi 3 s la pagina si sposta di ${Math.round(Math.abs(w.y1 - w.y0))} px, al massimo ${Math.round(w.peak)} px/s (limite ${PHOTO_PEAK_PX_S})`);
-    if (Math.abs(w.y1 - w.y0) < 40) problems.push(`in Mediality, con la foto più alta di ${Math.round(rise)} px in arrivo, la pagina non si è spostata abbastanza (${Math.round(Math.abs(w.y1 - w.y0))} px nei primi 3 s): la prova non ha misurato la salita`);
-    else if (w.peak > PHOTO_PEAK_PX_S) problems.push(`in Mediality, con la foto più alta di ${Math.round(rise)} px in arrivo, la foto sale troppo di scatto: ${Math.round(w.peak)} px al secondo al massimo (deve restare sotto i ${PHOTO_PEAK_PX_S}: la salita dev'essere lenta e dolce come la discesa, vedi growTransitionFor in js/app_v58.js)`);
+    if (Math.abs(w.y1 - w.y0) < 40) problems.push(`in ${RISE_NAME}, con la foto più alta di ${Math.round(rise)} px in arrivo, la pagina non si è spostata abbastanza (${Math.round(Math.abs(w.y1 - w.y0))} px nei primi 3 s): la prova non ha misurato la salita`);
+    else if (w.peak > PHOTO_PEAK_PX_S) problems.push(`in ${RISE_NAME}, con la foto più alta di ${Math.round(rise)} px in arrivo, la foto sale troppo di scatto: ${Math.round(w.peak)} px al secondo al massimo (deve restare sotto i ${PHOTO_PEAK_PX_S}: la salita dev'essere lenta e dolce come la discesa, vedi growTransitionFor in js/app_v58.js)`);
   } catch (e) {
     problems.push(`prova della salita della foto non riuscita: ${String(e.message).split('\n')[0]}`);
   }
@@ -769,6 +775,107 @@ async function checkBarHoldAfterUserScroll(context, base) {
   return problems;
 }
 
+/* ------------------------------ premere di nuovo prima che lo scorrimento sia finito ------------------------------ */
+// Segnalazione del proprietario, 24 novembre (registrazione schermo): cliccando nel margine di una galleria, o con le frecce della tastiera, la foto
+// «faceva degli scatti». Cause trovate e misurate (goTo in js/app_v58.js): premendo di nuovo prima che lo scorrimento (6 s) fosse finito, passando dalla
+// prima all'ultima foto (o al contrario) il binario SALTAVA di centinaia di px in un fotogramma (le copie della foto che chiudono il giro si toglievano e il
+// binario veniva rimesso a riposo come se fosse fermo); a ogni pressione la velocità crollava (lo scorrimento ripartiva dal suo inizio lento); il clic nel margine
+// poteva andare dalla parte sbagliata (confrontava il punto con la foto in arrivo, che passa sotto il puntatore).
+// Qui, su computer e per ogni motore, si premono i tasti ← e → a intervalli di 1-2 s (anche a cavallo del giro, in tutti e due i versi) e a ogni fotogramma si
+// guarda dove stanno le foto che si vedono nella finestra, seguendo la STESSA foto (anche se in quel momento è una copia: data-clone-of): i riancoraggi
+// invisibili cambiano il valore grezzo della trasformazione di molte larghezze senza che si veda nulla, quindi non si può leggere quello.
+// Fallisce se la stessa foto si sposta di colpo (più del 4 % della larghezza del riquadro in un fotogramma, a 60 Hz: lo scorrimento normale fa al massimo
+// il 2 %), se subito dopo una pressione la velocità scende sotto il 60 % di quella di prima (prima del 24 novembre: 20-40 %), o se a fine corsa non si vede la
+// foto giusta o restano copie nel binario. Il punto in cui il motore riceve il tasto si legge dalla pagina (keydown), non dal test: i ritardi del computer
+// di prova non spostano le finestre di misura.
+const RAPID_JUMP_FRACTION = 0.04;
+const RAPID_MIN_RATIO = 0.6;
+const RAPID_RUNS = [
+  { name: 'indietro dalla prima foto, a cavallo del giro', key: 'ArrowLeft', delta: -1, times: [700, 2300, 3300, 4950] },
+  { name: 'avanti oltre l\'ultima foto, a cavallo del giro', key: 'ArrowRight', delta: 1, times: [700, 1900, 3100, 4300, 5600] },
+];
+async function checkRapidNavigation(context, base) {
+  const problems = [];
+  if (context.__profile !== 'computer') return problems;
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+    await holdAutoplay(page);
+    await page.waitForTimeout(SETTLE_MS);
+    const visibleIndex = () => page.evaluate(() => {
+      const view = document.querySelector('.photo-viewport').getBoundingClientRect();
+      const reals = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')];
+      let best = -1; let bestWidth = -1;
+      reals.forEach((f, i) => { const r = f.getBoundingClientRect(); const w = Math.min(r.right, view.right) - Math.max(r.left, view.left); if (w > bestWidth) { bestWidth = w; best = i; } });
+      return { index: best, n: reals.length, clones: document.querySelectorAll('.photo-track > figure.photo-clone').length, width: view.width };
+    });
+    // (se l'avanzamento automatico era già partito prima che il mouse lo fermasse, si aspetta che quello scorrimento finisca: il punto di partenza dev'essere una foto ferma)
+    await page.waitForFunction(() => !document.querySelector('.photo-track').getAnimations().some((a) => a.playState === 'running'), null, { timeout: 9000 }).catch(() => {});
+    const first = await visibleIndex();
+    if (first.n < 6) return problems; // con poche foto i due percorsi non si distinguono
+    let expected = first.index;
+    for (const run of RAPID_RUNS) {
+      await page.evaluate(() => {
+        const track = document.querySelector('.photo-track'); const view = document.querySelector('.photo-viewport');
+        const st = { rows: [], presses: [], t0: performance.now(), stop: false };
+        window.__rapid = st;
+        document.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') st.presses.push(performance.now() - st.t0); }, true);
+        const tick = (ts) => {
+          const v = view.getBoundingClientRect(); const vis = []; let real = -1;
+          for (const f of track.children) {
+            const isClone = f.classList.contains('photo-clone');
+            if (!isClone) real++;
+            const r = f.getBoundingClientRect();
+            if (r.right > v.left + 1 && r.left < v.right - 1) vis.push(['p' + (isClone ? f.dataset.cloneOf : real), r.left - v.left, Math.min(r.right, v.right) - Math.max(r.left, v.left)]); // (la copia ha lo stesso nome della foto vera: quando una prende il posto dell'altra deve sembrare la stessa foto che non si è mossa)
+          }
+          st.rows.push([ts - st.t0, vis]);
+          if (!st.stop) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      const t0 = Date.now();
+      for (const t of run.times) {
+        const wait = t - (Date.now() - t0); if (wait > 0) await page.waitForTimeout(wait);
+        await page.keyboard.press(run.key);
+        expected += run.delta;
+      }
+      await page.waitForTimeout(6600); // l'ultimo scorrimento dura 6 s
+      const data = await page.evaluate(() => { window.__rapid.stop = true; return { rows: window.__rapid.rows, presses: window.__rapid.presses }; });
+      const end = await visibleIndex();
+      const want = ((expected % end.n) + end.n) % end.n;
+      expected = want; // (si riparte da qui, anche se il percorso fosse sbagliato: un solo errore alla volta)
+      // spostamento di ogni fotogramma (px, riportato a 60 Hz) della stessa foto: quella più visibile tra le due in comune
+      const moves = [];
+      for (let i = 1; i < data.rows.length; i++) {
+        const dt = data.rows[i][0] - data.rows[i - 1][0]; if (!(dt > 0) || dt > 120) continue;
+        const prev = new Map(data.rows[i - 1][1].map((v) => [v[0], v])); let best = null;
+        for (const v of data.rows[i][1]) { const q = prev.get(v[0]); if (q && (!best || Math.min(v[2], q[2]) > best.w)) best = { dx: v[1] - q[1], w: Math.min(v[2], q[2]) }; }
+        if (best) moves.push({ t: data.rows[i][0], dx: best.dx, dt });
+      }
+      const jumpLimit = end.width * RAPID_JUMP_FRACTION;
+      const jumps = moves.filter((m) => Math.abs(m.dx * (16.667 / m.dt)) > jumpLimit);
+      if (jumps.length) {
+        const worst = jumps.reduce((a, b) => (Math.abs(b.dx * (16.667 / b.dt)) > Math.abs(a.dx * (16.667 / a.dt)) ? b : a));
+        problems.push(`premendo ${run.key === 'ArrowLeft' ? '←' : '→'} a intervalli di 1-2 s (${run.name}) la foto salta di colpo ${jumps.length} ${jumps.length === 1 ? 'volta' : 'volte'}: fino a ${Math.abs(worst.dx * (16.667 / worst.dt)).toFixed(0)} px in un fotogramma (a 60 Hz; limite ${jumpLimit.toFixed(0)} px = il ${Math.round(RAPID_JUMP_FRACTION * 100)} % del riquadro)`);
+      }
+      const speed = (a, b) => { const s = moves.filter((m) => m.t >= a && m.t < b); return s.length ? s.reduce((x, m) => x + Math.abs(m.dx) / (m.dt / 1000), 0) / s.length : NaN; };
+      const slow = [];
+      data.presses.slice(1).forEach((tp, k) => {
+        const before = speed(tp - 130, tp - 30); const after = speed(tp + 30, tp + 130);
+        if (before > end.width * 0.08 && after < before * RAPID_MIN_RATIO) slow.push(`pressione ${k + 2}: da ${before.toFixed(0)} a ${after.toFixed(0)} px al secondo`);
+      });
+      if (slow.length) problems.push(`premendo ${run.key === 'ArrowLeft' ? '←' : '→'} di nuovo a scorrimento in corso (${run.name}) la velocità crolla subito dopo la pressione invece di continuare (deve restare almeno al ${Math.round(RAPID_MIN_RATIO * 100)} % di prima): ${slow.join('; ')}`);
+      if (end.index !== want || end.clones) problems.push(`dopo ${run.times.length} pressioni di ${run.key === 'ArrowLeft' ? '←' : '→'} (${run.name}) a fine corsa si vede la foto ${end.index + 1} invece della ${want + 1}${end.clones ? ` e restano ${end.clones} copie nel binario` : ''}`);
+    }
+  } catch (e) {
+    problems.push(`prova delle pressioni ravvicinate non riuscita: ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 /* ------------------------------ un motore intero ------------------------------ */
 // Peso del carattere delle didascalie: 700, il grassetto vero, in ogni motore e formato. Il carattere a macchina da scrivere ("Courier New") ha solo due
 // pesi, normale (400) e grassetto (700): con un peso a metà (era 550) ogni browser, e ogni versione, sceglie a modo suo, e sul computer del proprietario le
@@ -1129,6 +1236,34 @@ async function checkArchiveArrows(context, base) {
     s = await state();
     if (s.open || s.nav.some((n) => n.visible) || s.ghosts) problems.push(`Core Archive (${context.__profile}): dopo la chiusura restano aperti il riquadro, le frecce o una copia della foto (aperto ${s.open}, frecce visibili ${s.nav.filter((n) => n.visible).length}, copie ${s.ghosts})`);
     steps.push('chiusura');
+
+    // Scritta scelta a mano (dal 24 novembre, campo linkedImageLabel di una parola: oggi «free», «part of tourette syndrome project»): la foto ingrandita mostra
+    // quella scritta al posto del nome di un progetto, e NON è un collegamento (niente mano, il clic la attraversa: non porta in nessun progetto). Si prova la prima
+    // parola che ne ha una (nella pagina ha data-zoom-label); se nessuna ne ha, niente da controllare. La scritta deve stare tutta dentro lo schermo e non toccare la foto.
+    {
+      const custom = await page.evaluate(() => [...document.querySelectorAll('.archive-word-frame.is-linked[data-zoom-label]')].map((f) => f.dataset.zoomLabel));
+      if (custom.length) {
+        await page.locator('.archive-word-frame.is-linked[data-zoom-label]').first().click();
+        await page.waitForTimeout(1800);
+        const l = await page.evaluate(() => {
+          const el = document.querySelector('.lightbox-project-label'); const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); const f = document.getElementById('lightboxActiveFrame').getBoundingClientRect();
+          return { text: el.innerText, shown: cs.display !== 'none' && cs.visibility !== 'hidden', pointer: cs.pointerEvents, cursor: cs.cursor, left: r.left, right: r.right, top: r.top, bottom: r.bottom, photoRight: f.right, photoBottom: f.bottom, w: innerWidth, h: innerHeight };
+        });
+        if (l.text !== custom[0] || !l.shown) problems.push(`Core Archive (${context.__profile}): la foto ingrandita della parola con la scritta scelta a mano mostra «${l.text}» invece di «${custom[0]}»${l.shown ? '' : ' (e la scritta è nascosta)'}`);
+        else {
+          if (l.pointer !== 'none' || l.cursor === 'pointer') problems.push(`Core Archive (${context.__profile}): la scritta scelta a mano «${l.text}» sembra un collegamento (puntatore ${l.cursor}, eventi ${l.pointer}): non deve esserlo`);
+          if (l.left < 0 || l.right > l.w || l.bottom > l.h) problems.push(`Core Archive (${context.__profile}): la scritta scelta a mano «${l.text}» esce dallo schermo (da ${Math.round(l.left)} a ${Math.round(l.right)} su ${l.w}, fino a ${Math.round(l.bottom)} su ${l.h})`);
+          const touches = context.__profile === 'telefono' ? l.top < l.photoBottom - 1 : l.left + 10 < l.photoRight - 1; // (10 px di margine interno, che non si vede)
+          if (touches) problems.push(`Core Archive (${context.__profile}): la scritta scelta a mano «${l.text}» tocca la foto ingrandita`);
+          await page.mouse.click((l.left + l.right) / 2, (l.top + l.bottom) / 2);
+          await page.waitForTimeout(1300);
+          const after = await page.evaluate(() => ({ hash: location.hash, open: document.getElementById('lightboxActiveFrame').classList.contains('is-active') }));
+          if (after.hash !== ARCHIVE_ROUTE) problems.push(`Core Archive (${context.__profile}): cliccando la scritta scelta a mano «${l.text}» si va a ${after.hash} invece di restare nel Core Archive (non è un collegamento)`);
+          if (after.open) { await page.keyboard.press('Escape'); await page.waitForTimeout(1000); }
+        }
+        steps.push('scritta scelta a mano');
+      }
+    }
     console.log(`  [frecce core archive] ${context.__engine} ${context.__profile}: ${words.length} parole con foto; ${steps.join(', ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
   } catch (e) {
     problems.push(`prova delle frecce del Core Archive non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
@@ -1155,7 +1290,7 @@ async function runEngine(engine, base, origin, routes) {
       const withShot = profile.shots && SHOT_ROUTES.includes(route);
       const shotPath = path.join(OUT, 'schermate', `${slug}__${profileName.replace(/\s+/g, '-')}__${engine}.jpg`);
       const r = await checkPage(context, base, origin, route, withShot, shotPath);
-      if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); r.problems.push(...await checkAssist(context, base)); r.problems.push(...await checkMarqueeSpeed(context, base, marqueeSeen)); }
+      if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); r.problems.push(...await checkAssist(context, base)); r.problems.push(...await checkMarqueeSpeed(context, base, marqueeSeen)); r.problems.push(...await checkRapidNavigation(context, base)); }
       if (route === RISE_ROUTE) r.problems.push(...await checkPhotoRise(context, base));
       if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
       if (route === ABOUT_ROUTE) r.problems.push(...await checkAboutText(context, base));
@@ -1321,7 +1456,7 @@ function summary(all, diffs, started, visual) {
     const { PROJECTS } = new Function(`${src}\n;return { PROJECTS };`)();
     routes = ['', '#/', ...PROJECTS.map((p) => `#/project/${p.slug}`), '#/archive', '#/about', '#/contacts', '#/zzz']; // '' = l'indirizzo del sito senza nient'altro, come lo scrive un visitatore
   } catch (e) { console.error('Non riesco a leggere l\'elenco dei progetti da content.js:', e.message); process.exit(2); }
-  if (QUICK) routes = routes.filter((r) => ['#/', '#/project/boudaries', '#/project/mediality', '#/project/stills', '#/archive', '#/contacts', '#/zzz'].includes(r));
+  if (QUICK) routes = routes.filter((r) => ['#/', '#/project/boudaries', RISE_ROUTE, '#/project/stills', '#/archive', '#/contacts', '#/zzz'].includes(r));
   console.log(`Sito: ${LIVE_URL ? 'VERO ' + LIVE_URL : SITE + ' (' + origin + ')'} — ${routes.length} pagine × ${Object.keys(PROFILES).length} formati × ${ENGINES.length} motori (${ENGINES.join(', ')})`);
   const all = await Promise.all(ENGINES.map((engine) => runEngine(engine, base, origin, routes).catch((e) => ({ engine, version: '?', results: [{ engine, profile: '-', route: '-', problems: [`il motore non è partito: ${String(e.message).split('\n')[0]}`], metrics: null, shot: null }] }))));
   if (server) server.close();

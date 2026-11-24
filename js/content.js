@@ -297,18 +297,6 @@ mobile: { width: "320px", height: "363px" },
     ]
   },
   {
-    slug: "mediality",
-    name: "Mediality",
-    images: [
-      { caption: "", src: "images/mediality/mediality-1.jpg", zoomBox: { width: "1519.8px", height: "1022px" }, width: "354.827px" },
-      { caption: "", src: "images/mediality/mediality-2.jpg", width: "385.862px" },
-      { caption: "", src: "images/mediality/mediality-3.jpg", zoomBox: { width: "915.969px", height: "916.76px" }, width: "559.39px" },
-      { caption: "", src: "images/mediality/mediality-4.jpg", width: "382.442px", zoomBox: { width: "1519.8px", height: "986.157px" } },
-      { caption: "", src: "images/mediality/mediality-5.jpg", width: "446.382px", zoomBox: { width: "1519.8px", height: "795.457px" } },
-      { caption: "", src: "images/mediality/senza titolo-1-2.JPG", width: "503.383px", zoomBox: { width: "1519.8px", height: "994.45px" } },
-    ]
-  },
-  {
     slug: "sofa",
     name: "Sofa",
     images: [{ caption: "", src: "images/sofa/sushi discotheque.jpg", width: "380px", height: "auto", align: "left", offset: { x: 0, y: 52 }, zoomBox: { width: "1519.8px", height: "796.246px" } }]
@@ -464,7 +452,8 @@ const ARCHIVE = {
                   "text": "free",
                   "uid": "uid_1791600000002_4002",
                   "linkedImageSrc": "images/core archive/tourette.JPG",
-                  "linkedImageLinkTo": "archive"
+                  "linkedImageLinkTo": "archive",
+                  "linkedImageLabel": "part of tourette syndrome project"
               },
               {
                   "type": "break",
