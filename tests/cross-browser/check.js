@@ -27,7 +27,7 @@
          staccate dal bordo e senza toccare né la foto né il nome del progetto); → porta alla parola
          dopo, ← a quella prima, dalla prima ← porta all'ultima, il tasto → fa lo stesso; a passaggio finito non resta una copia della foto vecchia;
          chiudendo le frecce spariscono (checkArchiveArrows; dal 19 novembre); se una parola ha una scritta scelta a mano al posto del nome del progetto
-         (linkedImageLabel, nella pagina data-zoom-label; dal 24 novembre) la foto ingrandita mostra quella, la scritta sta tutta nello schermo, non tocca la foto e non è un
+         (ARCHIVE.photoLabels in content.js, nella pagina data-zoom-label; dal 24 novembre) la foto ingrandita mostra quella, la scritta sta tutta nello schermo, non tocca la foto e non è un
          collegamento (cliccandola si resta nel Core Archive); il colore: frecce e nome del progetto sono «più scuri» a riposo
          (opacità 0,7) e si schiariscono (1) col mouse sopra, tutti e due allo stesso modo (dal 20 novembre; il nome faceva l'opposto);
        - Stills con una finestra grande come un Mac (1788 × 1118): dopo la discesa con la rotella la pagina è in fondo e la barra con i numeri si vede
@@ -1237,7 +1237,7 @@ async function checkArchiveArrows(context, base) {
     if (s.open || s.nav.some((n) => n.visible) || s.ghosts) problems.push(`Core Archive (${context.__profile}): dopo la chiusura restano aperti il riquadro, le frecce o una copia della foto (aperto ${s.open}, frecce visibili ${s.nav.filter((n) => n.visible).length}, copie ${s.ghosts})`);
     steps.push('chiusura');
 
-    // Scritta scelta a mano (dal 24 novembre, campo linkedImageLabel di una parola: oggi «free», «part of tourette syndrome project»): la foto ingrandita mostra
+    // Scritta scelta a mano (dal 24 novembre, ARCHIVE.photoLabels in content.js, per foto: oggi quella di «free», «part of tourette syndrome project»): la foto ingrandita mostra
     // quella scritta al posto del nome di un progetto, e NON è un collegamento (niente mano, il clic la attraversa: non porta in nessun progetto). Si prova la prima
     // parola che ne ha una (nella pagina ha data-zoom-label); se nessuna ne ha, niente da controllare. La scritta deve stare tutta dentro lo schermo e non toccare la foto.
     {

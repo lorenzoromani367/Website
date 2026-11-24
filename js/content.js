@@ -322,6 +322,12 @@ const FOOTER_LINKS = [
    ------------------------------------------------------------------------- */
 const ARCHIVE = {
   title: "core archive",
+  // Scritte scelte a mano da mostrare accanto a una foto ingrandita del Core Archive al posto del nome di un progetto (non sono collegamenti).
+  // Legate alla FOTO (percorso, maiuscole indifferenti), non alla parola: valgono per ogni parola che porta a quella foto, e non dipendono
+  // dai dati salvati in modalità modifica (js/site-state.js, memoria del browser): se quelli non si leggono, la scritta c'è comunque.
+  photoLabels: {
+    "images/core archive/tourette.JPG": "part of tourette syndrome project",
+  },
     pages: [
       {
           "id": "page_1",
@@ -452,8 +458,7 @@ const ARCHIVE = {
                   "text": "free",
                   "uid": "uid_1791600000002_4002",
                   "linkedImageSrc": "images/core archive/tourette.JPG",
-                  "linkedImageLinkTo": "archive",
-                  "linkedImageLabel": "part of tourette syndrome project"
+                  "linkedImageLinkTo": "archive"
               },
               {
                   "type": "break",

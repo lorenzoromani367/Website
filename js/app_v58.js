@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality + scritta free legata alla foto";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -3598,8 +3598,8 @@ function warmLightboxPhoto(src) {
 }
 
 // nav (solo Core Archive, parole con foto): l'elenco in cui questa apertura si mette, nell'ordine delle parole; serve alle frecce (zoomGo).
-// labelText (solo Core Archive): una scritta scelta a mano da mostrare accanto alla foto al posto del nome di un progetto (campo linkedImageLabel della
-// parola). Non porta da nessuna parte: non è un collegamento (niente puntatore, il clic la attraversa e chiude l'ingrandimento).
+// labelText (solo Core Archive): una scritta scelta a mano da mostrare accanto alla foto al posto del nome di un progetto (ARCHIVE.photoLabels in
+// content.js: vedi archivePhotoLabel). Non porta da nessuna parte: non è un collegamento (niente puntatore, il clic la attraversa e chiude l'ingrandimento).
 function makeZoomable(frame, img, linkTo, sizeKey, zoomBox, nav, labelText) {
   const hasLabel = Boolean(linkTo || labelText); // c'è una scritta accanto alla foto (nome del progetto, o scritta scelta a mano)
   const warmThisPhoto = () => { if (!isEditMode()) warmLightboxPhoto(img.currentSrc || img.src); };
@@ -7136,8 +7136,9 @@ function renderArchivePagesMode(param) {
         // Accanto alla foto ingrandita compare il progetto a cui appartiene (cliccandolo si apre quel progetto)
         const project = archiveImageProject(src, poolImg && poolImg.linkTo, item.linkedImageProject);
         // L'ultimo parametro: l'elenco delle parole con foto, nell'ordine in cui compaiono: le frecce dell'ingrandimento passano di una all'altra
-        // Una scritta scelta a mano (linkedImageLabel, es. «part of tourette syndrome project») prende il posto del nome del progetto: non è un collegamento
-        const customLabel = typeof item.linkedImageLabel === "string" ? item.linkedImageLabel.trim() : "";
+        // Una scritta scelta a mano per questa FOTO (ARCHIVE.photoLabels in content.js, es. «part of tourette syndrome project») prende il posto del nome del
+        // progetto: non è un collegamento. Sta in content.js e non nei dati salvati in modalità modifica, così c'è anche se quelli non si leggono.
+        const customLabel = archivePhotoLabel(src);
         if (customLabel) frame.dataset.zoomLabel = customLabel; // (lo leggono i controlli automatici)
         makeZoomable(frame, hiddenImg, customLabel || !project ? null : `project/${project.slug}`, `${galleryKey}.zoom.${item.uid}`, poolImg && poolImg.zoomBox, archiveZoomNav, customLabel);
         frame.classList.add("is-linked");
@@ -7150,7 +7151,6 @@ function renderArchivePagesMode(param) {
         showArchivePoolModal(page, pages, "link", (selectedImg) => {
           item.linkedImageSrc = selectedImg.src;
           item.linkedImageLinkTo = selectedImg.linkTo;
-          delete item.linkedImageLabel; // (una scritta scelta a mano valeva per la foto di prima)
           const chosen = archiveImageProject(selectedImg.src, selectedImg.linkTo);
           if (chosen) item.linkedImageProject = chosen.slug;
           else delete item.linkedImageProject;
@@ -7433,6 +7433,15 @@ function archiveImageProject(src, linkTo, savedSlug) {
   if (bySlug(prefix)) return bySlug(prefix);
   if (linkTo && /^project\//.test(linkTo)) return bySlug(linkTo.split("/")[1]);
   return null;
+}
+
+// La scritta scelta a mano per una foto del Core Archive (ARCHIVE.photoLabels in content.js: percorso della foto → testo, maiuscole indifferenti), o "".
+function archivePhotoLabel(src) {
+  const labels = (typeof ARCHIVE !== "undefined" && ARCHIVE && ARCHIVE.photoLabels) || {};
+  const path = photoPathOf(src);
+  if (!path) return "";
+  const key = Object.keys(labels).find((candidate) => candidate.toLowerCase() === path.toLowerCase());
+  return key && typeof labels[key] === "string" ? labels[key].trim() : "";
 }
 
 function showArchivePoolModal(page, pages, mode = "add", onSelect = null) {

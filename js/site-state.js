@@ -1,12 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 502,
-<<<<<<< HEAD
-  "updatedAt": "2026-11-24T15:36:59.068Z",
-=======
-  "updatedAt": "2026-11-24T16:35:56.570Z",
->>>>>>> e48c8bd46a2c39d7085a2d34220bcd0c99e0c037
+  "version": 520,
+  "updatedAt": "2026-11-24T17:34:56.186Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -140,8 +136,7 @@ window.SITE_STATE = {
             "text": "free",
             "uid": "uid_1791600000002_4002",
             "linkedImageSrc": "images/core archive/tourette.JPG",
-            "linkedImageLinkTo": "archive",
-            "linkedImageLabel": "part of tourette syndrome project"
+            "linkedImageLinkTo": "archive"
           },
           {
             "type": "break",
