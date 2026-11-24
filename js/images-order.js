@@ -35,7 +35,7 @@ window.IMAGE_ORDER = [
   "images/core archive/tourette.JPG",
   "images/fluoxetine/dinner.JPG",
   "images/homes/1 wine.jpg",
-  "images/homes/3 left.jpg",
+  "images/homes/3 left.JPG",
   "images/homes/4 squatting.jpg",
   "images/homes/5 church.jpg",
   "images/homes/6 huts.jpg",
