@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 520,
-  "updatedAt": "2026-11-24T17:34:56.186Z",
+  "version": 534,
+  "updatedAt": "2026-11-25T10:48:53.231Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -243,7 +243,8 @@ window.SITE_STATE = {
       "project.counterpart.captionText.@counterpart/recognition-6.jpg": "clean, no mess",
       "project.counterpart.captionText.@counterpart/k100pro92-4-2-2-1.jpg": "me as a white shape",
       "project.stills.captionText.@stills/neon.jpg": "neon light, \ncasa boschi di stefano",
-      "project.stills.captionText.@stills/murano.jpg": "murano, glasstress"
+      "project.stills.captionText.@stills/murano.jpg": "murano, glasstress",
+      "project.stills.captionText.@stills/stills-7.jpg": "grandma's perfume bottle"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -716,7 +717,7 @@ window.SITE_STATE = {
         "height": "749.334px"
       },
       "project.stills.image.17": {
-        "width": "604.919px",
+        "width": "544.833px",
         "height": ""
       },
       "project.homes.image.6": {
@@ -880,7 +881,7 @@ window.SITE_STATE = {
         "height": "783.309px"
       },
       "project.stills.image.23": {
-        "width": "554.846px",
+        "width": "512.411px",
         "height": ""
       },
       "project.counterpart.image.0": {
@@ -1029,6 +1030,30 @@ window.SITE_STATE = {
       },
       "project.stills.captionSize.@stills/neon.jpg": {
         "width": "196.961px",
+        "height": ""
+      },
+      "project.stills.image.13": {
+        "width": "416.414px",
+        "height": ""
+      },
+      "project.stills.image.10": {
+        "width": "462.221px",
+        "height": ""
+      },
+      "project.stills.image.8": {
+        "width": "395.616px",
+        "height": ""
+      },
+      "project.stills.image.7": {
+        "width": "367.115px",
+        "height": ""
+      },
+      "project.stills.image.6": {
+        "width": "404.55px",
+        "height": ""
+      },
+      "project.stills.image.2": {
+        "width": "384.793px",
         "height": ""
       }
     },
