@@ -292,11 +292,22 @@ async function checkPage(context, base, origin, route, withShot, shotPath) {
 /* ------------------------------ inquadratura in fondo ------------------------------ */
 // Quando la galleria scorre la foto cambia altezza (quasi sempre) e con lei la pagina: su computer la barra col numero e le frecce deve restare
 // ferma sullo schermo, a muoversi deve essere la foto (startBarHold in js/app_v58.js: la pagina viene spostata a ogni fotogramma di quanto
-// basta). Si guarda la posizione della barra sullo schermo mentre cambia la foto: prima +62 px, poi +114, +60 e -177 (Complicity,
-// #/project/boudaries); non deve spostarsi di più di 3 px (1-2 px sono l'arrotondamento a pixel interi del browser). Su telefono la pagina
-// non si deve muovere. Si usa una pagina nuova: dopo un movimento della pagina fatto dall'utente (anche solo uno "scroll" mandato dal
-// test) l'inquadratura iniziale aspetta 15 s per non portare via la pagina a chi la sta leggendo.
+// basta). Si guarda la posizione della barra sullo schermo mentre cambia la foto, un passo alla volta col tasto →; non deve spostarsi di più
+// di 3 px (1-2 px sono l'arrotondamento a pixel interi del browser). Su telefono la pagina non si deve muovere.
+// Le altezze delle foto NON sono scritte qui: si leggono dalla pagina (altezza del riquadro con ciascuna foto, come in checkPhotoRise) e si va
+// avanti dalla foto 2 finché non si sono visti un cambio di altezza verso l'alto e uno verso il basso di almeno FRAMING_BIG_STEP_PX (al massimo
+// FRAMING_MAX_STEPS passi). Se Boudaries (Complicity) non ne ha, si completa in FRAMING_BACKUP_ROUTE (Counterpart: oggi -80 e +98 px).
+// Che la pagina si sposti si pretende solo nei passi grandi: dove due foto sono alte uguali (o quasi) non c'è niente da inseguire, e una pagina
+// ferma lì è giusta. Fino al 25 novembre i passi erano quattro, con misure scritte nella prova (+62, +114, +60 e -177 px): da tempo non erano
+// più quelle vere (all'ultimo commit verde, 4be53e7, erano +4, 0 e -8 px: la prova passava, ma con cambi di altezza minuscoli); il 25 novembre
+// il proprietario ha cambiato le misure di Boudaries, al quarto passo le due foto sono risultate alte uguali, la pagina non si muoveva
+// (giustamente) e la prova dava errore a ogni corsa, su tutti e tre i motori, con la barra ferma come doveva.
+// Si usa una pagina nuova: dopo un movimento della pagina fatto dall'utente (anche solo uno "scroll" mandato dal test) l'inquadratura iniziale
+// aspetta 15 s per non portare via la pagina a chi la sta leggendo.
 const FRAMING_ROUTE = '#/project/boudaries';
+const FRAMING_BACKUP_ROUTE = '#/project/counterpart'; // dove cercare i passi grandi che Boudaries non avesse
+const FRAMING_BIG_STEP_PX = 20; // da quanto in su un cambio di altezza «conta»: la pagina deve seguirlo e la prova lo conta come provato
+const FRAMING_MAX_STEPS = 8; // passi al massimo per galleria
 const BAR_TOLERANCE_PX = 3;
 // Posizione della barra e della pagina sullo schermo, fotogramma per fotogramma, per "ms" millisecondi. "peak": velocità massima della pagina
 // (pixel al secondo, sul tratto più breve di almeno PEAK_WINDOW_MS), cioè con quale velocità sale o scende la foto quando la barra sta ferma.
@@ -309,48 +320,79 @@ const watchPage = (page, ms) => page.evaluate(([duration, windowMs]) => new Prom
   const tick = () => { setTimeout(() => { tops.push(bar.getBoundingClientRect().top); ys.push(window.scrollY); ts.push(performance.now()); }, 0); if (performance.now() - t0 < duration) requestAnimationFrame(tick); else setTimeout(() => { let peak = 0; let j = 0; for (let k = 1; k < ys.length; k++) { while (j + 1 < k && ts[k] - ts[j + 1] >= windowMs) j++; const dt = ts[k] - ts[j]; if (dt >= windowMs) peak = Math.max(peak, Math.abs(ys[k] - ys[j]) / dt * 1000); } resolve({ min: Math.min(...tops), max: Math.max(...tops), last: tops[tops.length - 1], y0: ys[0], y1: ys[ys.length - 1], peak }); }, 60); };
   requestAnimationFrame(tick);
 }), [ms, PEAK_WINDOW_MS]);
+// Altezza del riquadro con ciascuna foto in vista: fino al punto più basso tra foto, didascalia e figura (come updateViewportHeight). Si legge a
+// pagina ferma, prima del primo scorrimento: le differenze tra una foto e la successiva sono i cambi di altezza che la pagina dovrà inseguire.
+const readFrameHeights = (page) => page.evaluate(() => {
+  const top = document.querySelector('.photo-viewport').getBoundingClientRect().top;
+  return [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')].map((figure) => {
+    let bottom = figure.getBoundingClientRect().bottom;
+    figure.querySelectorAll('.photo-frame, .caption-box').forEach((node) => { bottom = Math.max(bottom, node.getBoundingClientRect().bottom); });
+    return bottom - top;
+  });
+});
 async function checkFraming(context, base) {
   const problems = [];
-  const page = await context.newPage();
-  try {
-    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${FRAMING_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
-    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
-    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
-    await holdAutoplay(page);
-    await page.waitForTimeout(SETTLE_MS);
-    const read = () => page.evaluate(() => ({ y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
-    const watchBar = (ms) => watchPage(page, ms);
-    const before = await read();
-    if (before.photos < 2 || before.max <= 8) return problems; // una foto sola, o la pagina sta tutta nella finestra: niente da tenere fermo
-    if (context.__profile === 'telefono') {
-      await page.keyboard.press('ArrowRight');
-      await page.waitForTimeout(2500);
-      const after = await read();
-      if (Math.abs(after.y - before.y) > 3) problems.push(`su telefono la galleria che scorre ha mosso la pagina (da ${Math.round(before.y)} a ${Math.round(after.y)} px): la barra ferma è solo per il computer`);
-      return problems;
+  const phone = context.__profile === 'telefono';
+  const seen = { steps: 0, up: 0, down: 0, drift: 0 }; // passi fatti, passi grandi verso l'alto e verso il basso già provati, scarto più grande della barra
+  for (const route of phone ? [FRAMING_ROUTE] : [FRAMING_ROUTE, FRAMING_BACKUP_ROUTE]) {
+    if (route === FRAMING_BACKUP_ROUTE && (problems.length || (seen.up && seen.down))) break; // c'è già un errore, o Boudaries ha dato un passo grande in su e uno in giù
+    const page = await context.newPage();
+    try {
+      await walkFraming(context, page, base, route, seen, problems);
+    } catch (e) {
+      problems.push(`prova della barra ferma non riuscita${route === FRAMING_ROUTE ? '' : ` in ${route}`}: ${String(e.message).split('\n')[0]}`);
     }
-    // 1) primo scorrimento (+62 px): la pagina scende fino alla posizione di serie; si aspetta che arrivi
-    await page.keyboard.press('ArrowRight');
-    await page.waitForTimeout(2600);
-    const first = await read();
-    if (first.y < before.y + 20) { problems.push(`la galleria scorre ma la pagina non si porta alla posizione di serie (è a ${Math.round(first.y)} px, era a ${Math.round(before.y)} px)`); return problems; }
-    const base1 = (await watchBar(150)).last;
-    // 2) foto più alta (+114 px), poi (+60 px), poi più bassa (-177 px, sei secondi): la barra non si muove
-    const windows = [['foto più alta di 114 px', 2300], ['foto più alta di 60 px', 1800], ['foto più bassa di 177 px', 4200]];
-    for (let i = 0; i < windows.length; i++) {
-      const [label, ms] = windows[i];
-      await page.keyboard.press('ArrowRight');
-      const w = await watchBar(ms);
-      if (w.max - w.min > BAR_TOLERANCE_PX) problems.push(`con la ${label} il numero con le frecce si sposta sullo schermo di ${(w.max - w.min).toFixed(1)} px (deve restare fermo: massimo ${BAR_TOLERANCE_PX} px)`);
-      else if (Math.abs(w.last - base1) > BAR_TOLERANCE_PX) problems.push(`con la ${label} il numero con le frecce finisce ${(w.last - base1).toFixed(1)} px più in là di dov'era`);
-      if (Math.abs(w.y1 - w.y0) < 1 && label !== 'foto più alta di 60 px') problems.push(`con la ${label} la pagina non si è spostata: la barra è ferma per caso?`);
-      await page.waitForTimeout(700);
-    }
-  } catch (e) {
-    problems.push(`prova della barra ferma non riuscita: ${String(e.message).split('\n')[0]}`);
+    await page.close();
   }
-  await page.close();
+  if (!phone) {
+    const missing = [seen.up ? '' : 'con la foto più alta', seen.down ? '' : 'con la foto più bassa'].filter(Boolean);
+    console.log(`  [barra ferma] ${context.__engine} ${context.__profile}: ${seen.steps} passi col tasto →, ${seen.up} con la foto più alta e ${seen.down} con la foto più bassa di almeno ${FRAMING_BIG_STEP_PX} px; il numero con le frecce si è mosso al massimo di ${seen.drift.toFixed(1)} px (limite ${BAR_TOLERANCE_PX})${missing.length && !problems.length ? ` · NON PROVATO ${missing.join(' e ')}: nessun cambio di altezza di almeno ${FRAMING_BIG_STEP_PX} px in ${FRAMING_ROUTE} né in ${FRAMING_BACKUP_ROUTE}` : ''}`);
+  }
   return problems;
+}
+async function walkFraming(context, page, base, route, seen, problems) {
+  const primary = route === FRAMING_ROUTE;
+  const where = primary ? '' : ` in ${route.replace('#/project/', '')}`; // nei messaggi, il nome della galleria solo se non è quella di serie
+  await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${route}`, { waitUntil: 'load', timeout: 45000 });
+  await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+  await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
+  await holdAutoplay(page);
+  await page.waitForTimeout(SETTLE_MS);
+  const read = () => page.evaluate(() => ({ y: window.scrollY, max: document.documentElement.scrollHeight - window.innerHeight, photos: document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)').length }));
+  const watchBar = (ms) => watchPage(page, ms);
+  const before = await read();
+  if (before.photos < 2 || before.max <= 8) return; // una foto sola, o la pagina sta tutta nella finestra: niente da tenere fermo
+  if (context.__profile === 'telefono') {
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(2500);
+    const after = await read();
+    if (Math.abs(after.y - before.y) > 3) problems.push(`su telefono la galleria che scorre ha mosso la pagina (da ${Math.round(before.y)} a ${Math.round(after.y)} px): la barra ferma è solo per il computer`);
+    return;
+  }
+  const heights = await readFrameHeights(page);
+  // 1) primo scorrimento: la pagina scende fino alla posizione di serie; si aspetta che arrivi
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(2600);
+  const first = await read();
+  if (first.y < before.y + 20) { problems.push(`la galleria scorre${where} ma la pagina non si porta alla posizione di serie (è a ${Math.round(first.y)} px, era a ${Math.round(before.y)} px)`); return; }
+  const base1 = (await watchBar(150)).last;
+  // 2) i passi successivi, uno per foto, dalla 2 alla 3: la barra non si muove. Si va avanti finché non si sono visti un passo grande in su e uno in giù (almeno 3 passi in Boudaries)
+  let walked = 0;
+  for (let i = 1; i < heights.length - 1 && walked < FRAMING_MAX_STEPS; i++) {
+    const d = heights[i + 1] - heights[i]; // di quanto cambia l'altezza del riquadro (positivo: la foto in arrivo è più alta)
+    const big = Math.abs(d) >= FRAMING_BIG_STEP_PX;
+    const label = `${Math.abs(d) < 1 ? 'foto della stessa altezza' : `foto più ${d > 0 ? 'alta' : 'bassa'} di ${Math.round(Math.abs(d))} px`}${where} (dalla foto ${i + 1} alla ${i + 2})`;
+    await page.keyboard.press('ArrowRight');
+    const w = await watchBar(Math.round(Math.min(4500, 1800 + 14 * Math.abs(d)))); // il tempo della salita o discesa piano piano della foto: più è grande il cambio, più dura
+    if (w.max - w.min > BAR_TOLERANCE_PX) problems.push(`con la ${label} il numero con le frecce si sposta sullo schermo di ${(w.max - w.min).toFixed(1)} px (deve restare fermo: massimo ${BAR_TOLERANCE_PX} px)`);
+    else if (Math.abs(w.last - base1) > BAR_TOLERANCE_PX) problems.push(`con la ${label} il numero con le frecce finisce ${(w.last - base1).toFixed(1)} px più in là di dov'era`);
+    const moved = Math.abs(w.y1 - w.y0) >= 1;
+    if (big && !moved) problems.push(`con la ${label} la pagina non si è spostata: la barra è ferma per caso?`);
+    if (big && moved) seen[d > 0 ? 'up' : 'down']++;
+    seen.steps++; seen.drift = Math.max(seen.drift, w.max - w.min); walked++;
+    await page.waitForTimeout(700);
+    if (seen.up && seen.down && walked >= (primary ? 3 : 1)) break;
+  }
 }
 
 // La foto non deve salire di scatto quando la successiva è più alta. Con la barra ferma, la pagina si sposta di quanto il riquadro si allunga e quel
@@ -373,16 +415,7 @@ async function checkPhotoRise(context, base) {
     await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 12000 }).catch(() => {});
     await holdAutoplay(page);
     await page.waitForTimeout(SETTLE_MS);
-    const geo = await page.evaluate(() => {
-      // altezza del riquadro con ciascuna foto in vista: fino al punto più basso tra foto, didascalia e figura (come updateViewportHeight)
-      const top = document.querySelector('.photo-viewport').getBoundingClientRect().top;
-      const heights = [...document.querySelectorAll('.photo-track > figure.photo:not(.photo-clone)')].map((figure) => {
-        let bottom = figure.getBoundingClientRect().bottom;
-        figure.querySelectorAll('.photo-frame, .caption-box').forEach((node) => { bottom = Math.max(bottom, node.getBoundingClientRect().bottom); });
-        return bottom - top;
-      });
-      return { max: document.documentElement.scrollHeight - window.innerHeight, heights };
-    });
+    const geo = { max: await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), heights: await readFrameHeights(page) };
     if (geo.heights.length < 2 || geo.max <= 8) return problems;
     let from = -1; // (il primo passo non si misura: lì la pagina scende all'inquadratura di serie e quello sarebbe il movimento misurato)
     for (let i = 1; i < Math.min(5, geo.heights.length - 1); i++) { if (geo.heights[i + 1] - geo.heights[i] >= RISE_MIN_PX) { from = i; break; } }
