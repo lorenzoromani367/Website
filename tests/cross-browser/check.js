@@ -50,7 +50,8 @@
        - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
          content.js e le modifiche al file non comparivano), con gli a capo dove sono scritti nel file e uno stacco per ogni riga vuota, come i testi
          delle gallerie (dal 25 novembre; prima un a capo valeva uno spazio), anche nel testo ingrandito (clic sul testo). Il file si rilegge e si divide
-         in paragrafi e righe con un altro metodo da quello del sito.
+         in paragrafi e righe con un altro metodo da quello del sito. Anche il testo ingrandito di una galleria (Stills) ha le stesse righe di quello nella
+         pagina (checkGalleryTextZoom; letto dal DOM, non con innerText: su WebKit/Safari le righe di About si erano perse).
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -966,6 +967,23 @@ async function checkCaptionWeight(context, base) {
 // fa il sito) e si confronta, riga per riga, con quello che la pagina mostra. Poi si apre il testo ingrandito (un clic sul testo) e si guarda che mostri le stesse righe,
 // senza «<br>» scritti a lettere.
 const ABOUT_ROUTE = '#/about';
+// Righe dei paragrafi di un riquadro di testo (".lightbox-text-content" per il testo ingrandito, ".description-content" per quello della pagina), un elenco di righe
+// per paragrafo, senza gli «spacer». "dom": letto dal DOM (il testo, e un «a capo» per ogni <br> o \n nel testo): è ciò che si dà da disegnare al motore, uguale in tutti.
+// "inner": le stesse righe con innerText, cioè quello che il motore calcola come testo «visibile»: serve solo a una riga di avviso (WebKit/Safari dà risultati diversi
+// da Blink e Gecko), non decide. "notPreserved": i paragrafi con un \n nel testo il cui stile (white-space) non conserva gli a capo: le righe si vedrebbero incollate.
+const readParagraphLines = (page, rootSelector) => page.evaluate((root) => {
+  const ps = [...document.querySelector(root).querySelectorAll('p')].filter((p) => !p.classList.contains('spacer'));
+  const linesOf = (text) => text.split('\n').map((l) => l.trim()).filter((l) => l.length);
+  const domText = (p) => { let t = ''; const walk = (n) => { if (n.nodeType === 3) t += n.nodeValue; else if (n.nodeName === 'BR') t += '\n'; else n.childNodes.forEach(walk); }; walk(p); return t; };
+  return {
+    dom: ps.map((p) => linesOf(domText(p))).filter((lines) => lines.length),
+    inner: ps.map((p) => linesOf(p.innerText)).filter((lines) => lines.length),
+    notPreserved: ps.filter((p) => p.textContent.includes('\n') && !/^(pre|pre-line|pre-wrap|break-spaces)$/.test(getComputedStyle(p).whiteSpace)).length,
+    firstText: ps.length ? domText(ps[0]).slice(0, 120) : '',
+    firstWhiteSpace: ps.length ? getComputedStyle(ps[0]).whiteSpace : '',
+  };
+}, rootSelector);
+const innerTextNote = (zr, lines) => (lines(zr.inner) === lines(zr.dom) ? '' : ` (innerText di questo motore: ${zr.inner.length} paragrafi e ${lines(zr.inner)} righe invece di ${lines(zr.dom)}: il sito non lo usa)`);
 async function checkAboutText(context, base) {
   const problems = [];
   if (context.__profile === 'computer retina') return problems; // stesso testo del computer
@@ -997,16 +1015,51 @@ async function checkAboutText(context, base) {
       await page.locator('.description').first().click({ position: { x: 24, y: 24 }, timeout: 8000 });
       await page.waitForSelector('.lightbox-text-content p', { state: 'attached', timeout: 8000 });
       await page.waitForTimeout(600);
-      const z = await page.evaluate(() => [...document.querySelectorAll('.lightbox-text-content p')].map((p) => p.innerText.split('\n').map((l) => l.trim()).filter((l) => l.length)).filter((lines) => lines.length));
+      const zr = await readParagraphLines(page, '.lightbox-text-content');
+      const z = zr.dom;
       const zoomSame = JSON.stringify(r.expected) === JSON.stringify(z);
       const literal = z.some((lines) => lines.some((l) => /<br/i.test(l)));
       if (literal) problems.push('About: il testo ingrandito mostra «<br>» scritto a lettere');
-      else if (!zoomSame) problems.push(`About: il testo ingrandito non ha gli stessi paragrafi e righe del file (file: ${r.expected.length} paragrafi, ${lines(r.expected)} righe; ingrandito: ${z.length} paragrafi, ${lines(z)} righe)`);
-      zoom = zoomSame && !literal ? 'ingrandito uguale' : 'ingrandito DIVERSO';
+      else if (!zoomSame) problems.push(`About: il testo ingrandito non ha gli stessi paragrafi e righe del file (file: ${r.expected.length} paragrafi, ${lines(r.expected)} righe; ingrandito: ${z.length} paragrafi, ${lines(z)} righe; primo paragrafo: ${JSON.stringify(zr.firstText)}, stile ${zr.firstWhiteSpace})`);
+      if (zr.notPreserved) problems.push(`About: nel testo ingrandito ${zr.notPreserved} paragrafi hanno gli a capo nel testo ma lo stile (white-space) non li mostra: le righe si vedrebbero incollate`);
+      zoom = (zoomSame && !literal && !zr.notPreserved ? 'ingrandito uguale' : 'ingrandito DIVERSO') + innerTextNote(zr, lines);
     }
     console.log(`  [testo di About] ${context.__engine} ${context.__profile}: ${r.shown.length} paragrafi e ${lines(r.shown)} righe mostrati, ${r.expected.length} paragrafi e ${lines(r.expected)} righe nel file${same ? ': uguali' : ': DIVERSI'}, ${r.spacers} stacchi, ${zoom}`);
   } catch (e) {
     problems.push(`prova del testo di About non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
+// Il testo ingrandito di una galleria (clic sul testo scorrevole) deve avere gli stessi paragrafi e le stesse righe di quello che si legge nella pagina (dal 25 novembre,
+// dopo che su WebKit/Safari il testo ingrandito di About aveva perso gli a capo: le righe si leggevano con innerText, che dipende dal motore, e le gallerie lo facevano
+// dal 23 novembre; ora si leggono dal DOM, vedi paragraphTextLines in js/app_v58.js). Si guarda Stills, che ha un testo di più paragrafi e righe; se una galleria cambia
+// e non ha più testo, la prova lo dice e passa.
+const ZOOM_TEXT_ROUTE = '#/project/stills';
+async function checkGalleryTextZoom(context, base) {
+  const problems = [];
+  if (context.__profile === 'computer retina') return problems; // stesso testo del computer
+  const page = await context.newPage();
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${ZOOM_TEXT_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    const hasText = await page.evaluate(() => !!document.querySelector('.description-content p'));
+    if (!hasText) { console.log(`  [testo ingrandito] ${context.__engine} ${context.__profile}: ${ZOOM_TEXT_ROUTE} non ha più un testo: non provato`); await page.close(); return problems; }
+    const shown = await readParagraphLines(page, '.description-content');
+    await page.locator('.description').first().click({ position: { x: 24, y: 24 }, timeout: 8000 });
+    await page.waitForSelector('.lightbox-text-content p', { state: 'attached', timeout: 8000 });
+    await page.waitForTimeout(600);
+    const zr = await readParagraphLines(page, '.lightbox-text-content');
+    const lines = (list) => list.reduce((n, l) => n + l.length, 0);
+    const same = JSON.stringify(shown.dom) === JSON.stringify(zr.dom);
+    const name = ZOOM_TEXT_ROUTE.replace('#/project/', '');
+    if (!shown.dom.length) problems.push(`${name}: nessun paragrafo letto nel testo della pagina: la prova non ha niente da confrontare`);
+    else if (!same) problems.push(`${name}: il testo ingrandito non ha gli stessi paragrafi e righe di quello della pagina (pagina: ${shown.dom.length} paragrafi, ${lines(shown.dom)} righe; ingrandito: ${zr.dom.length} paragrafi, ${lines(zr.dom)} righe; primo paragrafo ingrandito: ${JSON.stringify(zr.firstText)}, stile ${zr.firstWhiteSpace})`);
+    if (zr.notPreserved) problems.push(`${name}: nel testo ingrandito ${zr.notPreserved} paragrafi hanno gli a capo nel testo ma lo stile (white-space) non li mostra: le righe si vedrebbero incollate`);
+    console.log(`  [testo ingrandito] ${context.__engine} ${context.__profile}: ${name}: ${shown.dom.length} paragrafi e ${lines(shown.dom)} righe nella pagina, ingrandito ${same && !zr.notPreserved ? 'uguale' : 'DIVERSO'}${innerTextNote(zr, lines)}`);
+  } catch (e) {
+    problems.push(`prova del testo ingrandito di una galleria non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
   }
   await page.close();
   return problems;
@@ -1575,7 +1628,7 @@ async function runEngine(engine, base, origin, routes) {
       if (route === FRAMING_ROUTE) { r.problems.push(...await checkFraming(context, base)); r.problems.push(...await checkBarHoldAfterUserScroll(context, base)); r.problems.push(...await checkAssist(context, base)); r.problems.push(...await checkMarqueeSpeed(context, base, marqueeSeen)); r.problems.push(...await checkRapidNavigation(context, base)); }
       if (route === RISE_ROUTE) r.problems.push(...await checkPhotoRise(context, base));
       if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
-      if (route === ABOUT_ROUTE) r.problems.push(...await checkAboutText(context, base));
+      if (route === ABOUT_ROUTE) { r.problems.push(...await checkAboutText(context, base)); r.problems.push(...await checkGalleryTextZoom(context, base)); }
       if (route === ARCHIVE_ROUTE) r.problems.push(...await checkArchiveArrows(context, base));
       if (route === REACH_ROUTE) { r.problems.push(...await checkReachBottom(context, base)); r.problems.push(...await checkFitToWindow(context, base)); r.problems.push(...await checkCanvasColour(context, base)); r.problems.push(...await checkPhoneSwipe(context, base)); }
       if (route === PHONE_BOTTOM_ROUTE) r.problems.push(...await checkPhoneBottom(context, base));

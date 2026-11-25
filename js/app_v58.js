@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality + scritta free legata alla foto + foto ridotte nelle finestre basse + fondo panna su telefono + About come le gallerie";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality + scritta free legata alla foto + foto ridotte nelle finestre basse + fondo panna su telefono + About come le gallerie + testo ingrandito dal DOM";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -4349,6 +4349,20 @@ function groupTextLines(lines) {
   return groups;
 }
 
+// Le righe di un paragrafo come stanno nella pagina, separate da \n: il testo, e un «a capo» per ogni <br>. Serve al testo ingrandito (clic sul
+// testo scorrevole di una galleria o di About). Si legge dal DOM, non con innerText: innerText dipende da come il motore calcola il testo «visibile»
+// del paragrafo (stile, trascinabile, livello grafico a parte) e un motore che perde gli a capo incollerebbe le righe.
+function paragraphTextLines(p) {
+  let text = "";
+  const walk = (node) => {
+    if (node.nodeType === 3) text += node.nodeValue;
+    else if (node.nodeName === "BR") text += "\n";
+    else node.childNodes.forEach(walk);
+  };
+  walk(p);
+  return text.split("\n").map((line) => line.trim()).filter((line) => line !== "").join("\n");
+}
+
 function renderGallery({ indexNumber, title, description, descriptionBox, images, projectNav, galleryKey }) {
   app.innerHTML = "";
   app.classList.add("has-fixed-bars");
@@ -4948,7 +4962,7 @@ function renderGallery({ indexNumber, title, description, descriptionBox, images
       if (marqueeJustDragged) { marqueeJustDragged = false; return; }
       // un elemento per paragrafo, con gli a capo come nella pagina (le righe di un paragrafo separate da \n)
       const currentLines = [...descContent.querySelectorAll("p:not(.spacer)")]
-        .map((p) => p.innerText.split(/\n/).map((line) => line.trim()).filter((line) => line !== "").join("\n"))
+        .map(paragraphTextLines)
         .filter((text) => text !== "");
         openTextLightbox(
           currentLines, 
@@ -6618,7 +6632,7 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
         // un elemento per paragrafo, con gli a capo come nella pagina (le righe di un paragrafo separate da \n), come per il testo di un progetto:
         // le stringhe di allText possono contenere <br> e testo HTML, che qui verrebbero scritti così com'è
         const currentLines = [...descContent.querySelectorAll("p:not(.spacer)")]
-          .map((p) => p.innerText.split(/\n/).map((line) => line.trim()).filter((line) => line !== "").join("\n"))
+          .map(paragraphTextLines)
           .filter((text) => text !== "");
         openTextLightbox(
           currentLines, 
