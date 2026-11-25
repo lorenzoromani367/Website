@@ -1,8 +1,8 @@
 // Generato automaticamente dal server locale: contiene le modifiche fatte in modalità modifica
 // (posizioni, misure, voci tolte dalla home...). Non modificare a mano — si aggiorna da solo.
 window.SITE_STATE = {
-  "version": 534,
-  "updatedAt": "2026-11-25T10:48:53.231Z",
+  "version": 598,
+  "updatedAt": "2026-11-25T11:09:02.630Z",
   "data": {
     "core_archive_reset_v1": true,
     "fixed_single_pages_v2": true,
@@ -217,9 +217,9 @@ window.SITE_STATE = {
       "project.stills.captionText.@stills/stills-11.jpg": "mercedes back seat",
       "project.stills.captionText.@stills/stills-10.jpg": "jewelry store, rabat",
       "project.cement.captionText.@cement/sunset-of-flower.jpg": "the sunset of flower \nX1 45 (part I)",
-      "project.sospension.captionText.@sospension/estrangement-4.jpg": "untitled (part of a series)",
-      "project.sospension.captionText.@sospension/estrangement-3.jpg": "untitled (part of a series)",
-      "project.sospension.captionText.@sospension/estrangement-1.jpg": "untitled (part of a series)",
+      "project.sospension.captionText.@sospension/estrangement-4.jpg": "man",
+      "project.sospension.captionText.@sospension/estrangement-3.jpg": "suspension",
+      "project.sospension.captionText.@sospension/estrangement-1.jpg": "holiday",
       "project.cement.captionText.@cement/employee-looking-outside-his-window.jpg": "employee looking outside \nhis window",
       "project.homes.captionText.@homes/epson0070-positive-2-2.jpg": "upper middle class, \nnorway",
       "project.homes.captionText.@homes/4 squatting.jpg": "wildfire",
@@ -237,14 +237,22 @@ window.SITE_STATE = {
       "project.counterpart.captionText.@counterpart/bwjuju_35-positive-2-1.jpg": "from a roof i jump into the sky",
       "project.counterpart.captionText.@counterpart/recognition-10.jpg": "shell",
       "project.counterpart.captionText.@counterpart/recognition-2.jpg": "dreaming with a broken leg",
-      "project.counterpart.captionText.@counterpart/recognition-4.jpg": "shine darkly",
+      "project.counterpart.captionText.@counterpart/recognition-4.jpg": "shine",
       "project.counterpart.captionText.@counterpart/vision500_14-2-2-1.jpg": "i watch the sun",
       "project.counterpart.captionText.@counterpart/recognition-9.jpg": "with fishes",
       "project.counterpart.captionText.@counterpart/recognition-6.jpg": "clean, no mess",
       "project.counterpart.captionText.@counterpart/k100pro92-4-2-2-1.jpg": "me as a white shape",
       "project.stills.captionText.@stills/neon.jpg": "neon light, \ncasa boschi di stefano",
       "project.stills.captionText.@stills/murano.jpg": "murano, glasstress",
-      "project.stills.captionText.@stills/stills-7.jpg": "grandma's perfume bottle"
+      "project.stills.captionText.@stills/stills-7.jpg": "grandma's perfume bottle",
+      "project.boudaries.captionText.@boudaries/8 decay.jpg": "noble decay",
+      "project.sospension.captionText.@sospension/recognition-2.jpg": "house",
+      "project.sospension.captionText.@sospension/recognition-6.jpg": "limbo",
+      "project.sospension.captionText.@sospension/recognition-4.jpg": "untitled (wall)",
+      "project.sospension.captionText.@sospension/recognition-3.jpg": "hole",
+      "project.sospension.captionText.@sospension/recognition-1.jpg": "untitled (object)",
+      "project.sospension.captionText.@sospension/recognition-9.jpg": "sardinia",
+      "project.sospension.captionText.@sospension/recognition-8.jpg": "red"
     },
     "site-caption-rebuild-v1": 1,
     "site-guides-v1:d": {
@@ -327,14 +335,14 @@ window.SITE_STATE = {
         1,
         2,
         3,
+        11,
         5,
         6,
         7,
         8,
+        12,
         9,
-        10,
-        11,
-        12
+        10
       ],
       "project.recognition.imageOrder": [
         0,
@@ -488,7 +496,8 @@ window.SITE_STATE = {
         "src:images/stills/pot and bowl.JPG"
       ],
       "project.boudaries": [
-        "src:images/boudaries/6 stage.JPG"
+        "src:images/boudaries/6 stage.JPG",
+        "src:images/boudaries/blanket.JPG"
       ],
       "project.homes": [
         "src:images/homes/2 family.jpg"
@@ -617,7 +626,7 @@ window.SITE_STATE = {
         "height": "1022px"
       },
       "project.boudaries.image.6": {
-        "width": "576.486px",
+        "width": "511.111px",
         "height": ""
       },
       "project.boudaries.zoom.6": {
@@ -629,11 +638,11 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "project.boudaries.image.7": {
-        "width": "536.547px",
+        "width": "480.951px",
         "height": ""
       },
       "project.boudaries.image.9": {
-        "width": "547.395px",
+        "width": "493.424px",
         "height": ""
       },
       "project.boudaries.image.10": {
@@ -645,7 +654,7 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.homes.image.8": {
-        "width": "461.947px",
+        "width": "396.646px",
         "height": ""
       },
       "project.boudaries.zoom.9": {
@@ -657,11 +666,11 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "project.boudaries.image.8": {
-        "width": "514.625px",
+        "width": "466.401px",
         "height": ""
       },
       "project.homes.image.7": {
-        "width": "456.956px",
+        "width": "415.641px",
         "height": ""
       },
       "project.homes.zoom.7": {
@@ -721,7 +730,7 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.homes.image.6": {
-        "width": "500.574px",
+        "width": "441.856px",
         "height": ""
       },
       "project.cement.image.0": {
@@ -777,15 +786,15 @@ window.SITE_STATE = {
         "height": ""
       },
       "project.sospension.image.7": {
-        "width": "512.912px",
+        "width": "459.124px",
         "height": ""
       },
       "project.sospension.image.8": {
-        "width": "512.004px",
+        "width": "410.605px",
         "height": ""
       },
       "project.sospension.image.9": {
-        "width": "395.718px",
+        "width": "355.695px",
         "height": ""
       },
       "project.maniac.image.3": {
@@ -921,7 +930,7 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "project.counterpart.image.10": {
-        "width": "518.497px",
+        "width": "469.129px",
         "height": ""
       },
       "project.counterpart.zoom.10": {
@@ -1005,7 +1014,7 @@ window.SITE_STATE = {
         "height": "1022px"
       },
       "project.counterpart.image.18": {
-        "width": "576.28px",
+        "width": "543.387px",
         "height": ""
       },
       "project.counterpart.zoom.18": {
@@ -1017,7 +1026,7 @@ window.SITE_STATE = {
         "height": "916.76px"
       },
       "project.counterpart.image.16": {
-        "width": "450.434px",
+        "width": "426.37px",
         "height": ""
       },
       "archive.page.page_1.zoom.uid_1795468220400_8737": {
@@ -1054,6 +1063,58 @@ window.SITE_STATE = {
       },
       "project.stills.image.2": {
         "width": "384.793px",
+        "height": ""
+      },
+      "project.homes.image.1": {
+        "width": "464.776px",
+        "height": ""
+      },
+      "project.homes.image.3": {
+        "width": "413.241px",
+        "height": ""
+      },
+      "project.homes.image.0": {
+        "width": "542.509px",
+        "height": ""
+      },
+      "project.counterpart.image.17": {
+        "width": "465.674px",
+        "height": ""
+      },
+      "project.counterpart.image.9": {
+        "width": "500.569px",
+        "height": ""
+      },
+      "project.sospension.image.3": {
+        "width": "494.776px",
+        "height": ""
+      },
+      "project.sospension.image.2": {
+        "width": "506.394px",
+        "height": ""
+      },
+      "project.sospension.image.6": {
+        "width": "462.208px",
+        "height": ""
+      },
+      "project.sospension.image.4": {
+        "width": "371.624px",
+        "height": ""
+      },
+      "project.maniac.image.2": {
+        "width": "510.14px",
+        "height": ""
+      },
+      "project.maniac.image.1": {
+        "width": "521.181px",
+        "height": ""
+      },
+      "project.maniac.image.0": {
+        "width": "515.871px",
+        "height": ""
+      },
+      "project.maniac.image.4": {
+        "width": "471.353px",
         "height": ""
       }
     },
