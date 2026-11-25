@@ -31,6 +31,12 @@
        Un'estensione che non legge nessuno dei due, o una persona che sceglie apposta di invertire i colori, un sito non li può fermare. -->
   <meta name="color-scheme" content="only light" />
   <meta name="darkreader-lock" />
+  <!-- Colore delle barre del browser sul telefono: crema, quello del foglio (--paper nel foglio di stile). Lo leggono Safari su iPhone fino
+       alla versione 18, Chrome e gli altri browser su Android; Safari 26 non lo legge più e usa il colore di sfondo di html e body, che sul
+       telefono è lo stesso crema (regola «@media (max-width: 700px)» vicino a "body" nel foglio di stile). Solo per il telefono (il secondo è
+       il telefono girato di lato): sul computer le barre restano come sono. Chrome su iPhone ha una barra sua, fissa, che un sito non può togliere. -->
+  <meta name="theme-color" content="#edebe0" media="(max-width: 700px)" />
+  <meta name="theme-color" content="#edebe0" media="(pointer: coarse) and (max-height: 500px)" />
   <!-- Il carattere si scarica subito, prima del resto: così il testo non cambia misura a metà caricamento -->
   <link rel="preload" href="fonts/StrichpunktSans-Regular.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/style_v58.css?v=dev" />

@@ -37,6 +37,9 @@
          Counterpart e Michelin, con la finestra alta 950 o 1000 px, la discesa con la rotella arriva in fondo e la barra si vede; con la finestra alta (1300 px) nessuna foto è
          ridotta; con una finestra troppo bassa (Homes a 800 px: una foto ne vorrebbe più del tetto) la galleria resta com'è, tutto o niente; in modalità modifica le foto hanno
          la misura vera; su telefono niente è ridotto (checkFitToWindow);
+       - telefono, fuori dal foglio crema (dal 25 novembre; checkCanvasColour): lo sfondo scuro della pagina è la «scrivania» attorno al foglio, solo sul computer; sul telefono (verticale e
+         girato di lato) e in una finestra stretta come un telefono, html e body sono dello stesso crema del foglio, e il crema dipinge davvero i punti che il foglio non copre (era la
+         striscia scura in fondo allo schermo di Safari su iPhone); sul computer e sul tablet lo sfondo resta scuro; le due righe «theme-color» (solo telefono) ci sono e dicono il crema;
        - telefono (dal 23 novembre): il dito non incontra nessuna zona che non muove la pagina (touch-action: none), a parte il testo scorrevole, che si trascina
          col dito per scelta del proprietario (e lo fa: il dito sposta il testo, la pagina resta ferma, un tocco subito dopo lo apre ingrandito);
          portata la pagina in fondo, ci resta mentre la galleria cambia foto da sola (la barra con i numeri e le frecce non scivola sotto lo schermo:
@@ -994,6 +997,84 @@ async function checkReachBottom(context, base) {
   return problems;
 }
 
+// Telefono, fuori dal foglio crema (25 novembre). Segnalazione del proprietario (una schermata di Safari su iPhone): «in basso rimane una parte scura, deve essere tutto del colore
+// panna». Lo sfondo scuro della pagina (--bg, #161616) è la «scrivania» attorno al foglio crema (--paper, #edebe0), che serve solo sul computer: sul telefono il foglio è largo quanto lo
+// schermo e la parte scura si vedeva sotto il fondo della pagina (dov'è la barra di Safari: il browser colora le sue barre con lo sfondo di html e body) e nel rimbalzo oltre la cima e il
+// fondo. Qui: sul telefono, verticale (390 × 844) e girato di lato (844 × 390), e in una finestra stretta come un telefono (600 × 800 sul computer), html e body sono del crema del foglio e il
+// crema dipinge davvero fuori dal foglio (si accorcia il foglio e si legge il colore di un punto sotto di lui); su un tablet (820 × 1180 con schermo tattile) e sul computer (1440 × 900) lo
+// sfondo resta scuro, com'è disegnato; le due righe «theme-color» per il telefono ci sono, col crema del foglio (--paper), e nessuna per il computer.
+const PAPER_RGB = [237, 235, 224]; // --paper (#edebe0)
+const DESK_RGB = [22, 22, 22]; // --bg (#161616)
+async function checkCanvasColour(context, base) {
+  const problems = [];
+  if (context.__profile === 'computer retina') return problems; // stesso CSS del computer
+  const phone = context.__profile === 'telefono';
+  const page = await context.newPage();
+  const near = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 3);
+  const parse = (css) => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(css || ''); return m ? [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])] : null; };
+  try {
+    await page.goto(`${base}/${LIVE_URL ? '' : '?visitor'}${REACH_ROUTE}`, { waitUntil: 'load', timeout: 45000 });
+    await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+    await page.waitForTimeout(600);
+    const probe = async (size, points) => {
+      await page.setViewportSize(size);
+      await page.waitForTimeout(500);
+      const css = await page.evaluate(() => ({ html: getComputedStyle(document.documentElement).backgroundColor, body: getComputedStyle(document.body).backgroundColor }));
+      // il foglio più corto della finestra: sotto resta una zona che il foglio non copre (come lo spazio sotto il fondo della pagina, dove sta la barra di Safari)
+      await page.addStyleTag({ content: 'html, body { height: auto !important; } .page { min-height: 0 !important; height: 240px !important; overflow: hidden !important; }' });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(400);
+      const buf = await page.screenshot({ type: 'png' });
+      const colours = await page.evaluate(async ([b64, pts]) => {
+        const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+        const canvas = document.createElement('canvas'); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        const g = canvas.getContext('2d'); g.drawImage(img, 0, 0);
+        const k = img.naturalWidth / innerWidth;
+        return pts.map(([x, y]) => { const d = g.getImageData(Math.min(img.naturalWidth - 1, Math.round(x * k)), Math.min(img.naturalHeight - 1, Math.round(y * k)), 1, 1).data; return [d[0], d[1], d[2]]; });
+      }, [buf.toString('base64'), points]);
+      return { css, colours };
+    };
+    const rows = [];
+    const expectPaper = (label, r) => {
+      const h = parse(r.css.html); const b = parse(r.css.body);
+      if (!h || !near(h.slice(0, 3), PAPER_RGB) || h[3] < 1) problems.push(`${label}: lo sfondo di html non è il crema del foglio (è ${r.css.html}): sotto il foglio, e dove la barra del browser si appoggia, resta lo sfondo scuro`);
+      if (!b || !near(b.slice(0, 3), PAPER_RGB) || b[3] < 1) problems.push(`${label}: lo sfondo di body non è il crema del foglio (è ${r.css.body})`);
+      const dark = r.colours.filter((c) => !near(c, PAPER_RGB));
+      if (dark.length) problems.push(`${label}: fuori dal foglio si vede ${dark.map((c) => `rgb(${c.join(', ')})`).join(', ')} invece del crema (rgb(${PAPER_RGB.join(', ')}))`);
+      rows.push(`${label}: html ${r.css.html.replace('rgb', '').replace(/[()]/g, '')}, fuori dal foglio ${r.colours.map((c) => c.join(',')).join(' / ')}`);
+    };
+    const expectDesk = (label, r) => {
+      const b = parse(r.css.body); const h = parse(r.css.html);
+      if (!b || !near(b.slice(0, 3), DESK_RGB)) problems.push(`${label}: lo sfondo di body non è più scuro (è ${r.css.body}): sul computer e sul tablet il foglio crema sta su una «scrivania» scura`);
+      if (h && h[3] > 0 && near(h.slice(0, 3), PAPER_RGB)) problems.push(`${label}: lo sfondo di html è crema (${r.css.html}): sul computer e sul tablet deve restare com'era`);
+      const light = r.colours.filter((c) => near(c, PAPER_RGB));
+      if (light.length) problems.push(`${label}: fuori dal foglio si vede il crema (rgb(${light[0].join(', ')})) invece dello sfondo scuro`);
+      rows.push(`${label}: body ${r.css.body.replace('rgb', '').replace(/[()]/g, '')}, fuori dal foglio ${r.colours.map((c) => c.join(',')).join(' / ')}`);
+    };
+    if (phone) {
+      expectPaper('telefono 390 × 844', await probe({ width: 390, height: 844 }, [[195, 836], [3, 420]]));
+      await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+      expectPaper('telefono girato 844 × 390', await probe({ width: 844, height: 390 }, [[8, 200], [422, 384]]));
+      await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+      expectDesk('tablet 820 × 1180', await probe({ width: 820, height: 1180 }, [[8, 600]]));
+      await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+      const metas = await page.evaluate(() => ({ list: [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => ({ content: (m.getAttribute('content') || '').toLowerCase(), media: m.getAttribute('media') || '' })), paper: getComputedStyle(document.documentElement).getPropertyValue('--paper').trim().toLowerCase() }));
+      const wanted = ['(max-width: 700px)', '(pointer: coarse) and (max-height: 500px)'];
+      if (metas.list.length !== 2 || !wanted.every((m) => metas.list.some((x) => x.media === m && x.content === metas.paper))) problems.push(`theme-color per il telefono: servono due righe con il crema del foglio (${metas.paper}) e le condizioni «${wanted.join('» e «')}»; ci sono: ${metas.list.map((x) => `${x.content} per «${x.media}»`).join('; ') || 'nessuna'}`);
+      rows.push(`theme-color: ${metas.list.length} righe, crema ${metas.paper}`);
+    } else {
+      expectDesk('computer 1440 × 900', await probe({ width: 1440, height: 900 }, [[8, 450], [720, 896]]));
+      await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.photo-track > figure.photo', { state: 'attached', timeout: 20000 });
+      expectPaper('finestra stretta 600 × 800 (disposizione da telefono)', await probe({ width: 600, height: 800 }, [[300, 792], [3, 400]]));
+    }
+    console.log(`  [fondo crema] ${context.__engine} ${context.__profile}: ${rows.join(' · ')}${problems.length ? ': PROBLEMI' : ': ok'}`);
+  } catch (e) {
+    problems.push(`prova del fondo crema non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
+  }
+  await page.close();
+  return problems;
+}
+
 // Foto ridotte nelle finestre basse (24 novembre). Segnalazione del proprietario: «su chrome e safari lo scroll down automatico non arriva a fondo pagina, su
 // firefox e vivaldi sì». Era l'altezza della finestra: con la regola «foto sempre intera» (13 novembre) la barra con i numeri restava sotto il bordo, e la pagina si
 // fermava prima del fondo, se la foto più alta, col vuoto sotto di lei e la barra, non stava nella finestra (a 950 px, in Stills: 160 px prima). Scelta C: si
@@ -1436,7 +1517,7 @@ async function runEngine(engine, base, origin, routes) {
       if (route === NOCUT_ROUTE) { r.problems.push(...await checkPhotoNotCut(context, base)); r.problems.push(...await checkCaptionWeight(context, base)); }
       if (route === ABOUT_ROUTE) r.problems.push(...await checkAboutText(context, base));
       if (route === ARCHIVE_ROUTE) r.problems.push(...await checkArchiveArrows(context, base));
-      if (route === REACH_ROUTE) { r.problems.push(...await checkReachBottom(context, base)); r.problems.push(...await checkFitToWindow(context, base)); r.problems.push(...await checkPhoneSwipe(context, base)); }
+      if (route === REACH_ROUTE) { r.problems.push(...await checkReachBottom(context, base)); r.problems.push(...await checkFitToWindow(context, base)); r.problems.push(...await checkCanvasColour(context, base)); r.problems.push(...await checkPhoneSwipe(context, base)); }
       if (route === PHONE_BOTTOM_ROUTE) r.problems.push(...await checkPhoneBottom(context, base));
       results.push({ engine, profile: profileName, route, problems: r.problems, metrics: r.metrics, shot: withShot && fs.existsSync(shotPath) ? shotPath : null });
     }

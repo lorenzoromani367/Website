@@ -54,6 +54,20 @@ body {
   --sans-stroke: 0.035em;
 }
 
+/* Telefono (anche girato di lato): il foglio crema occupa tutta la larghezza e tutto ciò che sta fuori da lui deve essere crema, non scuro. Il fondo
+   scuro (--bg) è solo la «scrivania» attorno al foglio sul computer. Sul telefono compariva come una striscia scura in fondo allo schermo (segnalazione
+   del proprietario, 25 novembre, Safari su iPhone): il foglio arriva fin dove comincia la barra di Safari, e la zona sotto (la barra con l'indirizzo e i
+   pulsanti, e lo spazio oltre il fondo della pagina) mostra lo sfondo della pagina, che Safari usa anche per colorare le sue barre (dal 26 non legge più
+   «theme-color»: prende il colore di sfondo di html e body). Lo stesso sfondo si scopre col rimbalzo oltre la cima e il fondo. Serve anche «html»: il suo
+   sfondo dipinge tutta l'area di lavoro del browser, mentre quello di body copre solo un riquadro alto quanto la finestra. Stessa soglia del foglio per
+   telefono (max-width: 700px); il secondo ramo è il telefono orizzontale (schermo tattile e basso: un tablet è alto più di 500 px e non ci rientra). */
+@media (max-width: 700px), (pointer: coarse) and (max-height: 500px) {
+  html,
+  body {
+    background: var(--paper);
+  }
+}
+
 *,
 *::before,
 *::after {
