@@ -48,7 +48,9 @@
        - Home (dal 24 novembre): «core archive» ha la freccia «→» dopo il nome (nel CSS, il testo del collegamento resta «core archive»), sta su una riga,
          ha un po' di spazio sotto e NESSUNA riga orizzontale (scelta del proprietario: idea B dello schizzo, senza la riga);
        - pagina About: i paragrafi mostrati sono quelli di testi/about.txt (dal 19 novembre il sito legge quel file; prima mostrava una copia in
-         content.js e le modifiche al file non comparivano). Il file si rilegge e si divide in paragrafi con un altro metodo da quello del sito.
+         content.js e le modifiche al file non comparivano), con gli a capo dove sono scritti nel file e uno stacco per ogni riga vuota, come i testi
+         delle gallerie (dal 25 novembre; prima un a capo valeva uno spazio), anche nel testo ingrandito (clic sul testo). Il file si rilegge e si divide
+         in paragrafi e righe con un altro metodo da quello del sito.
      AVVISI (si leggono nel riassunto, non fanno fallire): differenze di misura tra i motori (altezza della pagina e
        posizione/dimensione degli elementi principali).
    Produce: riassunto in italiano (report/riassunto.md, anche nella pagina della corsa su GitHub), report.json, le schermate
@@ -957,8 +959,12 @@ async function checkCaptionWeight(context, base) {
 }
 
 // Il testo di About sta in testi/about.txt e il sito lo legge da lì (19 novembre; prima mostrava una copia in js/content.js e le modifiche al file non
-// comparivano mai). Si rilegge il file dalla pagina (stesso indirizzo relativo del sito), lo si divide in paragrafi con un metodo diverso da quello del sito
-// (righe → blocchi separati da righe vuote → a capo = spazio; il testo passa per il parser HTML come fa il sito), e si confronta con quello che la pagina mostra.
+// comparivano mai). Dal 25 novembre ha lo stesso formato dei testi delle gallerie (segnalazione del proprietario: «About sembra avere ancora il vecchio formato»):
+// righe di seguito = UN paragrafo con gli a capo dove sono scritti nel file, una riga vuota = stacco tra paragrafi (come groupTextLines e makeParagraphs per i progetti);
+// prima un «a capo» valeva uno spazio e ogni paragrafo usciva su un blocco solo. Si rilegge il file dalla pagina (stesso indirizzo relativo del sito), lo si divide in
+// paragrafi e righe con un metodo diverso da quello del sito (righe → blocchi separati da righe vuote → righe di ogni blocco; il testo passa per il parser HTML come
+// fa il sito) e si confronta, riga per riga, con quello che la pagina mostra. Poi si apre il testo ingrandito (un clic sul testo) e si guarda che mostri le stesse righe,
+// senza «<br>» scritti a lettere.
 const ABOUT_ROUTE = '#/about';
 async function checkAboutText(context, base) {
   const problems = [];
@@ -971,13 +977,34 @@ async function checkAboutText(context, base) {
       const res = await fetch('testi/about.txt?v=' + Date.now());
       const file = res.ok ? await res.text() : null;
       const decode = (s) => { const p = document.createElement('p'); p.innerHTML = s; return p.textContent; };
-      const expected = file === null ? [] : file.replace(/\r\n?/g, '\n').trim().split(/\n[ \t]*\n+/).map((b) => b.split('\n').map((l) => l.trim()).filter((l) => l.length).join(' ')).filter((b) => b.length).map(decode);
-      const shown = [...document.querySelectorAll('.description-content p')].filter((p) => !p.classList.contains('spacer')).map((p) => p.textContent);
-      return { status: res.status, expected, shown };
+      const expected = file === null ? [] : file.replace(/\r\n?/g, '\n').trim().split(/\n[ \t]*\n+/).map((b) => b.split('\n').map((l) => l.trim()).filter((l) => l.length).map(decode)).filter((lines) => lines.length);
+      const shown = [...document.querySelector('.description-content').querySelectorAll('p')].filter((p) => !p.classList.contains('spacer')).map((p) => p.innerHTML.split(/<br\s*\/?>/i).map((l) => decode(l).trim()).filter((l) => l.length)).filter((lines) => lines.length);
+      // gli stacchi tra paragrafi (come nelle gallerie: un «spacer» per ogni riga vuota)
+      const spacers = document.querySelector('.description-content').querySelectorAll('p.spacer').length;
+      return { status: res.status, expected, shown, spacers };
     });
+    const lines = (list) => list.reduce((n, l) => n + l.length, 0);
+    const same = JSON.stringify(r.expected) === JSON.stringify(r.shown);
     if (r.expected.length === 0) problems.push(`About: testi/about.txt non si legge o è vuoto (risposta ${r.status}): il sito è ripiegato sul testo di content.js`);
-    else if (JSON.stringify(r.expected) !== JSON.stringify(r.shown)) problems.push(`About: la pagina non mostra il testo di testi/about.txt (file: ${r.expected.length} paragrafi, a partire da «${r.expected[0].slice(0, 40)}»; pagina: ${r.shown.length} paragrafi, a partire da «${(r.shown[0] || '').slice(0, 40)}»)`);
-    console.log(`  [testo di About] ${context.__engine} ${context.__profile}: ${r.shown.length} paragrafi mostrati, ${r.expected.length} nel file${r.expected.length && JSON.stringify(r.expected) === JSON.stringify(r.shown) ? ': uguali' : ': DIVERSI'}`);
+    else if (!same) {
+      const firstDiff = r.expected.findIndex((lines, i) => JSON.stringify(lines) !== JSON.stringify(r.shown[i]));
+      problems.push(`About: la pagina non mostra il testo di testi/about.txt come nel file (file: ${r.expected.length} paragrafi, ${lines(r.expected)} righe; pagina: ${r.shown.length} paragrafi, ${lines(r.shown)} righe; il primo che differisce è il ${firstDiff + 1}°: nel file ${r.expected[firstDiff] ? r.expected[firstDiff].length : 0} righe, nella pagina ${r.shown[firstDiff] ? r.shown[firstDiff].length : 0}: gli a capo del file vanno tenuti, come per i progetti)`);
+    }
+    if (r.expected.length > 1 && r.spacers !== r.expected.length - 1) problems.push(`About: tra i paragrafi ci sono ${r.spacers} stacchi, nel file ${r.expected.length - 1} (una riga vuota = uno stacco, come nelle gallerie)`);
+    // il testo ingrandito
+    let zoom = 'non provato';
+    if (r.expected.length) {
+      await page.locator('.description').first().click({ position: { x: 24, y: 24 }, timeout: 8000 });
+      await page.waitForSelector('.lightbox-text-content p', { state: 'attached', timeout: 8000 });
+      await page.waitForTimeout(600);
+      const z = await page.evaluate(() => [...document.querySelectorAll('.lightbox-text-content p')].map((p) => p.innerText.split('\n').map((l) => l.trim()).filter((l) => l.length)).filter((lines) => lines.length));
+      const zoomSame = JSON.stringify(r.expected) === JSON.stringify(z);
+      const literal = z.some((lines) => lines.some((l) => /<br/i.test(l)));
+      if (literal) problems.push('About: il testo ingrandito mostra «<br>» scritto a lettere');
+      else if (!zoomSame) problems.push(`About: il testo ingrandito non ha gli stessi paragrafi e righe del file (file: ${r.expected.length} paragrafi, ${lines(r.expected)} righe; ingrandito: ${z.length} paragrafi, ${lines(z)} righe)`);
+      zoom = zoomSame && !literal ? 'ingrandito uguale' : 'ingrandito DIVERSO';
+    }
+    console.log(`  [testo di About] ${context.__engine} ${context.__profile}: ${r.shown.length} paragrafi e ${lines(r.shown)} righe mostrati, ${r.expected.length} paragrafi e ${lines(r.expected)} righe nel file${same ? ': uguali' : ': DIVERSI'}, ${r.spacers} stacchi, ${zoom}`);
   } catch (e) {
     problems.push(`prova del testo di About non riuscita (${context.__profile}): ${String(e.message).split('\n')[0]}`);
   }

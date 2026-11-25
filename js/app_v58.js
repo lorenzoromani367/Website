@@ -153,7 +153,7 @@ function showPageNotice(text, { onClick = null, seconds = 12 } = {}) {
 // Quale versione del codice sta girando nel browser? Dopo un «Pull origin» il browser a volte tiene la vecchia, e da fuori non si vede. Sul tuo
 // computer (localhost, o la tua rete di casa) il titolo della scheda finisce col nome della versione, e il contatore di fluidità lo scrive nel
 // rapporto. Chi visita il sito pubblicato non vede niente. Va cambiato a mano a ogni modifica che si vuole poter riconoscere.
-const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality + scritta free legata alla foto + foto ridotte nelle finestre basse + fondo panna su telefono";
+const SITE_BUILD = "discesa morbida 2 + testo 4,95 + salvataggi + foto intera + testo sale + didascalie grassetto + frecce archivio + sosta 3 s + about dal file + frecce più dentro + home Stills Homes Complicity + titoli come le frecce + foto nuove in fondo + archivio ritrova cartelle spostate + telefono resta in fondo + testi a paragrafi come nel file + core archive con freccia + testo lento + discesa veloce + testi come Mediality + gallerie senza scatti + senza Mediality + scritta free legata alla foto + foto ridotte nelle finestre basse + fondo panna su telefono + About come le gallerie";
 window.SITE_BUILD = SITE_BUILD;
 if (IS_AT_HOME) document.title = `${document.title} · ${SITE_BUILD}`;
 
@@ -6615,8 +6615,13 @@ function renderSimplePage({ title, paragraphs, extraLines = [], disableMarquee =
       descBlock.addEventListener("click", () => {
         if (isEditMode()) return;
         if (marqueeJustDragged) { marqueeJustDragged = false; return; }
+        // un elemento per paragrafo, con gli a capo come nella pagina (le righe di un paragrafo separate da \n), come per il testo di un progetto:
+        // le stringhe di allText possono contenere <br> e testo HTML, che qui verrebbero scritti così com'è
+        const currentLines = [...descContent.querySelectorAll("p:not(.spacer)")]
+          .map((p) => p.innerText.split(/\n/).map((line) => line.trim()).filter((line) => line !== "").join("\n"))
+          .filter((text) => text !== "");
         openTextLightbox(
-          allText, 
+          currentLines, 
           sizeKeyPrefix, 
           descBlock, 
           title.toLowerCase(),
@@ -6647,14 +6652,16 @@ function renderContacts() {
   renderSimplePage({ title: CONTACTS.title, paragraphs: CONTACTS.paragraphs, extraLines: CONTACTS.lines, disableMarquee: true });
 }
 
-// Dal testo di un file ai paragrafi: una riga vuota separa un paragrafo dall'altro, un semplice "a capo" dentro un paragrafo vale
-// uno spazio (è com'era il testo di About quando stava in content.js: quattro paragrafi, l'ultimo su una riga sola).
+// Dal testo di un file ai paragrafi di una pagina semplice (About), COME PER I PROGETTI (groupTextLines e makeParagraphs in renderGallery): righe di seguito =
+// UN paragrafo, con gli a capo dove sono scritti nel file (le righe unite da <br>); ogni riga vuota = uno stacco tra paragrafi ("" = «spacer», vedi
+// renderSimplePage). Fino al 25 novembre un «a capo» dentro un paragrafo valeva uno spazio, e il testo di About usciva tutto di seguito anche dopo che i testi
+// delle gallerie (23-24 novembre) erano stati scritti una frase per riga: sembrava ancora nel formato vecchio (segnalazione del proprietario).
+// Un file senza testo (solo righe vuote) dà un elenco vuoto: allora vale il testo di ABOUT in content.js (vedi loadAboutParagraphs).
 function paragraphsFromText(text) {
-  return String(text)
-    .replace(/\r\n?/g, "\n")
-    .split(/\n[ \t]*\n/)
-    .map((block) => block.split("\n").map((line) => line.trim()).filter(Boolean).join(" "))
-    .filter(Boolean);
+  const lines = String(text).replace(/\r\n?/g, "\n").trim().split("\n").map((line) => line.trim());
+  const groups = groupTextLines(lines);
+  if (!groups.some(Boolean)) return [];
+  return groups.map((group) => (group ? group.join("<br>") : ""));
 }
 
 // Il testo di About sta in testi/about.txt, come quello dei progetti: lo si modifica lì e il sito lo mostra. Prima il sito leggeva
